@@ -11,7 +11,8 @@ use super::NodeId;
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, or
+    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"` / `"pointerHover"`),
+    /// `"scroll"`, or
     /// `"wheel"` — the common events. An element's own events ride
     /// [`Outbound::ElementEvent`].
     pub kind: String,
@@ -59,6 +60,20 @@ pub struct UiEvent {
     /// DOM `WheelEvent.deltaMode`. Present only for `"wheel"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delta_mode: Option<String>,
+    /// Whether Shift was held, like DOM `MouseEvent.shiftKey`. Present on the
+    /// pointer and wheel events; absent on `"click"` and `"scroll"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_key: Option<bool>,
+    /// Whether Control was held. See [`shift_key`](Self::shift_key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctrl_key: Option<bool>,
+    /// Whether Alt (Option) was held. See [`shift_key`](Self::shift_key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_key: Option<bool>,
+    /// Whether Meta (Super/Windows/Command) was held. See
+    /// [`shift_key`](Self::shift_key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta_key: Option<bool>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally

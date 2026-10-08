@@ -484,23 +484,29 @@ export interface BevyTransform3d {
   origin?: { x: Animatable<Length>; y: Animatable<Length> };
 }
 
-// TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM
-// `button` number rather than full DOM `PointerEvent` semantics. No modifier info.
-// It's part of the public contract, so settle the shape before too many apps depend
-// on it.
+/** The modifier keys held when a pointer or wheel event fired, like the DOM
+ *  `MouseEvent` flags. */
+export interface ModifierKeys {
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  /** The "Meta"/"Super" key (Windows/Command). */
+  metaKey: boolean;
+}
+
 /** Payload for the pointer handlers: the cursor position within the element,
  *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
  *  clamped to the element's bounds even while dragging outside it. `clientX` /
  *  `clientY` give the absolute cursor position in window logical pixels (also a
  *  top-left origin), unclamped — use those to drag a node across the screen. */
-export interface PointerEventData {
+export interface PointerEventData extends ModifierKeys {
   x: number;
   y: number;
   clientX: number;
   clientY: number;
   /** Which mouse button, DOM `MouseEvent.button` numbering (`0` left, `1`
    *  middle, `2` right). Present on down/move/up (a move's button is the one
-   *  dragging); absent on enter/leave. */
+   *  dragging); absent on enter/leave/hover. */
   button?: number;
 }
 
@@ -510,7 +516,7 @@ export interface PointerEventData {
  *  notches: scale by your own per-line distance) or `"pixel"` (trackpad: already in
  *  pixels) — mirroring DOM `WheelEvent`. Unlike a scroll container, nothing is scaled
  *  or applied for you: use the deltas to drive a zoom, pan, or custom scroll. */
-export interface WheelEventData {
+export interface WheelEventData extends ModifierKeys {
   x: number;
   y: number;
   clientX: number;
@@ -555,6 +561,12 @@ export interface BevyPointerProps {
   onPointerEnter?: (e: PointerEventData) => void;
   /** Pointer left this element (hover ends). */
   onPointerLeave?: (e: PointerEventData) => void;
+  /** The cursor moved while over this element (between `onPointerEnter` and
+   *  `onPointerLeave`), a button held or not — the DOM's hover `pointermove`.
+   *  Fires at most once per frame, only when the cursor actually moved; no
+   *  `button`. Unlike `onPointerMove` it never follows a drag off the
+   *  element. */
+  onPointerHover?: (e: PointerEventData) => void;
 }
 
 /** Controlled scrolling (the `SCROLL` common group). */

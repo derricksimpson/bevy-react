@@ -163,7 +163,8 @@ pub(crate) fn apply_pointer_handlers(
         || props.on_pointer_move
         || props.on_pointer_up
         || props.on_pointer_enter
-        || props.on_pointer_leave;
+        || props.on_pointer_leave
+        || props.on_pointer_hover;
     if any_pointer {
         let handlers = PointerHandlers {
             down: props.on_pointer_down,
@@ -171,6 +172,7 @@ pub(crate) fn apply_pointer_handlers(
             up: props.on_pointer_up,
             enter: props.on_pointer_enter,
             leave: props.on_pointer_leave,
+            hover: props.on_pointer_hover,
         };
         // `RelativeCursorPosition` supplies the `x`/`y` carried by drag and
         // hover events; the drag-capture and hover systems both read it. An
@@ -620,8 +622,9 @@ mod tests {
         );
     }
 
-    /// A node with `onPointerEnter`/`onPointerLeave` gets an `Interaction` + a
-    /// [`HoverState`], and the reconciler stamps the handler flags.
+    /// A node with `onPointerEnter`/`onPointerLeave`/`onPointerHover` gets an
+    /// `Interaction` + a [`HoverState`], and the reconciler stamps the handler
+    /// flags.
     #[test]
     fn pointer_enter_leave_stamps_hover_state() {
         let (mut app, ops_tx) = op_app();
@@ -629,9 +632,11 @@ mod tests {
             .send(vec![Op::Create {
                 id: 1,
                 kind: "node".into(),
-                props: serde_json::from_value(
-                    serde_json::json!({ "onPointerEnter": true, "onPointerLeave": true }),
-                )
+                props: serde_json::from_value(serde_json::json!({
+                    "onPointerEnter": true,
+                    "onPointerLeave": true,
+                    "onPointerHover": true,
+                }))
                 .unwrap(),
                 text: None,
             }])
@@ -649,7 +654,7 @@ mod tests {
             "hover handlers must stamp a HoverState"
         );
         let handlers = entity.get::<PointerHandlers>().expect("PointerHandlers");
-        assert!(handlers.enter && handlers.leave);
+        assert!(handlers.enter && handlers.leave && handlers.hover);
     }
 
     /// `imageRendering` stamps `ImageRenderingMode` for an explicit mode only:

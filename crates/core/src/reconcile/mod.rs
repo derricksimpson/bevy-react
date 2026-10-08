@@ -30,7 +30,7 @@ mod svg_tests;
 pub(crate) mod test_util;
 
 pub use apply::apply_js_ops;
-pub(crate) use events::climb;
+pub(crate) use events::{Modifiers, climb};
 pub use events::{collect_scroll_events, collect_ui_events};
 pub use hover::collect_hover_events;
 pub use interaction::apply_interaction_styles;

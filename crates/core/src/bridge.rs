@@ -137,7 +137,8 @@ pub struct FocusState(pub bool);
 
 /// Records which pointer handlers a node declared in JS, so the drag-capture
 /// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for
-/// it, and the hover system whether to emit `pointerEnter` / `pointerLeave`.
+/// it, and the hover systems whether to emit `pointerEnter` / `pointerLeave` /
+/// `pointerHover`.
 /// Stamped (or removed) alongside the node's `Interaction` +
 /// `RelativeCursorPosition` whenever any `onPointer*` handler is present.
 #[derive(Component, Debug, Clone, Copy, Default)]
@@ -147,6 +148,7 @@ pub struct PointerHandlers {
     pub up: bool,
     pub enter: bool,
     pub leave: bool,
+    pub hover: bool,
 }
 
 /// Marks an element that **owns** clicks: the click collectors

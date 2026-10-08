@@ -130,6 +130,11 @@ export interface UiEvent {
   // Present for pointerDown/Move/Up; absent for "click" (primary-only, like
   // DOM click) and hover/scroll events.
   button?: number;
+  // The modifier keys held. Present on the pointer and wheel events.
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
   // New scroll offset (logical px). Present only for the "scroll" event.
   scrollTop?: number;
   scrollLeft?: number;

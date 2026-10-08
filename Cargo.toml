@@ -17,6 +17,7 @@ members = [
     "examples/atrium",
     "examples/civilization",
     "examples/cyberpunk",
+    "examples/nodes",
 ]
 
 [workspace.package]
@@ -101,4 +102,9 @@ bevy-react = { path = "crates/bevy-react", version = "0.7.0", default-features =
 opt-level = 1
 
 [profile.dev.package."*"]
+opt-level = 3
+
+# The node editor evaluates its texture graph on the CPU in its own crate:
+# at the members' opt-level 1 a 512² graph takes seconds, not milliseconds.
+[profile.dev.package.nodes]
 opt-level = 3

@@ -8,13 +8,13 @@
 //! sharing their code: each side's attribution quirks are documented on its
 //! own systems.
 
-use bevy::picking::events::{Click, Drag, Enter, Leave, Pointer, Press, Release};
+use bevy::picking::events::{Click, Drag, Enter, Leave, Move, Pointer, Press, Release};
 use bevy::picking::pointer::PointerButton;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
-use super::events::{climb, dom_button, send_ui_event, surface_relative};
+use super::events::{Modifiers, climb, dom_button, send_ui_event, surface_relative};
 use crate::bridge::{JsBridge, PointerHandlers, ReactNode, StyleVariants};
 use crate::ext::VirtualPointers;
 use crate::style::Style;
@@ -65,7 +65,7 @@ pub fn collect_virtual_clicks(
         && let Ok(rnode) = targets.get(target)
     {
         tracing::debug!("virtual-pointer click -> reconciler node {}", rnode.0);
-        send_ui_event(&bridge, rnode.0, "click", None, None, None);
+        send_ui_event(&bridge, rnode.0, "click", None, None, None, None);
     }
 }
 
@@ -90,10 +90,12 @@ pub fn collect_virtual_pointer_events(
         &UiGlobalTransform,
     )>,
     child_of: Query<&ChildOf>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
 ) {
     if pointers.is_empty() {
         return;
     }
+    let mods = Modifiers::read(keys.as_deref());
     // Per-kind (owner, button) dedupe: a pass-through node stacked over the
     // target fans each gesture out to every hovered entity, and climbing can
     // resolve them to the same owner. (Moves see at most one `Drag` per button
@@ -120,6 +122,7 @@ pub fn collect_virtual_pointer_events(
                 Some(pos),
                 Some(abs),
                 Some(dom_button(button)),
+                Some(mods),
             );
         }
     };
@@ -171,27 +174,43 @@ pub fn collect_virtual_pointer_events(
 /// its ancestors, only on true boundary crossings — so no climb (and no dedupe)
 /// is needed, and crossing between a button's label and its padding never
 /// re-fires the button's boundary. Hover events carry no button.
+///
+/// `pointerHover` rides `Pointer<Move>`, which bevy_picking also sends to
+/// every hovered entity (ancestors included), so it needs no climb either —
+/// only a per-entity dedupe, in case two virtual pointers move over one node.
+#[allow(clippy::too_many_arguments)]
 pub fn collect_virtual_hover_events(
     bridge: Res<JsBridge>,
     pointers: Res<VirtualPointers>,
     mut enters: MessageReader<Pointer<Enter>>,
     mut leaves: MessageReader<Pointer<Leave>>,
+    mut moves: MessageReader<Pointer<Move>>,
     nodes: Query<(
         &ReactNode,
         &PointerHandlers,
         &ComputedNode,
         &UiGlobalTransform,
     )>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
 ) {
     if pointers.is_empty() {
         return;
     }
+    let mods = Modifiers::read(keys.as_deref());
     let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
         if let Ok((rnode, handlers, node, transform)) = nodes.get(entity)
             && want(handlers)
             && let Some((pos, abs)) = surface_relative(node, transform, at)
         {
-            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), None);
+            send_ui_event(
+                &bridge,
+                rnode.0,
+                kind,
+                Some(pos),
+                Some(abs),
+                None,
+                Some(mods),
+            );
         }
     };
     for ev in enters.read() {
@@ -210,6 +229,17 @@ pub fn collect_virtual_hover_events(
                 ev.entity,
                 |h| h.leave,
                 "pointerLeave",
+                ev.pointer_location.position,
+            );
+        }
+    }
+    let mut seen: HashSet<Entity> = HashSet::new();
+    for ev in moves.read() {
+        if pointers.contains(ev.pointer_id) && seen.insert(ev.entity) {
+            emit(
+                ev.entity,
+                |h| h.hover,
+                "pointerHover",
                 ev.pointer_location.position,
             );
         }

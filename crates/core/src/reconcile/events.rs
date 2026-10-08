@@ -93,7 +93,7 @@ pub fn collect_ui_events(
     for (_, (_, target)) in topmost {
         if let Ok(rnode) = targets.get(target) {
             tracing::debug!("click -> reconciler node {}", rnode.0);
-            send_ui_event(&bridge, rnode.0, "click", None, None, None);
+            send_ui_event(&bridge, rnode.0, "click", None, None, None, None);
         }
     }
 }
@@ -129,7 +129,42 @@ pub fn collect_scroll_events(
     }
 }
 
+/// The modifier keys held while a pointer or wheel event fired — the DOM
+/// `MouseEvent` `shiftKey`/`ctrlKey`/`altKey`/`metaKey` flags. Read from this
+/// frame's [`ButtonInput<KeyCode>`]; a missing resource (a headless harness
+/// without input) reads as nothing held.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Modifiers {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+impl Modifiers {
+    pub(crate) fn read(keys: Option<&ButtonInput<KeyCode>>) -> Self {
+        let Some(keys) = keys else {
+            return Self::default();
+        };
+        Self {
+            shift: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
+            ctrl: keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
+            alt: keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]),
+            meta: keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight]),
+        }
+    }
+
+    /// Stamp the four flags onto an outgoing event.
+    pub(crate) fn stamp(self, event: &mut UiEvent) {
+        event.shift_key = Some(self.shift);
+        event.ctrl_key = Some(self.ctrl);
+        event.alt_key = Some(self.alt);
+        event.meta_key = Some(self.meta);
+    }
+}
+
 /// Send one [`Outbound::UiEvent`] to the JS thread for a reconciler node.
+/// Pointer events pass the held [`Modifiers`]; `"click"` passes `None`.
 pub(super) fn send_ui_event(
     bridge: &JsBridge,
     id: NodeId,
@@ -137,19 +172,22 @@ pub(super) fn send_ui_event(
     pos: Option<Vec2>,
     abs: Option<Vec2>,
     button: Option<u8>,
+    mods: Option<Modifiers>,
 ) {
-    let _ = bridge.outbound_tx.send(Outbound::UiEvent {
-        event: UiEvent {
-            id,
-            kind: kind.to_string(),
-            x: pos.map(|p| p.x),
-            y: pos.map(|p| p.y),
-            client_x: abs.map(|a| a.x),
-            client_y: abs.map(|a| a.y),
-            button,
-            ..default()
-        },
-    });
+    let mut event = UiEvent {
+        id,
+        kind: kind.to_string(),
+        x: pos.map(|p| p.x),
+        y: pos.map(|p| p.y),
+        client_x: abs.map(|a| a.x),
+        client_y: abs.map(|a| a.y),
+        button,
+        ..default()
+    };
+    if let Some(mods) = mods {
+        mods.stamp(&mut event);
+    }
+    let _ = bridge.outbound_tx.send(Outbound::UiEvent { event });
 }
 
 /// DOM `MouseEvent.button` number for a picking button (`0`/`1`/`2` =

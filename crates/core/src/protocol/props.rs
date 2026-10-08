@@ -50,6 +50,11 @@ pub struct Props {
     /// Whether this element has an `onPointerLeave` handler registered in JS.
     /// Fires once when the pointer leaves the element (hover ends).
     pub on_pointer_leave: bool,
+    /// Whether this element has an `onPointerHover` handler registered in JS.
+    /// Fires each frame the cursor moved while the pointer is over the element
+    /// (the hover state `onPointerEnter` reports), whether or not a button is
+    /// held.
+    pub on_pointer_hover: bool,
 
     // --- controlled scroll (any node with `overflow: scroll`) ---
     /// Controlled vertical scroll offset (logical px) → `ScrollPosition.y`. On
@@ -170,6 +175,7 @@ enum Key {
     OnPointerUp,
     OnPointerEnter,
     OnPointerLeave,
+    OnPointerHover,
     OnScroll,
     OnWheel,
     ScrollTop,
@@ -197,6 +203,7 @@ fn common_key(name: &str) -> Option<(Key, Option<Common>)> {
         "onPointerUp" => (Key::OnPointerUp, Some(Common::POINTER)),
         "onPointerEnter" => (Key::OnPointerEnter, Some(Common::POINTER)),
         "onPointerLeave" => (Key::OnPointerLeave, Some(Common::POINTER)),
+        "onPointerHover" => (Key::OnPointerHover, Some(Common::POINTER)),
         "onScroll" => (Key::OnScroll, Some(Common::SCROLL)),
         "scrollTop" => (Key::ScrollTop, Some(Common::SCROLL)),
         "scrollLeft" => (Key::ScrollLeft, Some(Common::SCROLL)),
@@ -314,6 +321,7 @@ impl<'de> serde::Deserialize<'de> for Props {
                         Key::OnPointerUp => props.on_pointer_up = flag(&mut map)?,
                         Key::OnPointerEnter => props.on_pointer_enter = flag(&mut map)?,
                         Key::OnPointerLeave => props.on_pointer_leave = flag(&mut map)?,
+                        Key::OnPointerHover => props.on_pointer_hover = flag(&mut map)?,
                         Key::OnScroll => props.on_scroll = flag(&mut map)?,
                         Key::OnWheel => props.on_wheel = flag(&mut map)?,
                         Key::ScrollTop => props.scroll_top = map.next_value()?,

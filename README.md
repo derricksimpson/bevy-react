@@ -90,6 +90,16 @@ next through a custom morph shader; the worlds on the cards are live 3D.
 
 ![The main menu of the homage: a slashed yellow CYBERPUNK wordmark and five menu items on a translucent red band, glowing cyan and red bars and walls of magenta data blurred behind it.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/cyberpunk-menu.webp)
 
+[**Nodes**](https://github.com/tulustul/bevy-react/tree/main/examples/nodes)
+is a node editor for procedural textures, after Blender's: drag nodes and
+wires, zoom with the wheel, scrub number fields, search the Add menu. Bevy
+evaluates the graph on the CPU, puts a live thumbnail in every node and shows
+the result as a PBR material on a 3D preview. The wires are a custom element
+drawn by a shader.
+[Try it in your browser](https://tulustul.github.io/bevy-react/nodes/).
+
+![A node editor: a sphere of weathered bricks in the 3D preview, the base color tiled beside it, and below a graph of bricks, noise, warp, color ramp and mix nodes, each with a live thumbnail, wired into a material output.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/nodes-bricks.webp)
+
 ## Getting started
 
 ```sh

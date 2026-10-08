@@ -158,8 +158,9 @@ served as is.
 ## Reference setup
 
 The demos app and the
-[Cyberpunk](https://tulustul.github.io/bevy-react/cyberpunk/) and
-[Civilization](https://tulustul.github.io/bevy-react/civilization/) showcases
+[Cyberpunk](https://tulustul.github.io/bevy-react/cyberpunk/),
+[Civilization](https://tulustul.github.io/bevy-react/civilization/) and
+[Nodes](https://tulustul.github.io/bevy-react/nodes/) showcases
 build for the web with one script,
 [`examples/build-web.mjs`](../../../examples/build-web.mjs): it builds both
 bundles with `buildVendor` and `buildApp` from `bevy-react/build-lib`,

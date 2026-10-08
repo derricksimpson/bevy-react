@@ -133,9 +133,20 @@ pub fn collect_pointer_events(
     // Written by `apply_touch_scroll` (ordered after, same set): a steal
     // recorded in frame N ends the drag here in frame N+1.
     touch_scroll: Res<crate::touch_scroll::TouchScrollState>,
+    // `Option` so headless harnesses without input needn't init it.
+    keys: Option<Res<ButtonInput<KeyCode>>>,
 ) {
+    let mods = super::events::Modifiers::read(keys.as_deref());
     let emit = |rnode: &ReactNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
-        super::events::send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), Some(button));
+        super::events::send_ui_event(
+            &bridge,
+            rnode.0,
+            kind,
+            Some(pos),
+            Some(abs),
+            Some(button),
+            Some(mods),
+        );
     };
 
     // Absolute cursor position in window logical pixels; `None` when the cursor

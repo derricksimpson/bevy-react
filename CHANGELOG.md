@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`onPointerHover`.** Fires on each frame the pointer moved while over the
+  element (between its `onPointerEnter` and `onPointerLeave`), a button held
+  or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only
+  semantics. Works for `<surface>` UI too.
+- **Modifier keys on pointer and wheel events.** `PointerEventData` and
+  `WheelEventData` carry `shiftKey`, `ctrlKey`, `altKey` and `metaKey`, for
+  Shift-click selection, Ctrl+wheel zoom and the like.
 - **`SurfaceSpec::scale_factor`.** A `<surface>` can render at a DPI scale
   like a window: the subtree lays out in `size / scale_factor` logical px and
   rasterizes at the texture's full resolution, so a UI designed at a fixed

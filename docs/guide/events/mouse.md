@@ -6,8 +6,8 @@ demo: Mouse
 # Mouse
 
 Elements take DOM-like pointer handlers: `onClick`, `onPointerDown`,
-`onPointerMove`, `onPointerUp`, `onPointerEnter`, `onPointerLeave` and
-`onWheel`. Bevy detects the input (through `bevy_ui`'s interaction state and
+`onPointerMove`, `onPointerUp`, `onPointerEnter`, `onPointerLeave`,
+`onPointerHover` and `onWheel`. Bevy detects the input (through `bevy_ui`'s interaction state and
 Bevy picking) and calls the React handler a moment later. The element
 reference lists which elements accept which handlers.
 
@@ -49,24 +49,28 @@ under the pointer that owns clicks.
 | `onPointerUp`    | When that button is released, wherever the pointer is                                   |
 | `onPointerEnter` | Once when the pointer enters the element                                                |
 | `onPointerLeave` | Once when the pointer leaves the element                                                |
+| `onPointerHover` | On each frame the pointer moved while over the element, a button held or not            |
 
 - A press on an element with any `onPointer*` handler starts a drag on it,
   which lasts until the button that started it is released. One drag runs at
   a time: other buttons pressed during it are ignored. When several elements
   with pointer handlers overlap under the press, the topmost one gets the
   drag.
-- There is no hover-move event: `onPointerMove` only fires during a drag. A
-  held, unmoving pointer sends nothing.
+- `onPointerMove` only fires during a drag; it follows the pointer outside
+  the element. `onPointerHover` is the hover move: it fires while the pointer
+  is over the element (between its enter and leave), with or without a
+  button held. Neither fires for an unmoving pointer.
 - Enter and leave fire on the boundary only, not again when the element is
   pressed or released inside it.
 
 The pointer handlers receive a `PointerEventData`:
 
-| Field                | Meaning                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------- |
-| `x`, `y`             | Position within the element, `0..1` from its top-left corner; clamped to the element during a drag |
-| `clientX`, `clientY` | Position in the window, in logical pixels from its top-left corner; not clamped                    |
-| `button`             | `0` left, `1` middle, `2` right; on down, move and up only (absent on enter and leave)             |
+| Field                                      | Meaning                                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `x`, `y`                                   | Position within the element, `0..1` from its top-left corner; clamped to the element during a drag |
+| `clientX`, `clientY`                       | Position in the window, in logical pixels from its top-left corner; not clamped                    |
+| `button`                                   | `0` left, `1` middle, `2` right; on down, move and up only (absent on enter, leave and hover)      |
+| `shiftKey`, `ctrlKey`, `altKey`, `metaKey` | Whether that modifier key was held (`metaKey`: Windows/Super/Command)                              |
 
 Because `x`/`y` stop at the element's edges, drag things with the
 `clientX`/`clientY` deltas:
@@ -135,6 +139,9 @@ receives the raw delta in a `WheelEventData`: `x`, `y`, `clientX` and
 | `deltaX`    | Horizontal delta; positive when the content should move right              |
 | `deltaY`    | Vertical delta; positive when the wheel turns up, away from the user       |
 | `deltaMode` | `"line"` (mouse wheel notches) or `"pixel"` (trackpads, already in pixels) |
+
+It carries the same `shiftKey`, `ctrlKey`, `altKey` and `metaKey` flags as the
+pointer events, so `Ctrl`+wheel can zoom while the plain wheel scrolls.
 
 ```tsx
 <node

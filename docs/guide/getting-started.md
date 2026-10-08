@@ -286,3 +286,8 @@ elements, styles or filters should depend on `bevy-react` with
   `<portal>` cards, settings that drive the camera and the window, custom
   glitch filters and a glitch morph between screens.
   [Play it in the browser](https://tulustul.github.io/bevy-react/cyberpunk/).
+- [`examples/nodes`](https://github.com/tulustul/bevy-react/tree/main/examples/nodes):
+  a node editor for procedural textures — pan and zoom with `onWheel`, drag
+  nodes and wires, `editableText` number fields, an Add menu with search,
+  live per-node thumbnails, and wires drawn by a custom element.
+  [Try it in the browser](https://tulustul.github.io/bevy-react/nodes/).

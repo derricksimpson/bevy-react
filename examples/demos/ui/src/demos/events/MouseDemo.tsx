@@ -21,6 +21,17 @@ const LOG_W = 420;
 const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
 
+/** The held modifiers as a log suffix, e.g. ` | shift+ctrl`. */
+const mods = (e: PointerEventData) => {
+  const held = [
+    e.shiftKey && "shift",
+    e.ctrlKey && "ctrl",
+    e.altKey && "alt",
+    e.metaKey && "meta",
+  ].filter(Boolean);
+  return held.length ? ` | ${held.join("+")}` : "";
+};
+
 type LogLine = { id: number; text: string };
 
 const PAGE: ExplanationData = {
@@ -35,7 +46,8 @@ const PAGE: ExplanationData = {
         <InlineCode>onPointerUp</InlineCode> (any mouse button — the event's{" "}
         <InlineCode>button</InlineCode> is its DOM number), the hover boundary{" "}
         <InlineCode>onPointerEnter</InlineCode> /{" "}
-        <InlineCode>onPointerLeave</InlineCode>, and{" "}
+        <InlineCode>onPointerLeave</InlineCode>, hover moves with{" "}
+        <InlineCode>onPointerHover</InlineCode>, and{" "}
         <InlineCode>onWheel</InlineCode> for raw wheel deltas.
       </Paragraph>
       <Code lang="tsx">{`<node
@@ -45,12 +57,17 @@ const PAGE: ExplanationData = {
   onPointerUp={() => endDrag()}
   onPointerEnter={() => setHovered(true)}
   onPointerLeave={() => setHovered(false)}
+  onPointerHover={(e) => track(e.x, e.y)}
   onWheel={(e) => zoomBy(e.deltaY)}
 />`}</Code>
       <List>
         <ListItem>
           Pointer events carry both normalized x / y (clamped to the node) and
           absolute clientX / clientY window coordinates.
+        </ListItem>
+        <ListItem>
+          Pointer and wheel events carry the held modifier keys: shiftKey,
+          ctrlKey, altKey and metaKey.
         </ListItem>
         <ListItem>
           No Bevy scene on this page: the 3D viewport stays empty.
@@ -107,7 +124,8 @@ function DragDemo() {
             <InlineCode>clientX</InlineCode> / <InlineCode>clientY</InlineCode>{" "}
             deltas (the normalized <InlineCode>x</InlineCode> /{" "}
             <InlineCode>y</InlineCode> are clamped to the box and can't drive
-            free movement); the log shows each event with its DOM button number.
+            free movement); the log shows each event with its DOM button number
+            and the modifier keys held (try a Shift- or Ctrl-drag).
           </Paragraph>
           <Code lang="tsx">{DRAG_TSX}</Code>
         </>
@@ -141,7 +159,7 @@ function DragCard() {
   const fmt = (e: PointerEventData) =>
     `x=${e.x.toFixed(2)} y=${e.y.toFixed(2)} | client=(${Math.round(
       e.clientX,
-    )}, ${Math.round(e.clientY)}) | btn=${e.button}`;
+    )}, ${Math.round(e.clientY)}) | btn=${e.button}${mods(e)}`;
 
   const onPointerDown = (e: PointerEventData) => {
     lastClient.current = { x: e.clientX, y: e.clientY };
@@ -216,13 +234,16 @@ function HoverDemo() {
         <>
           <Paragraph>
             Hover boundary events: <InlineCode>onPointerEnter</InlineCode> /{" "}
-            <InlineCode>onPointerLeave</InlineCode> fire once per crossing. Move
-            the cursor on and off the left box to drive the right one's
+            <InlineCode>onPointerLeave</InlineCode> fire once per crossing.
+            Between them, <InlineCode>onPointerHover</InlineCode> fires on every
+            frame the cursor moves, no button needed. Move the cursor over the
+            left box: a dot tracks it, and the crossings drive the right box's
             transition.
           </Paragraph>
           <Code lang="tsx">{`<node
   onPointerEnter={() => setHovering(true)}
   onPointerLeave={() => setHovering(false)}
+  onPointerHover={(e) => setDot(e)}
 />`}</Code>
         </>
       }
@@ -231,19 +252,39 @@ function HoverDemo() {
   );
 }
 
+const DOT = 10;
+
 function HoverCard() {
   const [hovering, setHovering] = useState(false);
+  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
 
   return (
     <node style={{ flexDirection: "row", gap: 20 }}>
       <node
         style={boxStyle}
         onPointerEnter={() => setHovering(true)}
-        onPointerLeave={() => setHovering(false)}
+        onPointerLeave={() => {
+          setHovering(false);
+          setDot(null);
+        }}
+        onPointerHover={(e) => setDot({ x: e.x, y: e.y })}
       >
         <BoxLabel style={{ fontSize: FontSizes.sm, textAlign: "center" }}>
           Hover me
         </BoxLabel>
+        {dot && (
+          <node
+            style={{
+              positionType: "absolute",
+              left: dot.x * BOX - DOT / 2,
+              top: dot.y * BOX - DOT / 2,
+              width: DOT,
+              height: DOT,
+              borderRadius: DOT / 2,
+              backgroundColor: Colors.violet,
+            }}
+          />
+        )}
       </node>
       <node
         style={{

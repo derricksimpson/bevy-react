@@ -34,6 +34,9 @@ cargo run --release -p arcana
 
 npm run build:prod -w atrium
 cargo run --release -p atrium
+
+npm run build:prod -w nodes
+cargo run --release -p nodes
 ```
 
 ### 4. Verify the web build works
@@ -86,4 +89,5 @@ git push origin v<version>
 ```sh
 npm run deploy:docs
 npm run deploy:demos
+npm run deploy:nodes
 ```

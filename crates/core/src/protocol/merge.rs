@@ -100,6 +100,7 @@ impl Props {
             on_pointer_up => pointer,
             on_pointer_enter => pointer,
             on_pointer_leave => pointer,
+            on_pointer_hover => pointer,
             on_scroll => scroll_listener,
             on_wheel => wheel,
         );
@@ -144,6 +145,7 @@ impl Props {
                 "onPointerUp" => on_pointer_up = false => pointer,
                 "onPointerEnter" => on_pointer_enter = false => pointer,
                 "onPointerLeave" => on_pointer_leave = false => pointer,
+                "onPointerHover" => on_pointer_hover = false => pointer,
                 "onScroll" => on_scroll = false => scroll_listener,
                 "onWheel" => on_wheel = false => wheel,
                 "scrollStep" => scroll_step = None => scroll_step,

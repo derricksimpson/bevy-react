@@ -241,6 +241,8 @@ pub fn collect_wheel_events(
     bridge: Res<JsBridge>,
     listeners: Query<(&ComputedNode, &UiGlobalTransform, &ReactNode), With<WheelListener>>,
     mut capture: ResMut<PointerCapture>,
+    // `Option` so headless harnesses without input needn't init it.
+    keys: Option<Res<ButtonInput<KeyCode>>>,
 ) {
     if accumulated.delta == Vec2::ZERO {
         return;
@@ -275,20 +277,20 @@ pub fn collect_wheel_events(
         let size = computed.size;
         let min = transform.translation - size * 0.5;
         let norm = ((cursor - min) / size).clamp(Vec2::ZERO, Vec2::ONE);
-        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
-            event: UiEvent {
-                id: rnode.0,
-                kind: "wheel".to_string(),
-                x: Some(norm.x),
-                y: Some(norm.y),
-                client_x: Some(cursor_logical.x),
-                client_y: Some(cursor_logical.y),
-                delta_x: Some(accumulated.delta.x),
-                delta_y: Some(accumulated.delta.y),
-                delta_mode: Some(delta_mode.to_string()),
-                ..default()
-            },
-        });
+        let mut event = UiEvent {
+            id: rnode.0,
+            kind: "wheel".to_string(),
+            x: Some(norm.x),
+            y: Some(norm.y),
+            client_x: Some(cursor_logical.x),
+            client_y: Some(cursor_logical.y),
+            delta_x: Some(accumulated.delta.x),
+            delta_y: Some(accumulated.delta.y),
+            delta_mode: Some(delta_mode.to_string()),
+            ..default()
+        };
+        crate::reconcile::Modifiers::read(keys.as_deref()).stamp(&mut event);
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent { event });
         // The node handled the wheel — claim the wheel channel so world
         // wheel-consumers that honor `PointerCapture` ignore the same wheel
         // this frame. Not a hover claim: `over_ui` stays untouched.
