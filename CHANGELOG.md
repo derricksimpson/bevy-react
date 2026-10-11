@@ -88,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gradient `colorSpace: "okhsl"` and `"okhslLong"`.** Hue interpolation
   with even perceived brightness, the short or the long way around the hue
   circle (Bevy 0.20's `Okhsla`).
+- **`fontFamily` fallback lists.** A comma-separated list of registered
+  names (`"Space Grotesk, Inter"`) is tried per glyph in order, so a symbol
+  the first font lacks comes from the next; the default font always closes
+  a list. The CSS generic keywords (`sans-serif`, `monospace`, `system-ui`,
+  …) map to Bevy's generic families, which need its `system_font_discovery`
+  feature. A single name behaves as before.
 
 ### Changed
 

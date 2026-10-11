@@ -34,8 +34,12 @@ pub static FONT_WEIGHT: StyleProperty<FontWeight> = StyleProperty {
         ),
     )
 };
-/// A registered font-family name (the plugin's `default_font`/`font`
-/// config); unknown or unset → the configured default.
+/// A registered font-family name (the plugin's `font` config), or a CSS
+/// fallback list of them tried per glyph in order
+/// (`"Display, Inter, sans-serif"`). A list may hold generic keywords
+/// (`sans-serif`, `monospace`, `system-ui`, …, resolved by bevy's font
+/// database) and always ends with the configured default font. An unknown
+/// name reports `fontFamily` and is skipped; unset → the default font.
 pub static FONT_FAMILY: StyleProperty<String> = StyleProperty {
     invalidate: Invalidate::Fixed(SHAPING),
     ..StyleProperty::new("fontFamily")

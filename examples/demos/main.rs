@@ -250,12 +250,14 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
 
     // Our `CameraPlugin` (added below) provides the 3D camera that also renders the
-    // UI. Inter is the app-wide default font; the rest are named families the UI
-    // selects per element via `style={{ fontFamily: … }}` (Space Grotesk for
-    // display type, JetBrains Mono for code — see `Fonts` in `ui/src/theme.ts`).
+    // UI. Inter is the app-wide default font (also registered by name, for
+    // fallback lists); the rest are named families the UI selects per element
+    // via `style={{ fontFamily: … }}` (Space Grotesk for display type,
+    // JetBrains Mono for code — see `Fonts` in `ui/src/theme.ts`).
     let react_plugin = ReactUiPlugin::new(bundle)
         .hot_reload(hot_reload)
         .default_font("fonts/Inter-VariableFont_opsz,wght.ttf")
+        .font("Inter", "fonts/Inter-VariableFont_opsz,wght.ttf")
         .font("Space Grotesk", "fonts/SpaceGrotesk-VariableFont_wght.ttf")
         .font(
             "JetBrains Mono",

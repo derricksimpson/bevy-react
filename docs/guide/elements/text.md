@@ -82,7 +82,7 @@ const body: BevyStyle = { fontSize: 16, fontFamily: "Inter" };
 | `color`         | CSS color, or an `{ animated }` color binding                             | white            | block, span |
 | `fontSize`      | px number, or `"px"`, `"rem"`, `"em"`, `"vw"`, `"vh"`, `"vmin"`, `"vmax"` | `1rem` (20px)    | block, span |
 | `fontWeight`    | keyword, or a numeric string `"1"` to `"1000"`                            | `"normal"` (400) | block, span |
-| `fontFamily`    | a registered family name                                                  | the default font | block, span |
+| `fontFamily`    | a registered family name, or a comma-separated fallback list              | the default font | block, span |
 | `lineHeight`    | multiple of the font size, px string, or `{ px }`                         | `1.2`            | block, span |
 | `letterSpacing` | px number, `"px"`/`"rem"`/`"em"` string, or `{ rem }`                     | `0`              | block, span |
 | `textAlign`     | `"left"`, `"center"`, `"right"`, `"justify"`, `"start"`, `"end"`          | `"left"`         | block       |
@@ -195,12 +195,40 @@ app.add_plugins(
   without a `fontFamily`. Without it, text uses Bevy's built-in font.
 - `fontFamily` names are exact and case-sensitive. An unknown name falls back
   to the default font with a `fontFamily` warning. Registering a name twice
-  keeps the last path.
+  keeps the last path, and the same file may be registered under several
+  names.
 - Each family is one font file. Register a variable font to get every
   weight, or register each static weight under its own name
   (`"Inter Bold"`).
 - React cannot load fonts at runtime: every family must be registered up
   front.
+
+### Fallback lists
+
+`fontFamily` also takes a CSS-style comma list. Each glyph comes from the
+first font in the list that has it:
+
+```tsx
+<text style={{ fontFamily: "Display, Inter, sans-serif" }}>Saved ✓</text>
+```
+
+- An entry is a registered name, quoted or not (`"'Space Grotesk', Inter"`).
+  A single name selects exactly that font, as before: a glyph it lacks is
+  drawn as the font's missing-glyph box.
+- A list always ends with the default font, whether you write it or not, so
+  text in a list never ends up without a font.
+- An unregistered name reports a `fontFamily` warning and is skipped. A
+  system font cannot be picked by its name; register the file instead.
+- The CSS generic keywords (`serif`, `sans-serif`, `monospace`, `cursive`,
+  `fantasy`, `system-ui`, `ui-serif`, `ui-sans-serif`, `ui-monospace`,
+  `ui-rounded`, `emoji`, `math`, `fangsong`) map to Bevy's generic families.
+  They match nothing unless the app enables Bevy's `system_font_discovery`
+  feature (the system's fonts) or maps a family itself
+  (`FontCx::set_sans_serif_family`); without either Bevy logs an error once
+  and the list moves on to its next entry.
+- A block waits for every registered font in its list to load before it is
+  drawn. A font whose file fails to load keeps that text hidden, as it does
+  when named alone.
 
 ## Interaction and layers
 

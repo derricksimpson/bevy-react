@@ -184,13 +184,10 @@ pub(crate) fn resolve_text_font_in(
             font.weight = w;
         }
         if let Some(family) = s.get(&FONT_FAMILY) {
-            match fonts.named.get(family) {
-                Some(h) => font.font = FontSource::Handle(h.clone()),
-                None => {
-                    let msg = format!("unknown fontFamily {family:?}");
-                    crate::diag::report("fontFamily", family, &msg);
-                }
-            }
+            font.font = match fonts.named.get(family) {
+                Some(h) => FontSource::Handle(h.clone()),
+                None => font_list(family, fonts, font.font),
+            };
         }
         if let Some(lh) = s.get(&LINE_HEIGHT) {
             line = line_height(lh);
@@ -201,6 +198,57 @@ pub(crate) fn resolve_text_font_in(
         }
     }
     (font, line, spacing)
+}
+
+/// The CSS generic font families, by keyword. Bevy resolves them through the
+/// font database: the system's fonts under its `system_font_discovery`
+/// feature, or whatever the app mapped (`FontCx::set_sans_serif_family`, …).
+const GENERIC_FAMILIES: &[(&str, GenericFontFamily)] = &[
+    ("serif", GenericFontFamily::Serif),
+    ("sans-serif", GenericFontFamily::SansSerif),
+    ("cursive", GenericFontFamily::Cursive),
+    ("fantasy", GenericFontFamily::Fantasy),
+    ("monospace", GenericFontFamily::Monospace),
+    ("system-ui", GenericFontFamily::SystemUi),
+    ("ui-serif", GenericFontFamily::UiSerif),
+    ("ui-sans-serif", GenericFontFamily::UiSansSerif),
+    ("ui-monospace", GenericFontFamily::UiMonospace),
+    ("ui-rounded", GenericFontFamily::UiRounded),
+    ("emoji", GenericFontFamily::Emoji),
+    ("math", GenericFontFamily::Math),
+    ("fangsong", GenericFontFamily::FangSong),
+];
+
+/// A `fontFamily` that is not one registered name: a CSS fallback list
+/// (`"Display, Inter, sans-serif"`), tried per glyph in order. An entry is a
+/// registered name (its font) or a generic keyword; anything else reports
+/// `fontFamily` and is skipped — a system font is not reachable by name. The
+/// `default` face closes the list, so a list nothing in matched (the single
+/// unknown name included) is the default face itself and text never ends up
+/// without a font.
+fn font_list(list: &str, fonts: &Fonts, default: FontSource) -> FontSource {
+    let mut sources = Vec::new();
+    for name in list.split(',') {
+        let name = name.trim().trim_matches(['"', '\'']);
+        if let Some(h) = fonts.named.get(name) {
+            sources.push(FontSource::Handle(h.clone()));
+        } else if let Some((_, generic)) = GENERIC_FAMILIES
+            .iter()
+            .find(|(keyword, _)| name.eq_ignore_ascii_case(keyword))
+        {
+            sources.push(FontSource::Generic(*generic));
+        } else {
+            let msg = format!("unknown fontFamily {name:?}");
+            crate::diag::report("fontFamily", name, &msg);
+        }
+    }
+    if !sources.contains(&default) {
+        sources.push(default);
+    }
+    match sources.len() {
+        1 => sources.remove(0),
+        _ => FontSource::List(sources),
+    }
 }
 
 /// Land a resolved text style on a text root or an inheriting span, writing
@@ -240,4 +288,87 @@ pub fn text_layout(style: Option<&Style>) -> Option<TextLayout> {
         justify: s.get(&TEXT_ALIGN).copied().unwrap_or_default(),
         linebreak: s.get(&LINE_BREAK).copied().unwrap_or_default(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A default face and two named ones, each its own handle.
+    fn fonts() -> (Fonts, [Handle<Font>; 3]) {
+        let assets = Assets::<Font>::default();
+        let handles = [(); 3].map(|_| assets.reserve_handle());
+        let [default, display, mono] = handles.clone();
+        let named = [("Display".to_owned(), display), ("Mono".to_owned(), mono)].into();
+        (
+            Fonts {
+                default: Some(default),
+                named,
+            },
+            handles,
+        )
+    }
+
+    fn source(family: &str, fonts: &Fonts) -> FontSource {
+        let style: Style =
+            serde_json::from_value(serde_json::json!({ "fontFamily": family })).unwrap();
+        resolve_text_font(Some(&style), fonts).0.font
+    }
+
+    /// One registered name is that font alone, as it always was; a comma
+    /// list is a `FontSource::List` in the written order — registered names
+    /// (quoted or not) as their handles, generic keywords as bevy's generic
+    /// families — closed by the default face, once.
+    #[test]
+    fn font_family_list_maps_to_a_font_source_list() {
+        let (fonts, [default, display, mono]) = fonts();
+        let handle = |h: &Handle<Font>| FontSource::Handle(h.clone());
+        assert_eq!(source("Display", &fonts), handle(&display));
+        assert_eq!(
+            source("Display, 'Mono'", &fonts),
+            FontSource::List(vec![handle(&display), handle(&mono), handle(&default)])
+        );
+        assert_eq!(
+            source("Mono, Sans-Serif", &fonts),
+            FontSource::List(vec![
+                handle(&mono),
+                FontSource::Generic(GenericFontFamily::SansSerif),
+                handle(&default),
+            ])
+        );
+
+        // The default face under a registered name is not listed twice.
+        let mut fonts = fonts;
+        fonts.named.insert("Body".to_owned(), default.clone());
+        assert_eq!(
+            source("Display, Body", &fonts),
+            FontSource::List(vec![handle(&display), handle(&default)])
+        );
+    }
+
+    /// An unknown name is reported and skipped, never passed to the font
+    /// database; a value nothing in matched is the default face itself
+    /// (what a single unknown name always resolved to).
+    #[test]
+    fn unknown_font_family_entries_warn_and_are_skipped() {
+        let _lock = crate::diag::test_lock();
+        let (fonts, [default, display, _]) = fonts();
+        let handle = |h: &Handle<Font>| FontSource::Handle(h.clone());
+        crate::diag::arm_runtime();
+        let _scope = crate::diag::node_scope(4343);
+        assert_eq!(source("Nope", &fonts), handle(&default));
+        assert_eq!(
+            source("Nope, Display", &fonts),
+            FontSource::List(vec![handle(&display), handle(&default)])
+        );
+        #[cfg(all(feature = "devtools", debug_assertions))]
+        {
+            let unknown = crate::diag::take_runtime_warnings()
+                .into_iter()
+                .filter(|w| w.node == Some(4343))
+                .map(|w| (w.kind, w.value))
+                .collect::<Vec<_>>();
+            assert_eq!(unknown, vec![("fontFamily", "Nope".to_owned()); 2]);
+        }
+    }
 }

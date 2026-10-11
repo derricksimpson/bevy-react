@@ -134,13 +134,22 @@ function FontFamilyDemo() {
           <Paragraph>
             Fonts are registered <Bold>up front on the Rust side</Bold> and
             selected by name from React — <InlineCode>fontFamily</InlineCode>{" "}
-            cannot load a file at runtime. Inline spans (a nested{" "}
-            <InlineCode>{"<text>"}</InlineCode>) recolor or re-weight part of
-            one paragraph.
+            cannot load a file at runtime. A comma list is a fallback chain: a
+            glyph the first font lacks comes from the next one. Inline spans (a
+            nested <InlineCode>{"<text>"}</InlineCode>) recolor or re-weight
+            part of one paragraph.
           </Paragraph>
           <CodeTabs
             tsx={`<text style={{ fontFamily: "DancingScript" }}>
   Styled with a custom font family
+</text>
+
+<text
+  style={{
+    fontFamily: "Space Grotesk, Inter",
+  }}
+>
+  Saved ✓
 </text>
 
 <text style={{ fontSize: 18 }}>
@@ -149,6 +158,8 @@ function FontFamilyDemo() {
 </text>`}
             rust={`ReactUiPlugin::new(bundle)
     .default_font("fonts/Inter.ttf")
+    .font("Inter", "fonts/Inter.ttf")
+    .font("Space Grotesk", "fonts/Grotesk.ttf")
     .font("DancingScript", "fonts/DancingScript.ttf")`}
           />
         </>
@@ -170,6 +181,19 @@ function FontFamilyCard() {
       >
         Styled with a custom font family
       </text>
+
+      <node style={{ gap: 24 }}>
+        {FALLBACKS.map((fontFamily) => (
+          <node key={fontFamily} style={fallbackSample}>
+            <text
+              style={{ ...sampleStyle, fontSize: FontSizes.xl, fontFamily }}
+            >
+              Saved ✓
+            </text>
+            <InlineCode>{fontFamily}</InlineCode>
+          </node>
+        ))}
+      </node>
 
       <text style={sampleStyle}>
         Nested texts color{" "}
@@ -305,6 +329,16 @@ function LineBreakCard() {
 
 // The demo's sample text. Spans restate it — they don't inherit the run's
 // size or color.
+// Space Grotesk has no check mark: alone it draws its missing-glyph box, in
+// a list the glyph comes from the next font that has one.
+const FALLBACKS = ["Space Grotesk", "Space Grotesk, Inter"];
+
+const fallbackSample: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 6,
+};
+
 const sampleStyle: BevyStyle = {
   fontSize: FontSizes.lg,
   color: Colors.text,
