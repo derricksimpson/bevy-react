@@ -7,9 +7,9 @@
 //!    `clip_from_view` is an orthographic projection over the layer's capture
 //!    rect — the same physical screen space stock UI vertices live in — and
 //!    register an empty `TransparentUi` phase for it. Stock extraction / queue
-//!    never know it exists. Members of layers served from cache this frame
-//!    are then hidden from stock extraction for the rest of the extract
-//!    window ([`cached`]) — their items would only be stolen and dropped.
+//!    never know it exists. (Stock extraction is retained: only nodes whose
+//!    data changed are re-extracted, so a cached layer's idle members cost
+//!    no extraction — their queued items are stolen and dropped.)
 //! 2. [`redistribute_ui_layers`] (`PhaseSort`, before the stock sort): move
 //!    the already-queued phase items whose `main_entity` lies in a promoted
 //!    subtree, **verbatim**, from the camera's UI phase into their layer's
@@ -51,7 +51,6 @@
 //! vertex stage = bevy's fullscreen shader, fragment stage = pass module).
 
 pub mod backdrop;
-pub mod cached;
 pub mod clip;
 pub mod mips;
 pub mod morph;
@@ -307,9 +306,8 @@ pub struct ExtractedLayer {
     pub target_format: TextureFormat,
     /// Whether this layer's capture must re-render this frame. `false` = the
     /// persistent texture in [`LayerTextureStore`] already holds the correct
-    /// pixels: the capture pass skips it, its members are hidden from stock
-    /// extraction ([`cached`]), and any item still stolen for it is dropped
-    /// instead of re-drawn. Decided at extract time (main-world dirt ∪
+    /// pixels: the capture pass skips it, and the items stolen for it are
+    /// dropped instead of re-drawn. Decided at extract time (main-world dirt ∪
     /// missing/mismatched slot), then propagated up the enclosing chain — a
     /// re-capturing layer's quad re-draws inside every enclosing capture.
     pub needs_capture: bool,
@@ -331,13 +329,13 @@ pub struct ExtractedLayer {
     /// ([`LayerCaptureRect::outset`]). The backdrop quad shrinks by this to
     /// the un-inflated border box — frost must not paint in the outset ring.
     pub outset: u32,
-    /// The node's layout-resolved corner radii, `[top_left, top_right,
-    /// bottom_right, bottom_left]` physical px (from
-    /// `ComputedNode.border_radius` — already clamped per corner to
-    /// `0.5 * min(w, h)`, Bevy's rule; matching what bevy_ui paints is the
-    /// point). Consumed only by the backdrop quad's uniform push: the frost
-    /// is masked to the rounded border box. All-zero = square.
-    pub corner_radius: [f32; 4],
+    /// The node's layout-resolved corner radii, horizontal then vertical,
+    /// each `[top_left, top_right, bottom_right, bottom_left]` physical px
+    /// (from `ComputedNode.border_radius`, already clamped by bevy_ui;
+    /// matching what it paints is the point). Consumed only by the backdrop
+    /// quad's uniform push: the frost is masked to the rounded border box.
+    /// All-zero = square.
+    pub corner_radius: [[f32; 4]; 2],
     /// The layer's composite-time 3D model matrix (screen-space homography,
     /// from `LayerTransform3dMatrix`). `None` = untransformed (absent style
     /// or identity params) — the quad takes the CPU clip path unchanged.
@@ -377,36 +375,24 @@ pub struct ExtractedLayer {
     /// (`stack_z_offsets::BACKGROUND_COLOR` is 0.0). `None` when the root has
     /// no `ComputedStackIndex` yet. Source of [`Self::fallback_sort_key`].
     pub root_sort_key: Option<FloatOrd>,
-    /// The root's true `InheritedVisibility` at extract time (read before the
-    /// [`cached`] flip). Visibility inherits, so `false` means every member
-    /// is invisible too — stock would have queued nothing for the subtree.
-    pub root_visible: bool,
 }
 
 impl ExtractedLayer {
     /// Composite-quad sort key to fall back on when the subtree stole no
-    /// phase items ([`Self::root_sort_key`]), in exactly two cases: a layer
-    /// **served from cache** whose members were hidden from extraction
-    /// ([`cached`]) — its quad still has to draw, where the subtree's first
-    /// pixel would have — provided its root is visible (an invisible root
-    /// queues nothing, so it draws no quad, as before the skip); and a layer
-    /// with a **morph in flight**: an empty morph carrier (content
-    /// mounted/unmounted around the blend) must still draw its blend quad.
-    /// `None` everywhere else: idle empty layers draw no quad. Read after
-    /// propagation (`needs_capture` must be final).
+    /// phase items ([`Self::root_sort_key`]): only a layer with a **morph in
+    /// flight** — an empty morph carrier (content mounted/unmounted around
+    /// the blend) must still draw its blend quad. `None` everywhere else:
+    /// idle empty layers draw no quad.
     pub fn fallback_sort_key(&self) -> Option<FloatOrd> {
-        if self.morph.is_some() || (!self.needs_capture && self.root_visible) {
-            self.root_sort_key
-        } else {
-            None
-        }
+        self.morph.as_ref().and(self.root_sort_key)
     }
 }
 
 /// `bevy_ui_render`'s item-extraction sets (every `RenderUiSystems` set but
-/// the camera views) as one set: bevy has no umbrella of its own, and the
-/// layer extract-window systems (the clip swap, cached-member hiding) bracket
-/// all of them.
+/// the camera views and `ExtractChanges`, which only reads change ticks) as
+/// one set: bevy has no umbrella of its own, and the layer extract-window
+/// clip swap brackets all of them. Re-check the list on a Bevy upgrade — a
+/// new item set left out extracts its items with the real ancestor clips.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractUiItems;
 
@@ -456,7 +442,6 @@ pub fn extract_ui_layers(
             Option<&ComputedStackIndex>,
             Option<&crate::filters::MorphState>,
             Option<&crate::filters::ResolvedMorphChain>,
-            Option<&InheritedVisibility>,
         )>,
     >,
     membership: Extract<Res<LayerMembership>>,
@@ -510,7 +495,6 @@ pub fn extract_ui_layers(
         stack_index,
         morph_state,
         morph_chain,
-        root_visibility,
     ) in layers.iter()
     {
         let Some((camera_main, camera_render, target_format)) = camera_of(target_camera) else {
@@ -625,9 +609,7 @@ pub fn extract_ui_layers(
             backdrop_chain,
             backdrop_quad_entity,
             outset: rect.outset,
-            // Horizontal radii only: the frost mask is circular (exact for
-            // the circular corners `borderRadius` resolves to).
-            corner_radius: computed.map_or([0.0; 4], |c| <[[f32; 4]; 2]>::from(c.border_radius)[0]),
+            corner_radius: computed.map_or([[0.0; 4]; 2], |c| c.border_radius.into()),
             // Identity matrices stay `None`: the quad renders exactly like an
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
@@ -635,7 +617,6 @@ pub fn extract_ui_layers(
             bucketable,
             root_sort_key: stack_index
                 .map(|s| FloatOrd(s.0 as f32 + stack_z_offsets::BACKGROUND_COLOR)),
-            root_visible: root_visibility.is_some_and(|v| v.get()),
             morph,
             morph_warm,
         });
@@ -786,7 +767,7 @@ fn capture_view(layer: &ExtractedLayer) -> ExtractedView {
     let (min, size) = (layer.min, layer.size);
     ExtractedView {
         retained_view_entity: layer.retained,
-        clip_from_view: Mat4::orthographic_rh(
+        clip_from_view: bevy::math::proj::orthographic(
             min.x,
             min.x + size.x as f32,
             min.y + size.y as f32,
@@ -880,8 +861,8 @@ pub fn redistribute_ui_layers(
             stolen.push((idx, key, item));
         }
     }
-    // Cached layers' members were hidden from extraction ([`cached`]), so
-    // they stole nothing: their quads take the root's own stacking position.
+    // A morphing layer that stole nothing (an empty carrier) takes the
+    // root's own stacking position.
     fill_fallback_sort_keys(
         &mut quad_sort_keys,
         extracted
@@ -891,12 +872,10 @@ pub fn redistribute_ui_layers(
     );
     propagate_quad_sort_keys(&mut quad_sort_keys, &extracted.enclosing);
     for (idx, _key, item) in stolen {
-        // A cached layer's items (anything an extractor outside the hide
-        // window still produced — see [`cached`]'s known gap) are simply
-        // dropped: the persistent texture already holds their pixels, so
-        // nothing re-draws them (and stock `prepare_uinodes` builds no
-        // vertices for them either). The steal keeps them out of the stock
-        // phase.
+        // A cached layer's items are simply dropped: the persistent texture
+        // already holds their pixels, so nothing re-draws them (and stock
+        // `prepare_uinodes` builds no vertices for them either). The steal
+        // keeps them out of the stock phase.
         if !extracted.layers[idx].needs_capture {
             continue;
         }
@@ -1274,7 +1253,8 @@ pub fn prepare_layer_composites(
             image_size,
             // Content quads never round: the capture already holds the
             // node's own rounded paint. Zero radii disable the mask.
-            radius: Vec4::ZERO,
+            radius_x: Vec4::ZERO,
+            radius_y: Vec4::ZERO,
             box_center: Vec2::ZERO,
             box_size: Vec2::ZERO,
         });
@@ -1351,7 +1331,8 @@ pub fn prepare_layer_composites(
             // Frost is masked to the node's rounded border box; the radii
             // are the layout-resolved ones bevy_ui paints with, so the
             // frost edge coincides with the panel's own rounded edge.
-            radius: Vec4::from(layer.corner_radius),
+            radius_x: Vec4::from(layer.corner_radius[0]),
+            radius_y: Vec4::from(layer.corner_radius[1]),
             box_center: (box_min + box_max) * 0.5,
             box_size: box_max - box_min,
         });

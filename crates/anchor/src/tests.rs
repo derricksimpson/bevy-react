@@ -165,7 +165,7 @@ fn anchored_move_never_ticks_node() {
     // computed with the very same method the system uses.
     let camera = Camera {
         computed: ComputedCameraValues {
-            clip_from_view: Mat4::perspective_infinite_reverse_rh(
+            clip_from_view: bevy::math::proj::perspective_infinite_reverse(
                 std::f32::consts::FRAC_PI_4,
                 1.0,
                 0.1,

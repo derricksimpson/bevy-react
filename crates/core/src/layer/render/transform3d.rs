@@ -19,9 +19,8 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::{BindGroup, BufferId, DynamicUniformBuffer, ShaderType};
 
 /// Per-quad composite params. Field order matches `CompositeParams` in
-/// `composite.wesl` byte for byte (128 bytes; guarded by
-/// `composite_uniforms_match_the_documented_wgsl_layout`). Pad names are
-/// digit-free on purpose (the naga-namer constraint, see `FilterUniforms`).
+/// `composite.wesl` byte for byte (144 bytes; guarded by
+/// `composite_uniforms_match_the_documented_wgsl_layout`).
 #[derive(Clone, Copy, PartialEq, ShaderType)]
 pub struct CompositeUniforms {
     /// Screen-space model matrix (physical px, homogeneous — the vertex stage
@@ -45,15 +44,15 @@ pub struct CompositeUniforms {
     /// image UVs onto it (see `layer/render/store.rs`). Equal to the texture
     /// size for exactly-sized layers, where the shader passes UVs through.
     pub image_size: Vec2,
-    /// Rounded-corner mask radii, `[top_left, top_right, bottom_right,
-    /// bottom_left]` physical px — the node's layout-resolved
-    /// `ComputedNode.border_radius` (already clamped per corner to
-    /// `0.5 * min(w, h)`; Bevy's rule, not the CSS proportional-shrink one —
-    /// matching what bevy_ui *paints* is the point: the frost edge must
-    /// coincide with the node's own rounded background). All-zero disables
-    /// the mask term entirely (the `edge_feather` pattern) — today only
-    /// backdrop quads set it.
-    pub radius: Vec4,
+    /// Rounded-corner mask radii, horizontal then vertical, each
+    /// `[top_left, top_right, bottom_right, bottom_left]` physical px — the
+    /// node's layout-resolved `ComputedNode.border_radius` (already clamped
+    /// by bevy_ui; matching what it *paints* is the point: the frost edge
+    /// must coincide with the node's own rounded background). All-zero
+    /// disables the mask term entirely (the `edge_feather` pattern) — today
+    /// only backdrop quads set it.
+    pub radius_x: Vec4,
+    pub radius_y: Vec4,
     /// The UNCLIPPED border box the radii round, screen-space physical px.
     /// Carried separately because the CPU clip clamps the quad's *geometry*
     /// — the SDF must still measure against the true box.
@@ -142,7 +141,7 @@ mod tests {
     /// field.
     #[test]
     fn composite_uniforms_match_the_documented_wgsl_layout() {
-        assert_eq!(CompositeUniforms::min_size().get(), 128);
+        assert_eq!(CompositeUniforms::min_size().get(), 144);
 
         let value = CompositeUniforms {
             model: Mat4::from_translation(bevy::math::Vec3::new(9.0, 0.0, 0.0)),
@@ -151,14 +150,15 @@ mod tests {
             edge_feather: 1.5,
             pad_a: 0.0,
             image_size: Vec2::new(14.0, 15.0),
-            radius: Vec4::new(5.0, 6.0, 7.0, 8.0),
+            radius_x: Vec4::new(5.0, 6.0, 7.0, 8.0),
+            radius_y: Vec4::new(16.0, 17.0, 18.0, 19.0),
             box_center: Vec2::new(10.0, 11.0),
             box_size: Vec2::new(12.0, 13.0),
         };
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());
         buffer.write(&value).expect("uniform write");
         let bytes = buffer.into_inner();
-        assert_eq!(bytes.len(), 128);
+        assert_eq!(bytes.len(), 144);
         // Per-field offsets, per the WGSL struct's comment block.
         assert_eq!(f32_at(&bytes, 48), 9.0); // model.w_axis.x (col 3 @ 48)
         assert_eq!(f32_at(&bytes, 64), 1.0); // clip_min.x
@@ -168,13 +168,15 @@ mod tests {
         assert_eq!(f32_at(&bytes, 80), 1.5); // edge_feather
         assert_eq!(f32_at(&bytes, 88), 14.0); // image_size.x
         assert_eq!(f32_at(&bytes, 92), 15.0); // image_size.y
-        assert_eq!(f32_at(&bytes, 96), 5.0); // radius.x (top_left)
-        assert_eq!(f32_at(&bytes, 100), 6.0); // radius.y (top_right)
-        assert_eq!(f32_at(&bytes, 104), 7.0); // radius.z (bottom_right)
-        assert_eq!(f32_at(&bytes, 108), 8.0); // radius.w (bottom_left)
-        assert_eq!(f32_at(&bytes, 112), 10.0); // box_center.x
-        assert_eq!(f32_at(&bytes, 116), 11.0); // box_center.y
-        assert_eq!(f32_at(&bytes, 120), 12.0); // box_size.x
-        assert_eq!(f32_at(&bytes, 124), 13.0); // box_size.y
+        assert_eq!(f32_at(&bytes, 96), 5.0); // radius_x.x (top_left)
+        assert_eq!(f32_at(&bytes, 100), 6.0); // radius_x.y (top_right)
+        assert_eq!(f32_at(&bytes, 104), 7.0); // radius_x.z (bottom_right)
+        assert_eq!(f32_at(&bytes, 108), 8.0); // radius_x.w (bottom_left)
+        assert_eq!(f32_at(&bytes, 112), 16.0); // radius_y.x (top_left)
+        assert_eq!(f32_at(&bytes, 124), 19.0); // radius_y.w (bottom_left)
+        assert_eq!(f32_at(&bytes, 128), 10.0); // box_center.x
+        assert_eq!(f32_at(&bytes, 132), 11.0); // box_center.y
+        assert_eq!(f32_at(&bytes, 136), 12.0); // box_size.x
+        assert_eq!(f32_at(&bytes, 140), 13.0); // box_size.y
     }
 }

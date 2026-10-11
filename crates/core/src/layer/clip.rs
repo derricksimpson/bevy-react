@@ -37,6 +37,17 @@
 //! place: picking (`crate::pick_clip`) and `bevy_ui`'s own consumers keep
 //! seeing true inherited clips.
 //!
+//! **Retained extraction.** `bevy_ui_render` re-extracts a node only when one
+//! of its components changed, and the swap deliberately bypasses change
+//! ticks. So the clip a node's render data holds is the one in place at its
+//! last extraction: a node that joins a layer (promotion) would keep its real
+//! ancestor clip baked into the capture, and one that leaves (demotion) its
+//! interior clip, drawing outside its scroll container. Every node whose
+//! `interior` entry appears, changes or disappears is therefore recorded in
+//! [`LayerClips::changed`], and [`mark_reclipped_members`] flags its
+//! `CalculatedClip` as changed — re-extracted this frame, inside the swap
+//! window. (A real clip change needs no help: bevy's own write flags it.)
+//!
 //! Known divergence (deliberate, rare): an `OverrideClip` escapee inside a
 //! subtree is still clamped by the layer's quad clip at composite time
 //! (stock lets it escape every ancestor clip).
@@ -55,6 +66,9 @@ use bevy::ui::{CalculatedClip, ComputedNode, FixedNode, OverrideClip, UiGlobalTr
 
 use super::{LayerMembership, PromotedLayer};
 
+/// Subtree member → its interior clip ([`LayerClips::interior`]).
+pub type InteriorClips = HashMap<Entity, Option<CalculatedClip>>;
+
 /// Clip maps for promoted layers, maintained by [`sync_layer_clips`]. They
 /// persist across frames: rebuilt from scratch when [`LayerMembership`] is
 /// (a structural frame), refreshed per root when something a cascade depends
@@ -68,28 +82,37 @@ pub struct LayerClips {
     /// interior clip is `Some` always does (its interior clip sources are a
     /// subset of the real cascade's), so no component insert/remove is ever
     /// needed.
-    pub interior: HashMap<Entity, Option<CalculatedClip>>,
+    pub interior: InteriorClips,
     /// Promoted root → the screen-space rect its composite quad clamps to.
     /// Top-level roots: their inherited [`CalculatedClip`]. Nested roots: the
     /// enclosing layer's interior cascade value at the root. `None` inside
     /// the option = unclipped.
     pub quads: HashMap<Entity, Option<Rect>>,
+    /// Nodes whose `interior` entry appeared, changed or disappeared since
+    /// [`mark_reclipped_members`] last drained this (see the module docs on
+    /// retained extraction).
+    pub changed: Vec<Entity>,
 }
 
 /// The screen-space (physical px) bounds of an inherited [`CalculatedClip`]:
 /// the intersection of every clip rect's world-space bounding box. `None` =
 /// unclipped (no clip rects); a fully clipped node yields an empty rect. Exact
 /// for clippers that only translate/scale; a rotated clipper contributes its
-/// bounding box (the over-approximation errs on drawing, never on hiding), and
-/// a rotated clipper with an infinite (`Visible`) axis — whose box is not a
-/// number — constrains nothing.
+/// bounding box (the over-approximation errs on drawing, never on hiding).
 pub fn clip_aabb(clip: &CalculatedClip) -> Option<Rect> {
+    /// Stands in for a `Visible` axis's infinite clip extent: transforming
+    /// an infinite corner multiplies the matrix's zero terms by infinity
+    /// (NaN), which `f32::min`/`max` then silently drop.
+    const UNBOUNDED: f32 = 1e30;
     let Some(rects) = clip.rects() else {
         return Some(Rect::default());
     };
     rects.iter().fold(None, |bounds: Option<Rect>, c| {
         let to_world = c.world_to_clip_local.inverse();
-        let r = c.rect;
+        let r = Rect {
+            min: c.rect.min.max(Vec2::splat(-UNBOUNDED)),
+            max: c.rect.max.min(Vec2::splat(UNBOUNDED)),
+        };
         let world = [
             r.min,
             Vec2::new(r.max.x, r.min.y),
@@ -100,9 +123,6 @@ pub fn clip_aabb(clip: &CalculatedClip) -> Option<Rect> {
         .fold(Rect::EMPTY, |acc, p| {
             acc.union_point(to_world.transform_point2(p))
         });
-        if world.min.is_nan() || world.max.is_nan() {
-            return bounds;
-        }
         Some(bounds.map_or(world, |b| b.intersect(world)))
     })
 }
@@ -168,26 +188,37 @@ pub fn sync_layer_clips(
     mut memory: Local<ClipSyncMemory>,
     mut clips: ResMut<LayerClips>,
 ) {
-    let cascade_root =
-        |root: Entity, calculated_clip: Option<&CalculatedClip>, clips: &mut LayerClips| {
-            // Only ACTIVE roots (present in this frame's membership as their own
-            // layer) ran `mark_subtree`; inactive ones (zero-sized, not laid out)
-            // have no capture to clip and may carry stale components.
-            if membership.node_to_layer.get(&root) != Some(&root) {
-                return;
-            }
-            // Interior cascade: restart with NO inherited clip at the root —
-            // exactly `bevy_ui`'s `update_clipping`, minus everything above.
-            cascade(root, root, None, &children, &root_markers, &nodes, clips);
-            // A top-level root's quad composites into the screen phase and clamps
-            // to the root's real inherited clip. (Nested roots' quad clips were
-            // recorded by their enclosing root's cascade at the prune point.)
-            if membership.enclosing.get(&root) == Some(&None) {
-                clips
-                    .quads
-                    .insert(root, calculated_clip.and_then(clip_aabb));
-            }
-        };
+    let cascade_root = |root: Entity,
+                        calculated_clip: Option<&CalculatedClip>,
+                        prev: Option<&InteriorClips>,
+                        clips: &mut LayerClips| {
+        // Only ACTIVE roots (present in this frame's membership as their own
+        // layer) ran `mark_subtree`; inactive ones (zero-sized, not laid out)
+        // have no capture to clip and may carry stale components.
+        if membership.node_to_layer.get(&root) != Some(&root) {
+            return;
+        }
+        // Interior cascade: restart with NO inherited clip at the root —
+        // exactly `bevy_ui`'s `update_clipping`, minus everything above.
+        cascade(
+            root,
+            root,
+            None,
+            &children,
+            &root_markers,
+            &nodes,
+            prev,
+            clips,
+        );
+        // A top-level root's quad composites into the screen phase and clamps
+        // to the root's real inherited clip. (Nested roots' quad clips were
+        // recorded by their enclosing root's cascade at the prune point.)
+        if membership.enclosing.get(&root) == Some(&None) {
+            clips
+                .quads
+                .insert(root, calculated_clip.and_then(clip_aabb));
+        }
+    };
     if memory.rebuilds != membership.rebuilds {
         // Structural frame: membership is fresh, the maps are stale wholesale.
         memory.rebuilds = membership.rebuilds;
@@ -195,11 +226,17 @@ pub fn sync_layer_clips(
         removed_clips.clear();
         removed_overrides.clear();
         let clips = &mut *clips;
-        clips.interior.clear();
+        // Rebuilt into a fresh map, diffed against the old one: only the
+        // entries that really changed are re-extracted.
+        let prev = std::mem::take(&mut clips.interior);
         clips.quads.clear();
         for (root, calculated_clip) in &roots {
-            cascade_root(root, calculated_clip, clips);
+            cascade_root(root, calculated_clip, Some(&prev), clips);
         }
+        let LayerClips {
+            interior, changed, ..
+        } = clips;
+        changed.extend(prev.keys().filter(|e| !interior.contains_key(*e)));
         return;
     }
     let mut touched: Vec<Entity> = Vec::new();
@@ -227,7 +264,26 @@ pub fn sync_layer_clips(
     let clips = &mut *clips;
     for root in touched {
         if let Ok((root, calculated_clip)) = roots.get(root) {
-            cascade_root(root, calculated_clip, clips);
+            cascade_root(root, calculated_clip, None, clips);
+        }
+    }
+}
+
+/// Flag the `CalculatedClip` of every node whose interior clip entry changed
+/// ([`LayerClips::changed`]) so `bevy_ui_render`'s retained extraction
+/// re-extracts it this frame, inside the swap window. Runs right after
+/// [`sync_layer_clips`]. Entities without the component (unclipped, or
+/// despawned) need nothing: there is no clip in their render data to refresh.
+pub fn mark_reclipped_members(
+    mut clips: ResMut<LayerClips>,
+    mut clipped: Query<&mut CalculatedClip>,
+) {
+    if clips.changed.is_empty() {
+        return; // No `ResMut` deref: the maps stay unchanged-flagged.
+    }
+    for entity in clips.changed.drain(..) {
+        if let Ok(mut clip) = clipped.get_mut(entity) {
+            clip.set_changed();
         }
     }
 }
@@ -240,7 +296,7 @@ pub fn sync_layer_clips(
 /// pruned: the cascade value at the prune point is its composite quad's clip
 /// (its quad draws inside this capture), and its interior belongs to its own
 /// cascade.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn cascade(
     node: Entity,
     dfs_root: Entity,
@@ -254,6 +310,7 @@ fn cascade(
         Has<OverrideClip>,
         Has<FixedNode>,
     )>,
+    prev: Option<&InteriorClips>,
     clips: &mut LayerClips,
 ) {
     let Ok((ui_node, computed, transform, has_override, has_fixed)) = nodes.get(node) else {
@@ -272,6 +329,10 @@ fn cascade(
         return; // The nested root's own cascade owns its interior.
     }
     let child_clip = children_clip(ui_node, computed, transform, &inherited);
+    // The previous value: the old map on a rebuild, else this map's entry.
+    if prev.unwrap_or(&clips.interior).get(&node) != Some(&inherited) {
+        clips.changed.push(node);
+    }
     clips.interior.insert(node, inherited);
     if let Ok(kids) = children.get(node) {
         for &kid in kids {
@@ -282,6 +343,7 @@ fn cascade(
                 children,
                 root_markers,
                 nodes,
+                prev,
                 clips,
             );
         }
@@ -672,5 +734,110 @@ mod tests {
             "a clip change must not re-capture"
         );
         assert_eq!(quad(&world, root), Some(grown));
+    }
+
+    /// Retained extraction keeps the clip of a node's last extraction in its
+    /// render data, so a membership transition must flag the member's
+    /// `CalculatedClip` (re-extracted inside the swap window) — joining a
+    /// layer and leaving it — while an idle frame flags nothing.
+    #[test]
+    fn membership_transitions_flag_clips_for_reextraction() {
+        let (mut world, mut schedule) = clip_world();
+        schedule.add_systems(mark_reclipped_members.after(sync_layer_clips));
+        let flagged = |world: &World, e: Entity| {
+            world
+                .entity(e)
+                .get_ref::<CalculatedClip>()
+                .unwrap()
+                .is_changed()
+        };
+        let clip = Rect::new(0.0, 0.0, 30.0, 30.0);
+        let root = spawn_root(
+            &mut world,
+            1,
+            Vec2::new(100.0, 60.0),
+            Vec2::new(50.0, 30.0),
+            Overflow::visible(),
+        );
+        let child = spawn_node(
+            &mut world,
+            Vec2::new(40.0, 20.0),
+            Vec2::new(50.0, 30.0),
+            Overflow::visible(),
+        );
+        world.entity_mut(child).insert(ChildOf(root));
+        world.entity_mut(root).insert(screen_clip(clip));
+        world.entity_mut(child).insert(screen_clip(clip));
+        schedule.run(&mut world);
+        assert!(world.resource::<LayerClips>().changed.is_empty(), "drained");
+
+        // Idle: nothing joins or leaves, nothing is flagged.
+        world.clear_trackers();
+        schedule.run(&mut world);
+        assert!(!flagged(&world, root) && !flagged(&world, child), "idle");
+
+        // Demotion: the members' render data holds the interior clip.
+        world.clear_trackers();
+        world.entity_mut(root).remove::<PromotedLayer>();
+        schedule.run(&mut world);
+        assert!(world.resource::<LayerClips>().interior.is_empty());
+        assert!(flagged(&world, root) && flagged(&world, child), "demoted");
+
+        // Promotion: the members' render data holds the real ancestor clip.
+        world.clear_trackers();
+        world.entity_mut(root).insert(PromotedLayer {
+            reasons: PromotionReasons(PromotionReasons::FILTER),
+        });
+        schedule.run(&mut world);
+        assert!(flagged(&world, root) && flagged(&world, child), "promoted");
+    }
+
+    /// A scroll container clips one axis only: bevy_ui gives its `Visible`
+    /// axis an infinite extent, which must stay unbounded in the screen
+    /// bounds (transforming it naively yields NaN, i.e. an empty rect that
+    /// clips a nested layer's quad away entirely).
+    #[test]
+    fn single_axis_clip_bounds_stay_unbounded_on_the_open_axis() {
+        let (mut world, mut schedule) = clip_world();
+        let outer = spawn_root(
+            &mut world,
+            1,
+            Vec2::splat(300.0),
+            Vec2::splat(150.0),
+            Overflow::visible(),
+        );
+        let scroller = spawn_node(
+            &mut world,
+            Vec2::new(200.0, 100.0),
+            Vec2::new(150.0, 100.0),
+            Overflow::scroll_y(),
+        );
+        world.entity_mut(scroller).insert(ChildOf(outer));
+        let inner = spawn_root(
+            &mut world,
+            2,
+            Vec2::splat(40.0),
+            Vec2::new(150.0, 100.0),
+            Overflow::visible(),
+        );
+        world.entity_mut(inner).insert(ChildOf(scroller));
+        schedule.run(&mut world);
+
+        let clip = quad(&world, inner).expect("the scroller clips the nested quad");
+        assert_eq!((clip.min.y, clip.max.y), (50.0, 150.0), "the clipped axis");
+        assert!(
+            clip.min.x < -1e20 && clip.max.x > 1e20,
+            "the open axis stays unbounded, got {clip:?}"
+        );
+        assert!(
+            crate::layer::render::clip::clip_quad(
+                Vec2::new(130.0, 80.0),
+                bevy::math::UVec2::splat(40),
+                0.0,
+                Some(clip)
+            )
+            .is_some(),
+            "the nested quad still draws"
+        );
     }
 }

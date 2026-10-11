@@ -13,15 +13,19 @@
 // clamp a rotated quad's vertices.
 
 import bevy_render::view::View;
+// bevy_ui's own rounded-box distance (elliptical corners included): the frost
+// mask uses the very function the node's background is painted with.
+import bevy_ui_render::ui::sd_rounded_box;
 
 @group(0) @binding(0) var<uniform> view: View;
 @group(1) @binding(0) var atlas_texture: texture_2d<f32>;
 @group(1) @binding(1) var atlas_sampler: sampler;
 
-// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (128
+// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (144
 // bytes, guarded by `composite_uniforms_match_the_documented_wgsl_layout`).
 // Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80,
-// image_size @88, radius @96, box_center @112, box_size @120.
+// image_size @88, radius_x @96, radius_y @112, box_center @128,
+// box_size @136.
 struct CompositeParams {
     model: mat4x4<f32>,
     clip_min: vec2<f32>,
@@ -33,11 +37,13 @@ struct CompositeParams {
     // `layer/render/store.rs`), and `uv` 0..1 spans the image, not the
     // texture. Equal to the texture size for exactly-sized layers.
     image_size: vec2<f32>,
-    // Rounded-corner mask: per-corner radii [TL, TR, BR, BL] (physical px,
-    // the node's layout-resolved values) over the UNCLIPPED border box.
-    // All-zero disables the mask (the edge_feather pattern); today only
-    // backdrop quads set it — frost clipped to the rounded panel.
-    radius: vec4<f32>,
+    // Rounded-corner mask: per-corner horizontal and vertical radii
+    // [TL, TR, BR, BL] (physical px, the node's layout-resolved values) over
+    // the UNCLIPPED border box. All-zero disables the mask (the edge_feather
+    // pattern); today only backdrop quads set it — frost clipped to the
+    // rounded panel.
+    radius_x: vec4<f32>,
+    radius_y: vec4<f32>,
     box_center: vec2<f32>,
     box_size: vec2<f32>,
 }
@@ -54,29 +60,6 @@ struct VertexOutput {
     // of the render target (screen or a nested layer's capture texture).
     @location(2) screen_pos: vec2<f32>,
     @location(3) screen_w: f32,
-}
-
-// Signed distance from `point` (measured from the box CENTER) to a rounded
-// box of `size` with per-quadrant `corner_radii` [TL, TR, BR, BL]; negative
-// inside. Ported verbatim from bevy_ui_render's `ui.wesl::sd_rounded_box`
-// (including the .xy/.wz quadrant-select swap) so the frost's corner math is
-// bit-identical to the one bevy_ui paints the node's own background with.
-fn sd_rounded_box(point: vec2<f32>, size: vec2<f32>, corner_radii: vec4<f32>) -> f32 {
-    // If 0.0 < y then select bottom left (w) and bottom right corner radius (z).
-    // Else select top left (x) and top right corner radius (y).
-    let rs = select(corner_radii.xy, corner_radii.wz, 0.0 < point.y);
-    // w and z are swapped above so that both pairs are in left-to-right order, otherwise this second
-    // select statement would return the incorrect value for the bottom pair.
-    let radius = select(rs.x, rs.y, 0.0 < point.x);
-    // Vector from the corner closest to the point, to the point.
-    let corner_to_point = abs(point) - 0.5 * size;
-    // Vector from the center of the radius circle to the point.
-    let q = corner_to_point + radius;
-    // Length from center of the radius circle to the point, zeros a component if the point is not
-    // within the quadrant of the radius circle that is part of the curved corner.
-    let l = length(max(q, vec2(0.0)));
-    let m = min(max(q.x, q.y), 0.0);
-    return l + m - radius;
 }
 
 @vertex
@@ -132,9 +115,14 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // `antialias`; deliberately no fwidth) — so the frost edge coincides
     // with the node's painted rounded background. All-zero radii disable the
     // term exactly (content quads, square backdrops stay pixel-identical).
-    let sd = sd_rounded_box(screen - params.box_center, params.box_size, params.radius);
+    let sd = sd_rounded_box(
+        screen - params.box_center,
+        params.box_size,
+        params.radius_x,
+        params.radius_y,
+    );
     let rounded = saturate(0.5 - sd);
-    coverage *= select(1.0, rounded, any(params.radius > vec4(0.0)));
+    coverage *= select(1.0, rounded, any(params.radius_x > vec4(0.0)));
 
     // Ancestor clip of a transformed quad (screen-space rect vs. the true
     // screen position) — a HARD cut, like every other overflow edge.

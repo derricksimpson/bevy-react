@@ -442,7 +442,6 @@ impl Plugin for ReactUiPlugin {
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
-                    .init_resource::<lr::cached::HiddenMembers>()
                     // `precompile_filters`: the shader list crosses in extract,
                     // the pipelines are queued per newly seen camera format
                     // before any prepare that would specialize them lazily.
@@ -467,6 +466,7 @@ impl Plugin for ReactUiPlugin {
                             RenderUiSystems::ExtractCursor,
                             RenderUiSystems::ExtractDebug,
                             RenderUiSystems::ExtractGradient,
+                            RenderUiSystems::ExtractInlineImages,
                         )
                             .in_set(lr::ExtractUiItems),
                     )
@@ -487,20 +487,6 @@ impl Plugin for ReactUiPlugin {
                             lr::clip::swap_interior_clips_out
                                 .after(RenderUiSystems::ExtractCameraViews)
                                 .after(lr::ExtractUiItems),
-                            // The cached-layer extraction skip: members of
-                            // layers served from cache are HIDDEN for the
-                            // span of the stock item extractors (same
-                            // exclusive-borrow contract as the clip swap).
-                            // Needs the final `needs_capture`, so it follows
-                            // `extract_ui_layers` (itself after the camera
-                            // view set) and precedes every item set.
-                            lr::cached::hide_cached_layer_members
-                                .after(lr::extract_ui_layers)
-                                .before(lr::ExtractUiItems),
-                            // Restore after every item set — the clip
-                            // swap-out already sits after all of them.
-                            lr::cached::restore_cached_layer_members
-                                .after(lr::clip::swap_interior_clips_out),
                         ),
                     )
                     .add_systems(
@@ -1030,6 +1016,11 @@ impl Plugin for ReactUiPlugin {
                 crate::layer::clip::sync_layer_clips
                     .after(crate::layer::sync_layer_geometry)
                     .after(bevy::ui::UiSystems::PostLayout),
+                // Retained UI extraction: a node whose interior clip entry
+                // changed (it joined/left a layer) is flagged so bevy
+                // re-extracts it inside this frame's swap window.
+                crate::layer::clip::mark_reclipped_members
+                    .after(crate::layer::clip::sync_layer_clips),
                 // Re-clamps deferred controlled-scroll requests (a pin to the
                 // bottom in the same commit that grew the content) against
                 // fresh geometry.
