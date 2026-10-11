@@ -9,10 +9,10 @@
 //!
 //! ## How it fits the style pipeline
 //!
-//! Every style change funnels through [`crate::ui_map::apply_style`] — both the
+//! Every style change funnels through [`crate::ui_map::apply_style_masked`] — both the
 //! base re-render path (`Op::Update`) and the hover/press path
 //! ([`crate::reconcile::apply_interaction_styles`], which re-applies the *merged*
-//! style for the current `Interaction`). So `apply_style` is the one place that
+//! style for the current `ReactInteraction`). So `apply_style_masked` is the one place that
 //! always knows the resolved target. It stamps a [`TransitionInput`] (the spec +
 //! the resolved per-channel target) — a *stateless input* the engine reads but
 //! never writes, so there's no feedback loop with the live `UiTransform`/color it
@@ -65,8 +65,8 @@ use channels::with_input_channels;
 pub use channels::{Channel, TransitionState};
 
 /// Stamp (or clear) the transition components on a host element. Called from
-/// [`crate::ui_map::apply_style`] with the resolved style, so the input always
-/// reflects the current `Interaction` (base / hover / press). Sibling to
+/// [`crate::ui_map::apply_style_masked`] with the resolved style, so the input always
+/// reflects the current `ReactInteraction` (base / hover / press). Sibling to
 /// `apply_animated` in the reconciler's apply pattern.
 ///
 /// `fresh` marks a just-spawned entity: the input + state land as one insert
@@ -152,7 +152,7 @@ pub struct TransitionTargets {
     /// re-stamps this, never [`TransitionInput`]).
     gradient_input: Option<&'static crate::ui_map::GradientTargets>,
     /// The folded per-surface components the gradient channels ease
-    /// (snapped to the target by `apply_style`, which runs before this
+    /// (snapped to the target by `apply_style_masked`, which runs before this
     /// system).
     bg_gradient: Option<&'static mut BackgroundGradient>,
     border_gradient: Option<&'static mut BorderGradient>,
@@ -425,7 +425,7 @@ pub fn drive_transitions(
         // finds nothing to do and silently snaps. (The demos shell hits this:
         // crossing the responsive breakpoint commits `transition: {}` to snap
         // the nav across the swap, and the drawer's first open after it never
-        // eased.) Nothing is written here — `apply_style` already put the
+        // eased.) Nothing is written here — `apply_style_masked` already put the
         // static value on the component; only the readings catch up. The
         // channels that always drive (opacity, background color) pass their
         // `Option<spec>` straight to `drive`, which snaps on `None`, so they
@@ -453,7 +453,7 @@ pub fn drive_transitions(
         }
 
         // Transform: only when a transform transition is declared; otherwise the
-        // static `UiTransform` from `apply_style` stands untouched (the `else`
+        // static `UiTransform` from `apply_style_masked` stands untouched (the `else`
         // branch still re-seeds the channels — see `sync_row`). Only
         // specified channels are written (passing `None` keeps
         // `build_ui_transform`'s scale precedence intact).
@@ -721,7 +721,7 @@ pub fn drive_transitions(
         // Retarget detection runs on the unfolded stamp (it only changes on
         // style deltas); the eased opacity is baked only off a promoted
         // root (the group alpha owns the fold there), else the stamp's
-        // static fold applies — so settle equals `apply_style`'s own folded
+        // static fold applies — so settle equals `apply_style_masked`'s own folded
         // build bit-exactly. A write is content dirt: gradient pixels live
         // in the capture.
         {

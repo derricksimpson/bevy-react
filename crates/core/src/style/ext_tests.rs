@@ -112,10 +112,14 @@ fn stamped_property_follows_hover_variant() {
         .unwrap();
     app.update();
     let e = ent(&app, 1);
-    app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+    app.world_mut()
+        .entity_mut(e)
+        .insert(crate::ReactInteraction::Hovered);
     app.update();
     assert_eq!(glow_of(&app, 1), Some(5.0));
-    app.world_mut().entity_mut(e).insert(Interaction::None);
+    app.world_mut()
+        .entity_mut(e)
+        .insert(crate::ReactInteraction::None);
     app.update();
     assert_eq!(glow_of(&app, 1), Some(1.0));
 }

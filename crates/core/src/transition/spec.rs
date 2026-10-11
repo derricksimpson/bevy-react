@@ -210,7 +210,7 @@ impl ChannelTransition {
 }
 
 /// The resolved per-channel target for a transitioning entity, plus the spec.
-/// Written by [`crate::ui_map::apply_style`] from the *merged* style and read each
+/// Written by [`crate::ui_map::apply_style_masked`] from the *merged* style and read each
 /// frame by [`drive_transitions`](super::drive_transitions). Never written by
 /// the engine — keeping it free
 /// of the live components it animates avoids a target-chases-animation feedback

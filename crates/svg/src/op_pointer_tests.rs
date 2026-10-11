@@ -2,17 +2,17 @@
 //! the real op path.
 
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 
 use crate::op_tests::{create_kind, update_kind};
+use bevy_react_core::ReactInteraction;
 use bevy_react_core::ext::EventLocalPos;
 use bevy_react_core::protocol::{animatable::AnimatableField, props::Props};
 use bevy_react_core::test_util::{PointerHandlers, ent};
 
-/// A shape declaring handlers mounts with the synthesis component set —
-/// `PointerHandlers` + `Interaction` + `RelativeCursorPosition` +
-/// [`EventLocalPos`] — and stays Node-less; a handler-less sibling gets none of
-/// them (its hits fall through to the `<svg>` root).
+/// A shape declaring handlers mounts with the pointer component set —
+/// `PointerHandlers` + [`ReactInteraction`] + [`EventLocalPos`] — and stays
+/// Node-less; a handler-less sibling gets none of them (its hits fall through
+/// to the `<svg>` root).
 #[test]
 fn shape_handlers_stamp_pointer_components_on_create() {
     let (mut app, tx) = crate::test_app();
@@ -37,12 +37,8 @@ fn shape_handlers_stamp_pointer_components_on_create() {
         .expect("a handler-bearing shape carries PointerHandlers");
     assert!(handlers.down, "onPointerDown is registered");
     assert!(
-        with.get::<Interaction>().is_some(),
-        "onClick/onPointer* need the Interaction click-ownership marker"
-    );
-    assert!(
-        with.get::<RelativeCursorPosition>().is_some(),
-        "pointer handlers need the relative cursor"
+        with.get::<ReactInteraction>().is_some(),
+        "onClick/onPointer* make the shape interactive"
     );
     assert!(
         with.get::<EventLocalPos>().is_some(),
@@ -53,8 +49,7 @@ fn shape_handlers_stamp_pointer_components_on_create() {
     let without = app.world().entity(ent(&app, 2));
     assert!(
         without.get::<PointerHandlers>().is_none()
-            && without.get::<Interaction>().is_none()
-            && without.get::<RelativeCursorPosition>().is_none()
+            && without.get::<ReactInteraction>().is_none()
             && without.get::<EventLocalPos>().is_none(),
         "a handler-less shape must stay bare (root fallthrough)"
     );
@@ -62,9 +57,8 @@ fn shape_handlers_stamp_pointer_components_on_create() {
 
 /// Handler deltas toggle the whole component set on and off: adding handlers
 /// to a bare shape stamps them; unsetting every handler removes them —
-/// including `Interaction` and the [`EventLocalPos`] slot (the core's
-/// node-less rule: a shape's `Interaction` serves its handlers alone, and a
-/// leftover would steal clicks from the `<svg>` root's climb).
+/// including [`ReactInteraction`] and the [`EventLocalPos`] slot (the core's
+/// node-less rule: a shape's interaction serves its handlers alone).
 #[test]
 fn shape_pointer_update_adds_and_removes_components() {
     let (mut app, tx) = crate::test_app();
@@ -89,9 +83,9 @@ fn shape_pointer_update_adds_and_removes_components() {
         let entity = app.world().entity(e);
         assert!(
             entity.get::<PointerHandlers>().is_some()
-                && entity.get::<Interaction>().is_some()
+                && entity.get::<ReactInteraction>().is_some()
                 && entity.get::<EventLocalPos>().is_some(),
-            "an update adding handlers stamps the synthesis set"
+            "an update adding handlers stamps the pointer set"
         );
     }
 
@@ -106,10 +100,9 @@ fn shape_pointer_update_adds_and_removes_components() {
     let entity = app.world().entity(e);
     assert!(
         entity.get::<PointerHandlers>().is_none()
-            && entity.get::<Interaction>().is_none()
-            && entity.get::<RelativeCursorPosition>().is_none()
+            && entity.get::<ReactInteraction>().is_none()
             && entity.get::<EventLocalPos>().is_none(),
-        "unsetting every handler strips the synthesis set"
+        "unsetting every handler strips the pointer set"
     );
 }
 

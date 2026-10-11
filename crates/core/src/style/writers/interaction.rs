@@ -8,16 +8,17 @@ use crate::style::props::*;
 use crate::style::{Writer, owns};
 use crate::ui_map::remove_unless_fresh;
 
-/// `focusPolicy` → `FocusPolicy` (unset passes — an element that captures
-/// the pointer by default, like `<button>`, says so in its default style),
-/// mirrored into `Pickable` — bevy_ui's
-/// picking backend ignores `FocusPolicy` and blocks by default when
-/// `Pickable` is absent, and clicks (plus all `<surface>` interaction) ride
-/// picking events. Both are always inserted, never removed: an absent
-/// `FocusPolicy` makes `ui_focus_system` fall back to `Block` (silently
-/// blocking every node), an absent `Pickable` blocks picking. A `<root>`
-/// never blocks or hovers picking itself (its children are ordinary
-/// pickable nodes).
+/// `focusPolicy` → `Pickable` (unset passes — an element that captures the
+/// pointer by default, like `<button>`, says so in its default style):
+/// hover, press, drags and clicks all ride bevy_picking, whose backend and
+/// hover map stop at the first blocking `Pickable` — and block when it is
+/// absent, so it is always inserted, never removed. A `<root>` never blocks
+/// or hovers picking itself (its children are ordinary pickable nodes).
+///
+/// `FocusPolicy` is still written too: bevy's legacy `ui_focus_system` keeps
+/// running for the app's own bevy_ui nodes, and the policy is what stops
+/// their `Interaction` beneath a blocking React node. (Goes when Bevy
+/// removes that system.)
 pub static FOCUS_POLICY_WRITER: Writer = Writer {
     reads: &[&FOCUS_POLICY],
     attrs: &[],
@@ -37,8 +38,8 @@ pub static FOCUS_POLICY_WRITER: Writer = Writer {
 /// pass-through input one press would also land on every node below it and
 /// on the window, so the same click would both focus and blur the field (in
 /// hover-map order). Blocking keeps the press, and its one focus request, on
-/// the input. (`FocusPolicy` — the legacy `Interaction` hover of the nodes
-/// beneath — is unaffected.)
+/// the input — so the pointer over an input hovers and presses nothing
+/// beneath it either.
 pub(crate) fn focus_pickable(flags: crate::ext::ElementFlags, policy: FocusPolicy) -> Pickable {
     if flags.pick_ignore {
         Pickable::IGNORE

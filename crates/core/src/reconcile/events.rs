@@ -1,14 +1,13 @@
-//! Main-window event reporting back to JS — clicks, scroll offsets, canvas
-//! resizes — plus the small shared utilities every event collector leans on
-//! ([`send_ui_event`], [`climb`], coordinate normalization).
+//! Event reporting back to JS — clicks, scroll offsets — plus the small
+//! shared utilities every event collector leans on ([`send_ui_event`],
+//! [`climb`]).
 
 use bevy::picking::events::PointerClick;
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::text::EditableText;
-use bevy::ui::RelativeCursorPosition;
-use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
+use bevy::ui::ScrollPosition;
 
 use crate::bridge::{ClickOwner, JsBridge, ReactNode, ScrollListener};
 use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
@@ -16,7 +15,7 @@ use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 /// Query filter matching every click-owning element: one with a declared
 /// click/pointer handler ([`ClickOwner`], stamped by `apply_pointer_handlers`),
 /// a native `<button>`, or an `editableText` input. Deliberately NOT
-/// `Interaction` — hover/press styling inserts one too, and a style-only
+/// `ReactInteraction` — hover/press styling inserts one too, and a style-only
 /// interactive leaf (a hover-styled `<text>` label) must never steal the
 /// click from the ancestor that declared the handler.
 pub(super) type ClickOwners = Or<(
@@ -25,26 +24,21 @@ pub(super) type ClickOwners = Or<(
     With<EditableText>,
 )>;
 
-/// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
+/// Report clicks on reconciler-owned nodes to the JS thread, for every
+/// pointer (a `<surface>`'s included). Rides bevy_picking's
 /// `PointerClick`, which fires on *release over the same node the press landed
 /// on* — DOM click semantics, so press → drag off → release never clicks. Like
 /// DOM `click`, only the primary (left) button clicks; right/middle interactions
-/// are the `onPointer*` events' job (which carry the button). Virtual
-/// pointers ([`VirtualPointers`](crate::ext::VirtualPointers)) are excluded:
-/// their clicks are
-/// [`collect_virtual_clicks`](crate::reconcile::collect_virtual_clicks)' job.
-/// A touch whose scroll gesture moved past the tap slop is excluded too (web
+/// are the `onPointer*` events' job (which carry the button).
+/// A touch whose scroll gesture moved past the tap slop is excluded (web
 /// semantics: scrolling cancels the tap — `pointerUp` still fires).
 pub fn collect_ui_events(
     bridge: Res<JsBridge>,
-    // `Option` so headless tests needn't init it (production: `ReactUiPlugin`).
-    virtual_pointers: Option<Res<crate::ext::VirtualPointers>>,
     // `Option` so the many headless tests that never touch scrolling don't
     // have to init it; production always has it (`ReactUiPlugin`).
     touch_scroll: Option<Res<crate::touch_scroll::TouchScrollState>>,
     mut clicks: MessageReader<PointerClick>,
-    // Click ownership (see [`ClickOwners`]) — same attribution rule as
-    // `collect_virtual_clicks`.
+    // Click ownership (see [`ClickOwners`]).
     targets: Query<&ReactNode, ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
@@ -58,12 +52,6 @@ pub fn collect_ui_events(
     let mut topmost: HashMap<PointerId, (f32, Entity)> = HashMap::new();
     for ev in clicks.read() {
         if ev.button != PointerButton::Primary {
-            continue;
-        }
-        if virtual_pointers
-            .as_ref()
-            .is_some_and(|p| p.contains(ev.pointer.id))
-        {
             continue;
         }
         // A scrolled touch consumed its tap: bevy_picking emits `Click` on
@@ -204,29 +192,6 @@ pub(super) fn dom_button(button: PointerButton) -> u8 {
     }
 }
 
-/// Shift `RelativeCursorPosition`'s centered, unclamped position to a clamped
-/// `0..1` top-left-origin coordinate. `None` when the cursor position is unknown.
-pub(super) fn normalized_01(rel: &RelativeCursorPosition) -> Option<Vec2> {
-    rel.normalized
-        .map(|n| Vec2::new((n.x + 0.5).clamp(0.0, 1.0), (n.y + 0.5).clamp(0.0, 1.0)))
-}
-
-/// Node-relative `0..1` position (top-left origin) of a surface-space pixel
-/// `position` within a node, plus that absolute surface pixel as the client coord.
-/// `None` when the point can't be normalized (degenerate node).
-pub(super) fn surface_relative(
-    node: &ComputedNode,
-    transform: &UiGlobalTransform,
-    position: Vec2,
-) -> Option<(Vec2, Vec2)> {
-    node.normalize_point(*transform, position).map(|n| {
-        (
-            Vec2::new((n.x + 0.5).clamp(0.0, 1.0), (n.y + 0.5).clamp(0.0, 1.0)),
-            position,
-        )
-    })
-}
-
 /// Walk up the `ChildOf` chain from `entity` (inclusive) to the nearest entity that
 /// satisfies `is_target`. Surface picking hits the topmost leaf node (e.g. a `<text>`
 /// inside a `<button>`); this resolves it to the node that actually owns the
@@ -248,8 +213,8 @@ pub(crate) fn climb(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ReactInteraction;
     use crate::protocol::op::Op;
-    use crate::reconcile::collect_virtual_clicks;
     use bevy::picking::events::Pointer;
 
     /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
@@ -326,8 +291,6 @@ mod tests {
         );
     }
 
-    /// A synthetic picking `PointerClick` location: the render target is
-    /// irrelevant to the collectors, so a default image handle stands in.
     /// Register a virtual pointer the way a feature does (the `<surface>`
     /// crate registers its in-world pointer), returning its id.
     fn register_virtual_pointer(app: &mut App) -> PointerId {
@@ -339,6 +302,8 @@ mod tests {
         id
     }
 
+    /// A synthetic picking `PointerClick` location: the render target is
+    /// irrelevant to the collectors, so a default image handle stands in.
     fn click_location() -> bevy::picking::pointer::Location {
         bevy::picking::pointer::Location {
             target: bevy::camera::NormalizedRenderTarget::Image(
@@ -374,7 +339,7 @@ mod tests {
 
     /// [`collect_ui_events`] rides `PointerClick`: only the primary button
     /// clicks (right/middle are the `onPointer*` events' job), a click on a
-    /// node's leaf (label) climbs to the `Interaction`-bearing owner, and the
+    /// node's leaf (label) climbs to the click owner, and the
     /// multi-pick fan-out (leaf + owner both hovered) dedupes to ONE event.
     #[test]
     fn picking_click_fires_once_primary_only() {
@@ -417,14 +382,16 @@ mod tests {
         );
     }
 
-    /// Clicks do NOT bubble: when nested `Interaction` owners are all under the
-    /// cursor (pass-through hit stack), only the topmost owner — the resolving
+    /// Clicks do NOT bubble: when nested click owners are all under the
+    /// pointer (pass-through hit stack), only the topmost owner — the resolving
     /// hit with the smallest `HitData.depth`, not the first message (hover-map
-    /// order is arbitrary) — gets the click.
+    /// order is arbitrary) — gets the click. The same collector serves every
+    /// pointer: the mouse, and a feature's virtual one (a `<surface>`'s).
     #[test]
     fn nested_onclick_owners_click_topmost_only() {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
+        let surface_pointer = register_virtual_pointer(&mut app);
 
         let outer = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let inner = app
@@ -433,72 +400,37 @@ mod tests {
             .id();
         let leaf = app.world_mut().spawn(ChildOf(inner)).id();
 
-        let click = |entity, depth| PointerClick {
-            entity,
-            pointer: Pointer::new(PointerId::Mouse, click_location()),
-            button: PointerButton::Primary,
-            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
-            duration: std::time::Duration::ZERO,
-            count: 1,
-        };
-        // Adversarial order: the DEEPEST hit arrives first (the hover map is a
-        // HashMap — message order carries no meaning). Depths mirror the
-        // bevy_ui backend: topmost 0.0, +0.00001 per node beneath.
-        app.world_mut().write_message(click(outer, 0.00002));
-        app.world_mut().write_message(click(leaf, 0.0));
-        app.world_mut().write_message(click(inner, 0.00001));
-        app.update();
+        for pointer in [PointerId::Mouse, surface_pointer] {
+            let click = |entity, depth| PointerClick {
+                entity,
+                pointer: Pointer::new(pointer, click_location()),
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            };
+            // Adversarial order: the DEEPEST hit arrives first (the hover map is a
+            // HashMap — message order carries no meaning). Depths mirror the
+            // bevy_ui backend: topmost 0.0, +0.00001 per node beneath.
+            app.world_mut().write_message(click(outer, 0.00002));
+            app.world_mut().write_message(click(leaf, 0.0));
+            app.world_mut().write_message(click(inner, 0.00001));
+            app.update();
 
-        let events = drain_clicks(&mut out_rx);
-        assert_eq!(
-            events.len(),
-            1,
-            "a click over nested owners must fire only the topmost owner"
-        );
-        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
-    }
-
-    /// [`collect_virtual_clicks`] applies the same no-bubbling rule: nested
-    /// surface owners under one virtual-pointer gesture click only the topmost.
-    #[test]
-    fn surface_nested_onclick_owners_click_topmost_only() {
-        let (mut app, mut out_rx) = click_app();
-        let surface_id = register_virtual_pointer(&mut app);
-        app.add_systems(Update, collect_virtual_clicks);
-        app.update(); // Run Startup so the pointer resource exists.
-
-        let outer = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
-        let inner = app
-            .world_mut()
-            .spawn((ReactNode(2), ClickOwner, ChildOf(outer)))
-            .id();
-
-        let click = |entity, depth| PointerClick {
-            entity,
-            pointer: Pointer::new(surface_id, click_location()),
-            button: PointerButton::Primary,
-            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
-            duration: std::time::Duration::ZERO,
-            count: 1,
-        };
-        // Deepest-first again: selection must ride depth, not arrival order.
-        app.world_mut().write_message(click(outer, 0.00001));
-        app.world_mut().write_message(click(inner, 0.0));
-        app.update();
-
-        let events = drain_clicks(&mut out_rx);
-        assert_eq!(
-            events.len(),
-            1,
-            "a surface click over nested owners must fire only the topmost owner"
-        );
-        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+            let events = drain_clicks(&mut out_rx);
+            assert_eq!(
+                events.len(),
+                1,
+                "a click over nested owners must fire only the topmost owner ({pointer:?})"
+            );
+            assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+        }
     }
 
     /// Hover/press styling alone must NOT own a click: a hover-styled `<text>`
-    /// label inside a click-owning ancestor carries an `Interaction` (for the
+    /// label inside a click-owning ancestor carries a `ReactInteraction` (for the
     /// Bevy-side restyle) but no handler — the click still belongs to the
-    /// ancestor. Regression for the old `Interaction`-as-ownership overload,
+    /// ancestor. Regression for the old interaction-as-ownership overload,
     /// which made such a label swallow its button's `onClick`.
     #[test]
     fn hover_styled_label_does_not_steal_click() {
@@ -509,7 +441,7 @@ mod tests {
         // The label: interactive for styling, but not a click owner.
         let label = app
             .world_mut()
-            .spawn((ReactNode(2), Interaction::None, ChildOf(owner)))
+            .spawn((ReactNode(2), ReactInteraction::None, ChildOf(owner)))
             .id();
 
         let click = |entity, depth| PointerClick {
@@ -569,36 +501,5 @@ mod tests {
             events[0].id, 1,
             "a handler-less shape's click belongs to the <svg> root"
         );
-    }
-
-    /// The surface virtual pointer's clicks belong to `collect_virtual_clicks`
-    /// alone: [`collect_ui_events`] must skip them (no double-fire), and the
-    /// surface collector reports exactly one click.
-    #[test]
-    fn surface_pointer_clicks_are_not_main_clicks() {
-        let (mut app, mut out_rx) = click_app();
-        let surface_id = register_virtual_pointer(&mut app);
-        app.add_systems(Update, (collect_ui_events, collect_virtual_clicks));
-        app.update(); // Run Startup so the pointer resource exists.
-
-        let owner = app.world_mut().spawn((ReactNode(7), ClickOwner)).id();
-        app.world_mut().write_message(PointerClick {
-            entity: owner,
-            pointer: Pointer::new(surface_id, click_location()),
-            button: PointerButton::Primary,
-            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            duration: std::time::Duration::ZERO,
-            count: 1,
-        });
-        app.update();
-
-        let events = drain_clicks(&mut out_rx);
-        assert_eq!(
-            events.len(),
-            1,
-            "exactly one click: surface-collected, not double-fired by collect_ui_events"
-        );
-        assert_eq!(events[0].id, 7);
-        assert_eq!(events[0].button, None, "clicks carry no button");
     }
 }

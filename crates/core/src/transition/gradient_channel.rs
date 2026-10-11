@@ -16,12 +16,12 @@ use bevy::ui::{ColorStop, Gradient, RadialGradientShape, Val};
 use crate::animations::Lerp;
 
 /// The whole-value gradient channel — the `FilterChannel` pattern over one
-/// surface's resolved gradients. State-owned current: `apply_style` SNAPS
+/// surface's resolved gradients. State-owned current: `apply_style_masked` SNAPS
 /// the component to the new target on the retarget frame; this channel
 /// eases over that snap from its own last write. The target is the
 /// [`GradientTargets`](crate::ui_map::GradientTargets) stamp (UNfolded); the
 /// fold happens at write time so a simultaneous opacity ease bakes correctly
-/// and settle is bit-exact against `apply_style`'s own folded build.
+/// and settle is bit-exact against `apply_style_masked`'s own folded build.
 #[derive(Default)]
 pub(super) struct GradientChannel {
     /// Last unfolded target seen (retarget detection). `None` = no gradient.
@@ -92,7 +92,7 @@ impl GradientChannel {
 
     /// Advance toward the stamped unfolded target. Returns the UNfolded
     /// current to write (caller folds + compare-writes), or `None` when idle
-    /// (`apply_style` owns the component then).
+    /// (`apply_style_masked` owns the component then).
     ///
     /// Retarget policy (see the module doc): a structure-matched pair eases;
     /// a mismatch, appear, and unset all snap silently. The alignable check compares the channel's own
@@ -170,7 +170,7 @@ impl GradientChannel {
             .as_ref()
             .or_else(|| eased_alpha.map(|_| self.current()));
         let Some(current) = current else {
-            return false; // idle and no opacity target: `apply_style` owns it
+            return false; // idle and no opacity target: `apply_style_masked` owns it
         };
         let folded = crate::ui_map::fold_gradients(current, eased_alpha.or(static_fold));
         if *component != folded {

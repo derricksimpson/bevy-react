@@ -2,12 +2,12 @@ use std::f32::consts::PI;
 
 use super::super::test_util::{op_app, text_props, update_delta};
 use super::*;
-use crate::bridge::PointerHandlers;
+use crate::bridge::{PointerHandlers, ReactInteraction};
 use crate::protocol::op::Op;
 use crate::transition::TransitionInput;
 
 /// A `<text>` root's `transform`/`transition` must update on re-render — not
-/// just at mount. Regression: the text-update branch skipped `apply_style`, so
+/// just at mount. Regression: the text-update branch skipped `apply_style_masked`, so
 /// a rotating chevron's target never changed and the animation never ran.
 #[test]
 fn text_update_reapplies_transform_target() {
@@ -123,8 +123,8 @@ fn delta_update_skips_untouched_writers() {
             "variants survive (base mirrors the style, so it was rebuilt)"
         );
         assert!(
-            entity.get::<Interaction>().is_some(),
-            "the onClick Interaction survives"
+            entity.get::<ReactInteraction>().is_some(),
+            "the onClick ReactInteraction survives"
         );
     }
     assert_eq!(

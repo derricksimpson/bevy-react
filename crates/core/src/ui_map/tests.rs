@@ -114,7 +114,14 @@ fn focus_policy_maps_with_pass_default() {
             events: crate::element::Attrs::empty(),
             id: 0,
         };
-        apply_style(&mut commands.entity(entity), &Some(style), &ctx);
+        apply_style_masked(
+            &mut commands.entity(entity),
+            &Some(style),
+            WriterMask::ALL,
+            u64::MAX,
+            &ctx,
+            Invalidation::ALL,
+        );
         queue.apply(world);
     };
 
@@ -392,7 +399,7 @@ fn linear_gradient_maps_angle_and_stops() {
 }
 
 /// A gradient style stamps [`GradientTargets`]: the UNfolded resolved
-/// gradients per surface plus the fold opacity `apply_style` would use.
+/// gradients per surface plus the fold opacity `apply_style_masked` would use.
 /// Unsetting both surfaces removes it; a promoted root stamps
 /// `opacity: None` (the group alpha owns the fold there).
 #[test]

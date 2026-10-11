@@ -783,14 +783,14 @@ mod tests {
     /// The overlay-lift payoff — the hover-blur fade, end to end through the real
     /// interaction path: base `blur radius 0` + `hoverStyle` `radius 8` +
     /// `transition.filter`. The node promotes EAGERLY at creation (variant
-    /// presence union — no first-hover hitch), an `Interaction` flip makes
+    /// presence union — no first-hover hitch), a `ReactInteraction` flip makes
     /// [`crate::reconcile::apply_interaction_styles`] re-stamp `FilterInput`
     /// with the merged chain, and the transition eases the radius 0→8
     /// (matched strategy: same single-name blur chain), then back 8→0 on
     /// hover-out from wherever the ease currently is.
     #[test]
     fn hover_filter_eases_through_interaction_restyle() {
-        use bevy::ui::Interaction;
+        use crate::ReactInteraction;
 
         let (mut app, ops_tx) = ease_app();
         ops_tx
@@ -808,7 +808,7 @@ mod tests {
         app.update();
         let e = entity_of(&app, 1);
         // Promoted from creation — before any hover — and resolved at the
-        // base radius. The variants also stamped an `Interaction`.
+        // base radius. The variants also stamped a `ReactInteraction`.
         assert!(
             app.world().get::<PromotedLayer>(e).is_some(),
             "hover-filter node promotes eagerly"
@@ -817,15 +817,18 @@ mod tests {
             app.world().get::<ResolvedFilterChain>(e).unwrap().passes[0].params[0].x,
             0.0
         );
-        assert_eq!(app.world().get::<Interaction>(e), Some(&Interaction::None));
+        assert_eq!(
+            app.world().get::<ReactInteraction>(e),
+            Some(&ReactInteraction::None)
+        );
         drain_dirt(&mut app);
 
         // Hover in: the interaction restyle merges base+hover and re-stamps
         // `FilterInput` with radius 8; the ease starts from 0.
         *app.world_mut()
             .entity_mut(e)
-            .get_mut::<Interaction>()
-            .unwrap() = Interaction::Hovered;
+            .get_mut::<ReactInteraction>()
+            .unwrap() = ReactInteraction::Hovered;
         tick(&mut app, 0.25);
         let mid = {
             let chain = app.world().get::<ResolvedFilterChain>(e).unwrap();
@@ -869,8 +872,8 @@ mod tests {
         // radius eases back down from 8 — no snap.
         *app.world_mut()
             .entity_mut(e)
-            .get_mut::<Interaction>()
-            .unwrap() = Interaction::None;
+            .get_mut::<ReactInteraction>()
+            .unwrap() = ReactInteraction::None;
         tick(&mut app, 0.25);
         let down = app.world().get::<ResolvedFilterChain>(e).unwrap().passes[0].params[0].x;
         assert!(down > 0.0 && down < 8.0, "eases back down, got {down}");

@@ -50,9 +50,10 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
 ///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`, `Visibility`,
 ///   `UiTransform`, `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
-///   `TextLayout`, `ScrollPosition`, `Interaction`/`FocusPolicy`/`Pickable`
-///   (the `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
-///   `Children`/`ChildOf`, plus this crate's own markers.
+///   `TextLayout`, `ScrollPosition`, `FocusPolicy`/`Pickable` (the
+///   `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
+///   `Children`/`ChildOf`, plus this crate's own markers and state
+///   ([`ReactInteraction`], the hover/press state — read-only).
 /// - Yours: any component the bridge never inserts (`MaterialNode<M>`,
 ///   `TabIndex`, audio, your own markers and data).
 ///
@@ -75,7 +76,7 @@ pub struct RRoot;
 
 /// Base + hover + press styles kept on an element that declares `hoverStyle`
 /// and/or `pressStyle`. The interaction system re-applies the merged style as
-/// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
+/// the node's [`ReactInteraction`] changes, entirely on the Bevy side (no round-trip
 /// to JS). Absent on elements without variants — they style as before.
 #[derive(Component, Debug, Clone, Default)]
 pub struct StyleVariants {
@@ -97,7 +98,7 @@ pub struct StyleVariants {
 /// The pending work behind a `Changed<StyleVariants>` tick (see
 /// [`StyleVariants::restyle`]). A change with no recorded reason — a full
 /// (re)stamp, or a poke from the layer evaluator — re-merges and re-runs
-/// every writer. An `Interaction`/`FocusState` flip re-runs the writers of
+/// every writer. A `ReactInteraction`/`FocusState` flip re-runs the writers of
 /// the properties any variant sets ([`StyleVariants::keys`]); a base-only
 /// delta re-runs just the writers of the properties it touched (the merged
 /// style can't differ anywhere else), and when the node is idle (not
@@ -128,6 +129,28 @@ impl Restyle {
     }
 }
 
+/// Whether a pointer is over (or pressing) this React entity. Present on an
+/// element with `hoverStyle`/`pressStyle`, `onClick` or an `onPointer*`
+/// handler, and on every `<button>` and `<editableText>`. Derived from
+/// bevy_picking for every pointer — the mouse, each touch, the pointer of a
+/// 3D-transformed layer, a `<surface>`'s — in `PreUpdate`, so any `Update`
+/// system reads this frame's state: read it, never write it.
+///
+/// Hover follows the picking hover map: it stops at the first element with
+/// `focusPolicy: "block"`, so a `<button>` inside a hover-styled card
+/// un-hovers the card.
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ReactInteraction {
+    /// The primary button (or a touch) went down on it and is still held —
+    /// until release, wherever the pointer is.
+    Pressed,
+    /// A pointer is over it.
+    Hovered,
+    /// Neither.
+    #[default]
+    None,
+}
+
 /// Whether a node with a `focusStyle` [`StyleVariants::focus`] is currently
 /// focused. A *mutated* bool (never inserted/removed while the node lives) so the
 /// interaction-style system re-merges on `Changed<FocusState>` when focus toggles.
@@ -139,8 +162,7 @@ pub struct FocusState(pub bool);
 /// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for
 /// it, and the hover systems whether to emit `pointerEnter` / `pointerLeave` /
 /// `pointerHover`.
-/// Stamped (or removed) alongside the node's `Interaction` +
-/// `RelativeCursorPosition` whenever any `onPointer*` handler is present.
+/// Stamped (or removed) whenever any `onPointer*` handler is present.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct PointerHandlers {
     pub down: bool,
@@ -151,27 +173,28 @@ pub struct PointerHandlers {
     pub hover: bool,
 }
 
-/// Marks an element that **owns** clicks: the click collectors
-/// ([`collect_ui_events`](crate::reconcile::collect_ui_events) /
-/// `collect_virtual_clicks`) climb a picked leaf to the nearest click owner,
-/// and only owners are reported to JS. Stamped by `apply_pointer_handlers`
+/// Marks an element that **owns** clicks: the click collector
+/// ([`collect_ui_events`](crate::reconcile::collect_ui_events)) climbs a
+/// picked leaf to the nearest click owner, and only owners are reported to JS. Stamped by `apply_pointer_handlers`
 /// when `onClick` or any `onPointer*` handler is declared; native `<button>`s
 /// and `editableText` inputs own clicks by element type (the collectors match
-/// them directly). Deliberately **not** `Interaction`: hover/press styling
-/// inserts an `Interaction` too, and a style-only interactive element (a
+/// them directly). Deliberately **not** `ReactInteraction`: hover/press styling
+/// inserts one too, and a style-only interactive element (a
 /// hover-styled `<text>` label inside a `<button>`) must never steal the
 /// click from the ancestor that declared the handler.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct ClickOwner;
 
-/// Whether a node with an `onPointerEnter`/`onPointerLeave` handler currently has
-/// the pointer inside it (its `Interaction` is not `None`). Kept so the hover
-/// system can emit `pointerEnter`/`pointerLeave` only on the boundary crossing —
-/// not on the `Hovered`↔`Pressed` transition of a click. A *component* (rather
-/// than a side-table) so it despawns with the node. Stamped alongside
+/// The pointer currently inside a node with an `onPointerEnter`/
+/// `onPointerLeave` handler (its [`ReactInteraction`] is not `None`), `None`
+/// while outside. Kept so the hover system can emit `pointerEnter`/
+/// `pointerLeave` only on the boundary crossing — not on the
+/// `Hovered`↔`Pressed` transition of a click — and report the leave at the
+/// position of the pointer that had entered. A *component* (rather than a
+/// side-table) so it despawns with the node. Stamped alongside
 /// `PointerHandlers` when either handler is present; absent otherwise.
 #[derive(Component, Debug, Clone, Copy, Default)]
-pub struct HoverState(pub bool);
+pub struct HoverState(pub Option<bevy::picking::pointer::PointerId>);
 
 /// Marks a node that declared an `onScroll` handler, so the read-back system
 /// (`collect_scroll_events`) reports its `ScrollPosition` changes. The marker is
@@ -179,7 +202,7 @@ pub struct HoverState(pub bool);
 /// `Node`, so a bare `Changed<ScrollPosition>` query would fire for every node on
 /// its mount frame — scoping to `With<ScrollListener>` walks only onScroll nodes.
 /// Inserted/removed alongside the node as its `onScroll` handler comes and goes,
-/// mirroring how `Interaction` gates `onClick`.
+/// mirroring how `ClickOwner` gates `onClick`.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct ScrollListener;
 

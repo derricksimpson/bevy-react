@@ -253,7 +253,7 @@ pub fn apply_scroll(
             // The wheel consumed an in-range axis — claim the wheel channel
             // so world wheel-consumers that honor `PointerCapture` (the orbit
             // camera's wheel-zoom, etc.) ignore the same wheel this frame. Not
-            // a hover claim: `over_ui` stays as `collect_pointer_events` set it.
+            // a hover claim: `over_ui` stays as this frame's hover left it.
             capture.wheel_captured = true;
             break;
         }
@@ -310,11 +310,12 @@ pub fn settle_controlled_scroll(
 /// `WheelEvent`.
 ///
 /// Target selection mirrors [`apply_scroll`]: a geometric hit-test over the
-/// `UiStack`, topmost first, filtered to [`WheelListener`] nodes — no `Interaction`
-/// needed, so it composes cleanly with the `onPointer*` machinery. Runs in
-/// `PointerCaptureSet` after `collect_pointer_events` so the `PointerCapture::over_ui`
-/// claim survives (that system *assigns* `over_ui`), letting world wheel-consumers
-/// (a zoom camera) ignore a wheel a node just handled.
+/// `UiStack`, topmost first, filtered to [`WheelListener`] nodes — no hover
+/// state needed, so it composes cleanly with the `onPointer*` machinery. Runs in
+/// `PointerCaptureSet` after `collect_pointer_events` so the
+/// `PointerCapture::wheel_captured` claim survives (that system *resets* it),
+/// letting world wheel-consumers (a zoom camera) ignore a wheel a node just
+/// handled.
 pub fn collect_wheel_events(
     accumulated: Res<AccumulatedMouseScroll>,
     cursors: WheelCursors,

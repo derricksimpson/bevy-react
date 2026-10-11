@@ -16,27 +16,24 @@
 //!   attributes into [`CubeAttrs`] (compare-before-write); the
 //!   [`apply_cube_attrs`] system turns `CubeAttrs` + this frame's driven
 //!   values into the `Transform` and the material color.
-//! - **Pointer events.** `onClick` rides the core's click path (a
-//!   `Pointer<Click>` on any bridge entity); `onPointerEnter`/`Leave` need
-//!   an `Interaction`, which `ui_focus_system` never writes for a mesh — so
-//!   [`sync_cube_interactions`] derives it from the hover map, the svg
-//!   shapes' pattern. Mesh picking runs with `require_markers`, so only
-//!   handler-bearing cubes (which get a `Pickable`) are ray-cast.
+//! - **Pointer events.** Nothing cube-specific: the core derives hover,
+//!   press, clicks and drags from bevy_picking for every bridge entity, so a
+//!   cube only has to be a picking target. Mesh picking runs with
+//!   `require_markers`, so only handler-bearing cubes (which get a
+//!   `Pickable`) are ray-cast.
 
 use bevy::picking::Pickable;
-use bevy::picking::hover::HoverMap;
 use bevy::picking::mesh_picking::{MeshPickingPlugin, MeshPickingSettings};
-use bevy::picking::pointer::{PointerId, PointerPressState};
 use bevy::prelude::*;
 use bevy_react::animations::protocol::Binding;
 use bevy_react::animations::{AnimatedNode, AnimationSet};
 use bevy_react::element::{
     AttrBinding, Attribute, Attrs, Common, Element, SpawnCtx, animatable_binding,
 };
-use bevy_react::ext::{DrivenExtValues, ElementFlags, InteractionSyncSet};
+use bevy_react::ext::{DrivenExtValues, ElementFlags};
 use bevy_react::protocol::animatable::{Animatable, AnimatableField};
 use bevy_react::style::{Codec, Writer, owns};
-use bevy_react::{ReactAppExt, ReactApplySet, ReactNode};
+use bevy_react::{ReactAppExt, ReactApplySet, ReactInteraction, ReactNode};
 
 #[cfg(test)]
 mod tests;
@@ -76,7 +73,6 @@ pub fn register_systems(app: &mut App) {
             apply_cube_attrs
                 .after(ReactApplySet)
                 .after(AnimationSet::Apply),
-            sync_cube_interactions.in_set(InteractionSyncSet),
         ),
     );
 }
@@ -337,44 +333,18 @@ fn validate_bindings(anim: &AnimatedNode) {
 
 /// Give handler-bearing cubes a `Pickable` (the mesh picking backend's
 /// marker) and take it away with the last handler. The core stamps
-/// `Interaction` on a node-less element exactly while it has pointer
-/// handlers.
+/// `ReactInteraction` on a node-less element exactly while it has pointer
+/// handlers — and, once the cube is a picking target, keeps it current.
 #[allow(clippy::type_complexity)]
 fn sync_cube_pickable(
     mut commands: Commands,
-    gained: Query<Entity, (With<Cube>, With<Interaction>, Without<Pickable>)>,
-    lost: Query<Entity, (With<Cube>, Without<Interaction>, With<Pickable>)>,
+    gained: Query<Entity, (With<Cube>, With<ReactInteraction>, Without<Pickable>)>,
+    lost: Query<Entity, (With<Cube>, Without<ReactInteraction>, With<Pickable>)>,
 ) {
     for entity in &gained {
         commands.entity(entity).insert(Pickable::default());
     }
     for entity in &lost {
         commands.entity(entity).remove::<Pickable>();
-    }
-}
-
-/// Drive `Interaction` for handler-bearing cubes from the hover map and the
-/// hovering pointer's press state — the enter/leave collectors read it.
-fn sync_cube_interactions(
-    hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPressState)>,
-    mut cubes: Query<(Entity, &mut Interaction), With<Cube>>,
-) {
-    for (entity, mut interaction) in &mut cubes {
-        let hovering = hover_map.as_ref().and_then(|map| {
-            map.iter()
-                .find(|(_, hits)| hits.contains_key(&entity))
-                .map(|(id, _)| *id)
-        });
-        let pressed = hovering.is_some_and(|id| {
-            pointers
-                .iter()
-                .any(|(pid, press)| *pid == id && press.is_primary_pressed())
-        });
-        interaction.set_if_neq(match (hovering.is_some(), pressed) {
-            (true, true) => Interaction::Pressed,
-            (true, false) => Interaction::Hovered,
-            (false, _) => Interaction::None,
-        });
     }
 }

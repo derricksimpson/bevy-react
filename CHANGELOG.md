@@ -48,10 +48,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"100%"` on a `<root>` or `<surface>` yourself, switch to viewport units.
 - **`<button>` carries `bevy::ui_widgets::Button`** (breaking for Rust code
   that queries buttons). `bevy_ui`'s old `Button` component is private in
-  Bevy 0.20, so a `<button>` entity now has the headless widget `Button`,
-  with `Interaction` added explicitly. Its accessible name still comes from
-  the text under it, now with nested wrappers included and refreshed when
-  its direct children change.
+  Bevy 0.20, so a `<button>` entity now has the headless widget `Button`
+  (its hover and press state is a `ReactInteraction`, see below). Its
+  accessible name still comes from the text under it, now with nested
+  wrappers included and refreshed when its direct children change.
+- **Hover and press come from Bevy picking** (breaking for Rust code that
+  queries React entities). They no longer carry `bevy::ui::Interaction`
+  (deprecated in Bevy 0.20) or `RelativeCursorPosition`: read
+  `bevy_react::ReactInteraction` (`None`, `Hovered`, `Pressed`) instead. It
+  is kept for every pointer — the mouse, each touch, 3D-transformed elements
+  and `<surface>` UI — so they all behave alike now:
+  - In `<surface>` UI, hover follows `focusPolicy` as on screen: a blocking
+    child (a `<button>`) un-hovers its ancestors, a press on it no longer
+    presses or drags an ancestor with pointer handlers, and of overlapping
+    elements with pointer handlers only the topmost gets the drag.
+  - An `<editableText>` keeps hover and presses from what lies beneath it,
+    whatever its `focusPolicy`; so does a scrollbar.
+  - Drags run per pointer: every finger drags its own element (one drag ran
+    at a time).
+  - `onPointerHover` goes to the elements under the moving pointer. A
+    pressed element stops receiving it once the pointer has left it
+    (`onPointerMove` still follows the drag).
+  - A press stays pressed until release, also while the cursor is outside
+    the window.
+  - A mesh or other picking target drawn by a higher-order camera keeps
+    hover from the UI beneath it, as it already kept clicks.
+  - An app that turns off Bevy picking's hover (`PickingSettings`), or sets
+    `UiPickingSettings::require_markers` without marking the UI camera,
+    loses hover and drags, not only clicks.
+  - Devtools pick mode selects a `<text>`, not one run inside it.
+- **Custom node-less elements get pointer events from picking alone**
+  (breaking for the extension contract). An element hit by a picking backend
+  is hovered, entered, left and dragged with no system of its own; the
+  `Interaction` sync in `InteractionSyncSet` is no longer needed (the set is
+  for filling `EventLocalPos`). `VirtualButtons::leave` takes the release
+  location and the parking location separately.
 - **`<editableText>` follows Bevy 0.20's text input.** The entity carries
   `bevy::ui_widgets::TextInput` next to `EditableText`. Clicking anywhere
   else now blurs the field, and so does Escape. A field also keeps clicks
@@ -88,6 +119,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scrolled out of its container, a hidden one, or one beneath a
   `focusPolicy: "block"` node. The cursor now follows the same hover as
   `hoverStyle` and clicks.
+- A touch neither hovered nor pressed its element while the mouse cursor
+  rested elsewhere in the window, and a second finger pressed nothing.
+- Pointer events inside a `<surface>` with a `scale_factor` other than 1
+  reported wrong `x`/`y`.
+- A drag that left a 3D-transformed element froze `x`/`y` at the element's
+  edge.
+- `onPointerDown`, `onPointerMove` and `onPointerUp` never fired on `<svg>`
+  shapes.
+- The glyphs of a `<text>` stopped the pointer whatever its `focusPolicy`:
+  a pass-through label drawn over another element kept that element's
+  clicks and `cursor` wherever its letters were. A hit on a text run now
+  counts as a hit on its `<text>` block.
 
 ## [0.7.0] - 2026-10-05
 

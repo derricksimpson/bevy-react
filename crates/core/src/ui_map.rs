@@ -349,13 +349,7 @@ pub(crate) fn border_color(s: Option<&Style>) -> BorderColor {
     }
 }
 
-/// Apply a style to an element: every writer of its element runs (see
-/// [`apply_style_masked`]).
-pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>, ctx: &WriterCtx) {
-    apply_style_masked(ec, style, WriterMask::ALL, u64::MAX, ctx, Invalidation::ALL);
-}
-
-/// [`apply_style`] for a **freshly spawned** element whose spawn bundle carried
+/// [`apply_style_masked`] for a **freshly spawned** element whose spawn bundle carried
 /// [`fresh_style_bundle`] (and, for text, the resolved text tuple): the
 /// bundled writers are skipped, and `ctx.fresh` makes every "absent → remove"
 /// branch a no-op (a fresh entity has nothing to remove — each of those would
@@ -439,7 +433,7 @@ pub fn apply_style_masked(
 /// Overlay `overlay` onto `base`, producing the style to apply: every field the
 /// overlay sets wins, the rest fall through to `base`. A `None` overlay leaves
 /// `base` untouched. Used to merge `hoverStyle`/`pressStyle` onto the base style
-/// for the current `Interaction` state.
+/// for the current `ReactInteraction` state.
 pub fn overlay_style(base: Option<&Style>, overlay: Option<&Style>) -> Option<Style> {
     let Some(overlay) = overlay else {
         return base.cloned();

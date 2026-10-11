@@ -131,7 +131,7 @@ pub mod test_util {
     pub use crate::diag::{arm_runtime, take_decode_warnings, take_runtime_warnings, test_lock};
     pub use crate::plugin::Fonts;
     pub use crate::reconcile::test_util::*;
-    pub use crate::reconcile::{OpApplyStats, apply_js_ops, collect_ui_events};
+    pub use crate::reconcile::{OpApplyStats, apply_js_ops, collect_ui_events, sync_interactions};
     pub use crate::ui_map::AtlasLayoutCache;
 
     use crate::animations::{Driver, SharedId, SharedValues};
@@ -163,7 +163,7 @@ pub mod test_util {
         values.tick(dt);
     }
 }
-pub use bridge::ReactNode;
+pub use bridge::{ReactInteraction, ReactNode};
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;

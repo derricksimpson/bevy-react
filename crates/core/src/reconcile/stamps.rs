@@ -6,13 +6,12 @@
 
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition};
 
 use crate::animations::AnimatedNode;
 use crate::bridge::{
-    ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, Restyle, ScrollListener,
-    ScrollStep, StyleVariants, WheelListener,
+    ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, ReactInteraction, Restyle,
+    ScrollListener, ScrollStep, StyleVariants, WheelListener,
 };
 use crate::protocol::{
     NodeId,
@@ -67,9 +66,9 @@ pub(crate) fn apply_animated(
 }
 
 /// Stamp (or clear) the hover/press [`StyleVariants`] on a host element. When
-/// either variant is present the element also gets an `Interaction` so the focus
-/// system tracks hover/press for it; `insert_if_new` leaves any existing
-/// `Interaction` untouched (a `button`'s, or a node already mid-hover) so we
+/// either variant is present the element also gets a [`ReactInteraction`] so
+/// `sync_interactions` tracks hover/press for it; `insert_if_new` leaves any
+/// existing one untouched (a `button`'s, or a node already mid-hover) so we
 /// never reset its state on a re-render. `base` is the node's effective
 /// style (its element's default style overlaid by the user's).
 pub(super) fn apply_style_variants(
@@ -87,10 +86,10 @@ pub(super) fn apply_style_variants(
             keys: variant_keys(props),
             restyle: Restyle::Full,
         });
-        // Hover/press are driven by `Interaction`; focus by `FocusState` (toggled
+        // Hover/press are driven by `ReactInteraction`; focus by `FocusState` (toggled
         // by the focus observers). Add each only for the variants present.
         if props.hover_style.is_some() || props.press_style.is_some() {
-            ec.insert_if_new(Interaction::default());
+            ec.insert_if_new(ReactInteraction::default());
         }
         if props.focus_style.is_some() {
             ec.insert_if_new(FocusState::default());
@@ -136,23 +135,18 @@ pub(super) fn apply_style_variants_delta(
     }
 }
 
-/// Stamp (or clear) the [`PointerHandlers`] marker plus the components the
-/// drag-capture system needs. When any `onPointer*` handler is declared the
-/// element also gets a [`RelativeCursorPosition`] (so we can read the cursor's
-/// normalized position within it).
+/// Stamp (or clear) the [`PointerHandlers`] marker and what goes with it.
 ///
-/// Both `onClick` and the `onPointer*` handlers need an `Interaction` (the
-/// drag begin/over test in
-/// [`collect_pointer_events`](crate::reconcile::collect_pointer_events), the
-/// hover/press-style + [`crate::PointerCapture`] source) **and** a
-/// [`ClickOwner`] — the click-*ownership* marker
+/// Both `onClick` and the `onPointer*` handlers make the element interactive
+/// — a [`ReactInteraction`] (hover/press state, the enter/leave boundary and
+/// the [`crate::PointerCapture`] source) — **and** a click owner: the
+/// [`ClickOwner`] marker
 /// ([`collect_ui_events`](crate::reconcile::collect_ui_events) climbs a picked
 /// leaf to the nearest owner). The two are separate on purpose: hover/press
-/// styling also inserts an `Interaction`, and a style-only interactive element
-/// must never steal a click from an ancestor with a real handler. Without the
-/// pair a plain `<node onClick>` — no hover/press style, not a `<button>` —
-/// would never be reported as clicked. `insert_if_new` leaves an existing
-/// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
+/// styling also inserts a `ReactInteraction`, and a style-only interactive
+/// element must never steal a click from an ancestor with a real handler.
+/// `insert_if_new` leaves an existing `ReactInteraction` (a `button`'s, or a
+/// hover/press variant's) untouched.
 pub(crate) fn apply_pointer_handlers(
     ec: &mut EntityCommands,
     props: &Props,
@@ -174,27 +168,20 @@ pub(crate) fn apply_pointer_handlers(
             leave: props.on_pointer_leave,
             hover: props.on_pointer_hover,
         };
-        // `RelativeCursorPosition` supplies the `x`/`y` carried by drag and
-        // hover events; the drag-capture and hover systems both read it. An
-        // update keeps a live one; a fresh entity takes both in one insert.
-        if fresh {
-            ec.insert((handlers, RelativeCursorPosition::default()));
-        } else {
-            ec.insert(handlers)
-                .insert_if_new(RelativeCursorPosition::default());
-        }
+        ec.insert(handlers);
     } else if !fresh {
-        ec.remove::<(PointerHandlers, RelativeCursorPosition)>();
+        ec.remove::<PointerHandlers>();
     }
-    // `pointerEnter`/`pointerLeave` are derived from `Interaction` transitions, so
-    // the node tracks its "inside" state in `HoverState`; add/remove it in step.
+    // `pointerEnter`/`pointerLeave` are derived from `ReactInteraction`
+    // transitions, so the node tracks which pointer is inside in `HoverState`;
+    // add/remove it in step.
     if props.on_pointer_enter || props.on_pointer_leave {
         ec.insert_if_new(HoverState::default());
     } else if !fresh {
         ec.remove::<HoverState>();
     }
     if props.on_click || any_pointer {
-        ec.insert_if_new((Interaction::default(), ClickOwner));
+        ec.insert_if_new((ReactInteraction::default(), ClickOwner));
     } else if !fresh {
         // Safe to remove unconditionally: `<button>`/`editableText` own clicks
         // by element type in the collectors, not through this marker.
@@ -208,17 +195,17 @@ pub(crate) fn apply_pointer_handlers(
 /// A node-less element (an SVG shape) has no box for the collectors to
 /// measure: with a pointer handler it carries an [`EventLocalPos`] slot the
 /// feature owning its coordinate space fills (the event's `x`/`y`). On full
-/// handler removal its `Interaction` goes too — unlike a layout node (where it
-/// may serve hover/press styling or a `<button>`), a node-less element's
-/// `Interaction` serves its handlers alone, and a leftover would keep
-/// stealing clicks an ancestor should own.
+/// handler removal its [`ReactInteraction`] goes too — unlike a layout node
+/// (where it may serve hover/press styling or a `<button>`), a node-less
+/// element's serves its handlers alone, and a leftover would keep it
+/// counting as interactive UI under the pointer.
 ///
 /// [`EventLocalPos`]: crate::ext::EventLocalPos
 fn node_less_pointer_slot(ec: &mut EntityCommands, any: bool, fresh: bool) {
     if any {
         ec.insert_if_new(crate::ext::EventLocalPos::default());
     } else if !fresh {
-        ec.remove::<(crate::ext::EventLocalPos, Interaction)>();
+        ec.remove::<(crate::ext::EventLocalPos, ReactInteraction)>();
     }
 }
 
@@ -466,8 +453,8 @@ mod tests {
     use bevy::ui::FocusPolicy;
 
     /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get
-    /// an `Interaction` so `collect_ui_events` can report its clicks. Regression:
-    /// `onClick` crossed the wire as a bool but nothing attached an `Interaction`,
+    /// a `ReactInteraction` so `collect_ui_events` can report its clicks. Regression:
+    /// `onClick` crossed the wire as a bool but nothing attached a `ReactInteraction`,
     /// so such a node was silently unclickable (only a `<button>`, or a node that
     /// also had a hover/press style or an `onPointer*` handler, worked).
     #[test]
@@ -497,19 +484,25 @@ mod tests {
         let nodes = &app.world().resource::<JsBridge>().nodes;
         let (clickable, inert) = (nodes[&1], nodes[&2]);
         assert!(
-            app.world().entity(clickable).get::<Interaction>().is_some(),
+            app.world()
+                .entity(clickable)
+                .get::<ReactInteraction>()
+                .is_some(),
             "`onClick` alone must make a <node> clickable"
         );
         assert!(
-            app.world().entity(inert).get::<Interaction>().is_none(),
-            "a node with no handlers/hover/press must not gain an Interaction"
+            app.world()
+                .entity(inert)
+                .get::<ReactInteraction>()
+                .is_none(),
+            "a node with no handlers/hover/press must not gain a ReactInteraction"
         );
     }
 
-    /// `ClickOwner` tracks handler presence, independent of `Interaction`: a
+    /// `ClickOwner` tracks handler presence, independent of `ReactInteraction`: a
     /// hover-styled node without handlers is interactive for styling but not
     /// a click owner; toggling `onClick` off drops ownership while the
-    /// hover `Interaction` survives.
+    /// hover `ReactInteraction` survives.
     #[test]
     fn click_owner_tracks_handlers_not_styling() {
         use crate::bridge::ClickOwner;
@@ -543,7 +536,10 @@ mod tests {
         let nodes = app.world().resource::<JsBridge>().nodes.clone();
         let (styled, clickable) = (nodes[&1], nodes[&2]);
         assert!(
-            app.world().entity(styled).get::<Interaction>().is_some(),
+            app.world()
+                .entity(styled)
+                .get::<ReactInteraction>()
+                .is_some(),
             "hover styling makes the node interactive"
         );
         assert!(
@@ -553,7 +549,7 @@ mod tests {
         assert!(app.world().entity(clickable).get::<ClickOwner>().is_some());
 
         // Toggling the handler off drops ownership but keeps the hover
-        // `Interaction` (the style variant still needs it).
+        // `ReactInteraction` (the style variant still needs it).
         ops_tx
             .send(vec![update_delta(2, Props::default(), &["onClick"], &[])])
             .unwrap();
@@ -564,8 +560,8 @@ mod tests {
             "unsetting the last handler drops click ownership"
         );
         assert!(
-            entity.get::<Interaction>().is_some(),
-            "the hover-style Interaction survives"
+            entity.get::<ReactInteraction>().is_some(),
+            "the hover-style ReactInteraction survives"
         );
     }
 
@@ -596,7 +592,7 @@ mod tests {
             entity.get::<StyleVariants>().is_some(),
             "a <text> hoverStyle stamps StyleVariants"
         );
-        assert!(entity.get::<Interaction>().is_some());
+        assert!(entity.get::<ReactInteraction>().is_some());
         assert!(
             entity.get::<ClickOwner>().is_some(),
             "onClick makes the <text> a click owner"
@@ -623,7 +619,7 @@ mod tests {
     }
 
     /// A node with `onPointerEnter`/`onPointerLeave`/`onPointerHover` gets an
-    /// `Interaction` + a [`HoverState`], and the reconciler stamps the handler
+    /// `ReactInteraction` + a [`HoverState`], and the reconciler stamps the handler
     /// flags.
     #[test]
     fn pointer_enter_leave_stamps_hover_state() {
@@ -646,7 +642,7 @@ mod tests {
         let e = app.world().resource::<JsBridge>().nodes[&1];
         let entity = app.world().entity(e);
         assert!(
-            entity.get::<Interaction>().is_some(),
+            entity.get::<ReactInteraction>().is_some(),
             "hover handlers must make the node interactive"
         );
         assert!(
@@ -709,7 +705,7 @@ mod tests {
     /// pointer (`Block`, mirroring bevy_ui's native `Button`), while a `<node>`
     /// passes it through (`Pass`), so a container/label never swallows clicks meant
     /// for what's behind it. An explicit `focusPolicy` prop overrides either, and
-    /// re-rendering a button keeps its `Block` (the per-commit `apply_style` resets
+    /// re-rendering a button keeps its `Block` (the per-commit `apply_style_masked` resets
     /// it to `Pass` first).
     #[test]
     fn focus_policy_defaults_block_button_pass_node() {

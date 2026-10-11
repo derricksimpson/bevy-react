@@ -37,12 +37,12 @@ state. See [State styles](node.md#state-styles) for the overlay rules.
 
 ## How it differs from `<node>`
 
-|                       | `<node>`                                 | `<button>`                            |
-| --------------------- | ---------------------------------------- | ------------------------------------- |
-| Default `focusPolicy` | `"pass"`                                 | `"block"`                             |
-| Owns clicks           | Only with `onClick` or an `onPointer*`   | Always, with or without `onClick`     |
-| Hover and press state | Tracked only with state styles, handlers | Always tracked (Bevy's `Interaction`) |
-| Bevy components       | `Node`                                   | `Node`, `Button`, `Interaction`       |
+|                       | `<node>`                                 | `<button>`                           |
+| --------------------- | ---------------------------------------- | ------------------------------------ |
+| Default `focusPolicy` | `"pass"`                                 | `"block"`                            |
+| Owns clicks           | Only with `onClick` or an `onPointer*`   | Always, with or without `onClick`    |
+| Hover and press state | Tracked only with state styles, handlers | Always tracked (`ReactInteraction`)  |
+| Bevy components       | `Node`                                   | `Node`, `Button`, `ReactInteraction` |
 
 ### It blocks the pointer
 

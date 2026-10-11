@@ -7,9 +7,9 @@ demo: Mouse
 
 Elements take DOM-like pointer handlers: `onClick`, `onPointerDown`,
 `onPointerMove`, `onPointerUp`, `onPointerEnter`, `onPointerLeave`,
-`onPointerHover` and `onWheel`. Bevy detects the input (through `bevy_ui`'s interaction state and
-Bevy picking) and calls the React handler a moment later. The element
-reference lists which elements accept which handlers.
+`onPointerHover` and `onWheel`. Bevy detects the input through Bevy picking
+and calls the React handler a moment later. The element reference lists which
+elements accept which handlers.
 
 ## Usage
 
@@ -52,10 +52,11 @@ under the pointer that owns clicks.
 | `onPointerHover` | On each frame the pointer moved while over the element, a button held or not            |
 
 - A press on an element with any `onPointer*` handler starts a drag on it,
-  which lasts until the button that started it is released. One drag runs at
-  a time: other buttons pressed during it are ignored. When several elements
-  with pointer handlers overlap under the press, the topmost one gets the
-  drag.
+  which lasts until the button that started it is released. Each pointer
+  runs one drag at a time: other mouse buttons pressed during it are
+  ignored, while every finger on a touch screen drags on its own. When
+  several elements with pointer handlers overlap under the press, the
+  topmost one gets the drag.
 - `onPointerMove` only fires during a drag; it follows the pointer outside
   the element. `onPointerHover` is the hover move: it fires while the pointer
   is over the element (between its enter and leave), with or without a
@@ -102,8 +103,12 @@ function Draggable() {
 ```
 
 On the shapes of an [`<svg>`](../elements/svg.md), `x`/`y` are in the SVG's
-user space instead. Inside a [`<surface>`](../elements/surface.md),
-`clientX`/`clientY` are pixels of the surface's texture.
+user space instead, and stop updating once a drag leaves the shape. Inside a
+[`<surface>`](../elements/surface.md), `clientX`/`clientY` are logical
+pixels of the surface. Inside a
+[3D-transformed](../styling/3d-transforms.md) element, `x`/`y` follow the
+transformed quad (also past its edge during a drag), and `clientX`/`clientY`
+stay the window cursor's.
 
 ## Hover and press styles
 
@@ -209,14 +214,28 @@ finger's position.
   taken over by scrolling: the element gets `onPointerLeave` instead of
   `onPointerUp`.
 - A touch that moves more than 8 logical pixels while scrolling doesn't click.
-- One drag runs at a time; other fingers are ignored meanwhile.
+- Each finger is a pointer of its own: two fingers press, hover and drag two
+  elements at once.
+
+## Hover and press from Rust
+
+Hover and press are computed from Bevy picking for every pointer and kept on
+each interactive element's entity as `bevy_react::ReactInteraction` (see
+[Named nodes](../communication/named-nodes.md)). React entities don't carry
+`bevy::ui::Interaction`, which Bevy 0.20 deprecates.
+
+Bevy's legacy focus system still runs every frame for `Interaction` nodes
+your app spawns itself. An app that has none can switch that pass off:
+
+```rust
+app.configure_sets(PreUpdate, bevy::ui::UiSystems::Focus.run_if(|| false));
+```
 
 ## Limits
 
-- No modifier keys on pointer events. Track them with the
-  [keyboard](keyboard.md) events.
-- No hover-move events, double-click events, bubbling, capture phase or
-  `stopPropagation`.
+- No double-click events, bubbling, capture phase or `stopPropagation`.
+- No pointer capture API: a drag follows its pointer anyway, and hover keeps
+  following the pointer during it.
 - Handlers run a frame or more after the input, on React's thread; for
   feedback that must be instant, use state styles.
 - `onClick` is primary-button only.

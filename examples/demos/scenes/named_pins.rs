@@ -9,13 +9,13 @@
 //! hanging straight below. The camera is fixed for this scene (see
 //! `camera.rs`), so the view reads as 2D: pins never swing because the camera
 //! moved. Hovering a card makes its ball glow (read straight off the node's
-//! `Interaction`). No messages, no events, no entity ids handed around.
+//! `ReactInteraction`). No messages, no events, no entity ids handed around.
 
 use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::ui::{CalculatedClip, ComputedNode, IsDefaultUiCamera, UiGlobalTransform, UiSystems};
-use bevy_react::{ReactApplySet, ReactNodes};
+use bevy_react::{ReactApplySet, ReactInteraction, ReactNodes};
 
 use crate::scene::{self, Scene};
 
@@ -229,7 +229,7 @@ fn sync_pins(
 /// card swings and bounces it and it settles hanging straight below. A card
 /// scrolled out of its container (its `CalculatedClip` no longer contains the
 /// center) or off screen hides its pin; a hovered card (the node's own
-/// `Interaction`) ramps its ball's glow.
+/// `ReactInteraction`) ramps its ball's glow.
 fn place_pins(
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -238,7 +238,7 @@ fn place_pins(
         &ComputedNode,
         &UiGlobalTransform,
         Option<&CalculatedClip>,
-        Option<&Interaction>,
+        Option<&ReactInteraction>,
     )>,
     mut pins: Query<(&mut Pin, &mut Visibility)>,
     mut parts: Query<&mut Transform, With<PinPart>>,
@@ -311,7 +311,7 @@ fn place_pins(
         // an idle pin never dirties its material.
         let hovered = matches!(
             interaction,
-            Some(Interaction::Hovered | Interaction::Pressed)
+            Some(ReactInteraction::Hovered | ReactInteraction::Pressed)
         );
         let target_glow = if hovered { HOVER_GLOW } else { GLOW };
         let next_glow = pin.glow + (target_glow - pin.glow) * ease;

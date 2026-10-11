@@ -116,7 +116,11 @@ cursor, finds the nearest `SurfacePointer` mesh, reads the texture coordinate
 at the hit, and moves a virtual pointer to that pixel of the surface.
 
 - Children get `onClick`, the `onPointer*` handlers, `hoverStyle` and
-  `pressStyle`, and the `cursor` style sets the OS cursor, as on screen.
+  `pressStyle`, and the `cursor` style sets the OS cursor, as on screen. The
+  same rules apply, [`focusPolicy`](../styling/focus-policy.md) included: a
+  `<button>` un-hovers the card around it.
+- A drag ends when the cursor leaves the mesh: the element gets
+  `onPointerUp` at the last position on the surface.
 - The wheel scrolls the scroll container under the pointer and fires
   `onWheel`; screen UI under the cursor takes it first.
 - The mesh needs UVs, with `(0, 0)` at the texture's top-left. If your

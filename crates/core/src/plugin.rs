@@ -21,16 +21,20 @@ use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactAppExt, ReactMessage, ReactRegistry};
 use crate::protocol::{op::Op, outbound::Outbound};
 use crate::reconcile::{
-    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_virtual_interaction_styles,
-    collect_hover_events, collect_pointer_events, collect_scroll_events, collect_ui_events,
-    collect_virtual_clicks, collect_virtual_hover_events, collect_virtual_pointer_events,
+    OpApplyStats, apply_interaction_styles, apply_js_ops, collect_hover_events,
+    collect_pointer_events, collect_scroll_events, collect_ui_events,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
 /// Whether the React UI currently owns the mouse pointer. Refreshed every frame
-/// in [`PointerCaptureSet`]; world-input systems (a 3D camera controller, picking,
-/// …) should consult it and ignore the mouse when it reports captured, so a UI
-/// drag or click doesn't also drive the scene.
+/// (complete once [`PointerCaptureSet`] has run); world-input systems (a 3D
+/// camera controller, picking, …) should consult it and ignore the mouse when
+/// it reports captured, so a UI drag or click doesn't also drive the scene.
+///
+/// It answers for the window's own pointers (the mouse, touches): the pointer
+/// of a `<surface>` hovering or dragging that surface's UI is not the
+/// window's. Unrelated to bevy_picking's `PointerCaptureMap`, which this
+/// crate never writes.
 ///
 /// Order such a system after the set to read the current frame's state:
 /// ```no_run
@@ -46,8 +50,9 @@ pub struct PointerCapture {
     /// progress). Stays true for the whole gesture — even after the cursor leaves
     /// the element's bounds — until the button is released.
     pub dragging: bool,
-    /// The pointer is over an interactive UI element (its `Interaction` is
-    /// `Hovered` or `Pressed`).
+    /// The pointer is over an interactive UI element (its
+    /// [`ReactInteraction`](crate::ReactInteraction) is `Hovered` or
+    /// `Pressed`), or a scrollbar.
     pub over_ui: bool,
     /// The UI consumed this frame's wheel input: a scroll container actually
     /// moved, an `onWheel` listener claimed the delta, or an overlay (devtools
@@ -674,6 +679,17 @@ impl Plugin for ReactUiPlugin {
                 .after(crate::layer::pick3d::suppress_transformed_layer_hits)
                 .before(bevy::picking::PickingSystems::Hover),
         )
+        // A hit on a React text run names its `<text>` block, whose
+        // `focusPolicy` then decides what the hover map sees beneath it.
+        .add_systems(
+            PreUpdate,
+            (
+                crate::reconcile::fold_span_hits.in_set(crate::ext::PickRefineSet),
+                // Hover and press of every pointer, off this frame's hover
+                // map: current for all of `Update` without any ordering.
+                crate::reconcile::sync_interactions.after(bevy::picking::PickingSystems::Hover),
+            ),
+        )
         .add_systems(
             Update,
             (
@@ -683,15 +699,17 @@ impl Plugin for ReactUiPlugin {
                 // events (`onKeyDown`/`onKeyUp`). Node-independent: reads Bevy's
                 // `KeyboardInput` messages directly, no reconciler state needed.
                 crate::keyboard::collect_keyboard_events,
-                // Emit `pointerEnter`/`pointerLeave` from `Interaction` transitions
-                // (same signal as hover styling), for nodes with those handlers.
+                // Emit `pointerEnter`/`pointerLeave` from `ReactInteraction`
+                // transitions (same signal as hover styling), and `pointerHover`
+                // from the hover map, for nodes with those handlers.
                 collect_hover_events,
                 collect_pointer_events.in_set(PointerCaptureSet),
                 // Wheel-scroll any `overflow: scroll` node under the cursor, and
                 // deliver raw wheel deltas to any `onWheel` node. Both in the same
-                // set, after `collect_pointer_events`, so their `PointerCapture::over_ui`
-                // claim survives (that system *assigns* `over_ui`) and world systems
-                // (ordered `.after(PointerCaptureSet)`) see it. (A sub-tuple: the outer
+                // set, after `collect_pointer_events`, so their
+                // `PointerCapture::wheel_captured` claim survives (that system
+                // *resets* it) and world systems (ordered
+                // `.after(PointerCaptureSet)`) see it. (A sub-tuple: the outer
                 // tuple is at Bevy's arity limit.)
                 (
                     crate::scroll::apply_scroll
@@ -710,10 +728,11 @@ impl Plugin for ReactUiPlugin {
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
                     // Hovering a scrollbar part claims the hover channel (the
-                    // widget has `Hovered`, not `Interaction`, so a press on it
-                    // would otherwise start a world grab); a thumb drag claims
-                    // the pointer outright and snaps any eased scroll state. In the set,
-                    // after `collect_pointer_events` so its `over_ui` claim survives.
+                    // widget is no React element, so a press on it would
+                    // otherwise start a world grab); a thumb drag claims the
+                    // pointer outright and snaps any eased scroll state. In the
+                    // set, after `collect_pointer_events` so its `dragging`
+                    // claim survives.
                     crate::scrollbar::bridge_scrollbar_capture
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
@@ -782,15 +801,6 @@ impl Plugin for ReactUiPlugin {
                 crate::render_target::bind_target_views.after(apply_js_ops),
                 crate::render_target::drive_render_targets
                     .after(crate::render_target::bind_target_views),
-                // Virtual-pointer interaction (a `<surface>`'s in-world pointer):
-                // turn its picking events on the offscreen subtree into
-                // `onClick`/`onPointer*` + hover/press styling. The picking
-                // events are produced in `PreUpdate`, so these read this
-                // frame's events.
-                collect_virtual_clicks,
-                collect_virtual_pointer_events,
-                collect_virtual_hover_events,
-                apply_virtual_interaction_styles,
             ),
         );
 
@@ -873,39 +883,18 @@ impl Plugin for ReactUiPlugin {
         app.init_resource::<crate::layer::clip::LayerClips>();
         app.add_systems(
             Update,
-            (
-                crate::layer::evaluate_layer_promotions
-                    .after(apply_js_ops)
-                    .before(apply_interaction_styles)
-                    .before(AnimationSet::Apply),
-                // Override `ui_focus_system`'s geometric (stale-rect) verdict
-                // for members of visually-transformed layers with the virtual
-                // pointer's, before styling/enter-leave/drag-position readers.
-                crate::layer::pick3d::correct_transformed_interactions
-                    .before(apply_interaction_styles)
-                    .before(collect_hover_events)
-                    .before(crate::reconcile::collect_pointer_events),
-            ),
+            crate::layer::evaluate_layer_promotions
+                .after(apply_js_ops)
+                .before(apply_interaction_styles)
+                .before(AnimationSet::Apply),
         );
-        // Synthesize `Interaction`/`RelativeCursorPosition`/user-space cursor
-        // for handler-bearing SVG shape children from the hover map + the
-        // refined per-shape hits (`svg::interact` module docs) — shapes are
-        // Node-less, so `ui_focus_system` never sees them. Same slot as
-        // `correct_transformed_interactions` above: before styling,
-        // enter/leave, and drag-position readers so they all see the
-        // synthesized state — and AFTER `correct_transformed_interactions`
-        // itself: for a handler-bearing shape inside a visually-transformed
-        // layer both systems write the same `RelativeCursorPosition` (pick3d
-        // writes `normalized: None` — shapes have no `ComputedNode`), and
-        // without an explicit order the winner is nondeterministic and the
-        // two writes ping-pong `Changed` every frame. The svg synthesis must
-        // land last: it holds the refined user-space hit. A separate
-        // `add_systems` call — the Update tuple above is at Bevy's arity cap.
-        // `InteractionSyncSet` is the contract's name for this slot.
+        // `InteractionSyncSet`: a feature fills the pointer state the core
+        // cannot derive — an `EventLocalPos` (an SVG shape's user-space
+        // cursor), or a `ReactInteraction` for an entity no picking backend
+        // reports — before the restyle and the hover/drag collectors read it.
         app.configure_sets(
             Update,
             crate::ext::InteractionSyncSet
-                .after(crate::layer::pick3d::correct_transformed_interactions)
                 .before(apply_interaction_styles)
                 .before(collect_hover_events)
                 .before(crate::reconcile::collect_pointer_events),
@@ -1235,6 +1224,15 @@ fn setup(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The guide's opt-out for bevy's legacy focus pass (`docs/guide/events/
+    /// mouse.md`): the core needs nothing `ui_focus_system` writes. Fails to
+    /// compile once Bevy removes the set — drop the guide's line with it.
+    #[test]
+    fn the_legacy_focus_pass_can_be_switched_off() {
+        let mut app = App::new();
+        app.configure_sets(PreUpdate, bevy::ui::UiSystems::Focus.run_if(|| false));
+    }
 
     /// `is_captured` must cover every capture channel: a UI drag, hovering
     /// interactive UI, and a UI-consumed wheel each count as "the UI owns the

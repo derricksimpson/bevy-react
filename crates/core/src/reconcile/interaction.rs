@@ -1,19 +1,19 @@
-//! The main-window hover/press/focus restyle: re-merge and re-apply a
-//! variant-bearing element's style when its interaction or focus state flips.
-//! (The `<surface>` analogue lives in `virtual_events.rs` — surface nodes
-//! never receive a legacy `Interaction`.)
+//! The hover/press/focus restyle: re-merge and re-apply a variant-bearing
+//! element's style when its interaction or focus state flips — for every
+//! pointer, a `<surface>`'s included ([`ReactInteraction`] is derived from
+//! picking for all of them).
 
 use bevy::prelude::*;
 
-use crate::bridge::{FocusState, ReactNode, Restyle, StyleVariants};
+use crate::bridge::{FocusState, ReactInteraction, ReactNode, Restyle, StyleVariants};
 use crate::ui_map::overlay_style;
 
 /// Re-apply the merged style for any element with [`StyleVariants`] whose
-/// `Interaction` or `FocusState` changed (hover/press/focus in or out) — or whose
+/// [`ReactInteraction`] or `FocusState` changed (hover/press/focus in or out) — or whose
 /// variants changed from a React re-render. The interaction axis: `None` → base,
 /// `Hovered` → base+hover, `Pressed` → base+hover+press; then `focus` overlays last
-/// (so an explicit `focusStyle` wins on conflicting fields). Both `Interaction` and
-/// `FocusState` are optional — a focus-only `editableText` has no `Interaction`, and
+/// (so an explicit `focusStyle` wins on conflicting fields). Both the interaction and
+/// `FocusState` are optional — a focus-only node has no `ReactInteraction`, and
 /// a hover-only node has no `FocusState`. Runs entirely on the Bevy side: no
 /// round-trip to JS, no React re-render on mouse move or focus change.
 ///
@@ -29,14 +29,14 @@ pub fn apply_interaction_styles(
     mut query: Query<
         (
             Entity,
-            Option<Ref<Interaction>>,
+            Option<Ref<ReactInteraction>>,
             Option<Ref<FocusState>>,
             &mut StyleVariants,
             Option<&crate::layer::PromotedLayer>,
             Option<&crate::ext::ElementFlags>,
         ),
         Or<(
-            Changed<Interaction>,
+            Changed<ReactInteraction>,
             Changed<FocusState>,
             Changed<StyleVariants>,
         )>,
@@ -86,16 +86,16 @@ pub fn apply_interaction_styles(
         if matches!(pending, Restyle::Base(_))
             && !state_changed
             && !focused
-            && matches!(interaction, None | Some(Interaction::None))
+            && matches!(interaction, None | Some(ReactInteraction::None))
         {
             continue;
         }
         let mut style = match interaction {
-            Some(Interaction::Pressed) => overlay_style(
+            Some(ReactInteraction::Pressed) => overlay_style(
                 overlay_style(variants.base.as_ref(), variants.hover.as_ref()).as_ref(),
                 variants.press.as_ref(),
             ),
-            Some(Interaction::Hovered) => {
+            Some(ReactInteraction::Hovered) => {
                 overlay_style(variants.base.as_ref(), variants.hover.as_ref())
             }
             _ => variants.base.as_ref().cloned(),
@@ -186,7 +186,7 @@ pub fn apply_interaction_styles(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::{op_app, update_delta};
+    use super::super::test_util::{create, ent, op_app, update_delta};
     use super::*;
     use crate::bridge::JsBridge;
     use crate::protocol::op::Op;
@@ -240,7 +240,7 @@ mod tests {
 
         app.world_mut()
             .entity_mut(root)
-            .insert(Interaction::Hovered);
+            .insert(ReactInteraction::Hovered);
         app.update();
         assert_eq!(
             color(&app, root),
@@ -253,7 +253,9 @@ mod tests {
             "…and the inheriting bare-string span"
         );
 
-        app.world_mut().entity_mut(root).insert(Interaction::None);
+        app.world_mut()
+            .entity_mut(root)
+            .insert(ReactInteraction::None);
         app.update();
         assert_eq!(
             color(&app, root),
@@ -306,8 +308,12 @@ mod tests {
             .image
             .clone();
 
-        app.world_mut().entity_mut(e1).insert(Interaction::Hovered);
-        app.world_mut().entity_mut(e2).insert(Interaction::Hovered);
+        app.world_mut()
+            .entity_mut(e1)
+            .insert(ReactInteraction::Hovered);
+        app.world_mut()
+            .entity_mut(e2)
+            .insert(ReactInteraction::Hovered);
         app.update();
         let hover_handle = app
             .world()
@@ -325,8 +331,12 @@ mod tests {
             "a hover-only spec mounts the image on hover-in"
         );
 
-        app.world_mut().entity_mut(e1).insert(Interaction::None);
-        app.world_mut().entity_mut(e2).insert(Interaction::None);
+        app.world_mut()
+            .entity_mut(e1)
+            .insert(ReactInteraction::None);
+        app.world_mut()
+            .entity_mut(e2)
+            .insert(ReactInteraction::None);
         app.update();
         assert_eq!(
             app.world().entity(e1).get::<ImageNode>().unwrap().image,
@@ -365,7 +375,9 @@ mod tests {
         let bg = |app: &App| app.world().entity(e).get::<BackgroundColor>().map(|c| c.0);
         let base = bg(&app);
 
-        app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+        app.world_mut()
+            .entity_mut(e)
+            .insert(ReactInteraction::Hovered);
         app.update();
         assert_eq!(bg(&app), Some(crate::ui_map::parse_color("blue")));
 
@@ -379,5 +391,85 @@ mod tests {
             .unwrap();
         app.update();
         assert_eq!(bg(&app), base, "the hover background is cleared");
+    }
+
+    /// A virtual pointer (a `<surface>`'s) restyles like the mouse: its hover
+    /// map entry becomes `ReactInteraction::Hovered`, which is all the
+    /// restyle reads.
+    #[test]
+    fn a_virtual_pointer_restyles_like_the_mouse() {
+        use crate::reconcile::picking::test_pointers::{hover, spawn_pointer};
+        use bevy::picking::pointer::PointerId;
+
+        let (mut app, ops_tx) = op_app();
+        app.add_systems(
+            Update,
+            (
+                crate::reconcile::sync_interactions.before(crate::reconcile::apply_js_ops),
+                apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+            ),
+        );
+        let pointer = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0x5eed));
+        spawn_pointer(app.world_mut(), pointer, Vec2::ZERO);
+        app.world_mut()
+            .get_resource_or_init::<crate::ext::VirtualPointers>()
+            .register(pointer);
+        ops_tx
+            .send(vec![create(
+                1,
+                "node",
+                serde_json::json!({
+                    "style": { "backgroundColor": "red" },
+                    "hoverStyle": { "backgroundColor": "blue" },
+                }),
+            )])
+            .unwrap();
+        app.update();
+        let e = ent(&app, 1);
+        let bg = |app: &App| app.world().get::<BackgroundColor>(e).unwrap().0;
+        assert_eq!(bg(&app), crate::ui_map::parse_color("red"));
+
+        hover(app.world_mut(), pointer, &[e]);
+        app.update();
+        assert_eq!(bg(&app), crate::ui_map::parse_color("blue"));
+
+        hover(app.world_mut(), pointer, &[]);
+        app.update();
+        assert_eq!(bg(&app), crate::ui_map::parse_color("red"));
+    }
+
+    /// A press or release edge on a FOCUSED node keeps its `focusStyle`: it
+    /// overlays last. (Clicking a `<surface>` input used to drop its focus
+    /// ring on release.)
+    #[test]
+    fn press_on_a_focused_node_keeps_its_focus_style() {
+        let (mut app, ops_tx) = op_app();
+        app.add_systems(
+            Update,
+            apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+        );
+        ops_tx
+            .send(vec![create(
+                1,
+                "editableText",
+                serde_json::json!({
+                    "style": { "border": 1, "borderColor": "#ff0000" },
+                    "focusStyle": { "borderColor": "#0000ff" },
+                }),
+            )])
+            .unwrap();
+        app.update();
+        let input = ent(&app, 1);
+        app.world_mut().get_mut::<FocusState>(input).unwrap().0 = true;
+
+        let top = |app: &App| app.world().get::<BorderColor>(input).unwrap().top;
+        for (state, when) in [
+            (ReactInteraction::Pressed, "pressed, focused"),
+            (ReactInteraction::Hovered, "released, focused"),
+        ] {
+            *app.world_mut().get_mut::<ReactInteraction>(input).unwrap() = state;
+            app.update();
+            assert_eq!(top(&app), Color::srgb(0.0, 0.0, 1.0), "{when}");
+        }
     }
 }

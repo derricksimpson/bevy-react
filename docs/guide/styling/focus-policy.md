@@ -41,9 +41,10 @@ An explicit value overrides the element's default, on a `<button>` too. An
 unknown value reports a `focusPolicy` warning and acts as `"pass"`.
 
 An [`<editableText>`](../elements/editable-text.md) is the exception: it
-keeps clicks and scene picking from what lies beneath it whatever its
-`focusPolicy`. A click that also reached the nodes beneath would blur the
-field it just focused.
+keeps hover, presses, clicks and scene picking from what lies beneath it
+whatever its `focusPolicy`. A click that also reached the nodes beneath would
+blur the field it just focused. So a hover-styled card loses its `hoverStyle`
+while the pointer is on an input inside it.
 
 ## What blocking stops
 
@@ -52,7 +53,8 @@ Under the pointer, nodes are visited from the topmost down (see
 Everything beneath it is out of reach:
 
 - **Hover and press.** Only the visited nodes are hovered or pressed, which
-  drives `hoverStyle`, `pressStyle`, `onPointerEnter` and `onPointerLeave`.
+  drives `hoverStyle`, `pressStyle`, `onPointerEnter`, `onPointerLeave`,
+  `onPointerHover` and where a drag can start.
   That includes the blocking node's own ancestors, which are beneath it: a
   `<button>` inside a hover-styled card un-hovers the card while the pointer
   is on the button. Give the button `focusPolicy: "pass"` if the card should
@@ -88,7 +90,11 @@ capture the pointer, even with `"block"`. See
 - A [`<root>`](../elements/root.md) never takes part in hit testing itself;
   its children do, by their own policies.
 - In a [`<surface>`](../elements/surface.md), the policy applies the same
-  way to the in-world pointer.
+  way to the in-world pointer, hover included.
+- A scrollbar blocks: while the pointer is on one, the content beneath it
+  isn't hovered.
+- The glyphs of a `<text>` follow the `<text>`'s policy, like the rest of
+  its box.
 
 See [`focusPolicy`](../reference/style-properties.md#focusPolicy) in the
 style reference.

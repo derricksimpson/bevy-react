@@ -101,7 +101,7 @@ pub mod prelude {
     #[cfg(feature = "svg")]
     pub use crate::svg::SvgPlugin;
     pub use bevy_react_core::{
-        ReactAppExt, ReactEvents, ReactNode, ReactNodes, ReactUiPlugin, Request, react_event,
-        react_filter, react_message, react_morph_filter, react_request,
+        ReactAppExt, ReactEvents, ReactInteraction, ReactNode, ReactNodes, ReactUiPlugin, Request,
+        react_event, react_filter, react_message, react_morph_filter, react_request,
     };
 }

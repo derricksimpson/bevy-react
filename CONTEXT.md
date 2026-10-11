@@ -206,3 +206,25 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   capitalized name, its argument the payload. Sent from Rust with
   `ElementEvents`, only to nodes with a handler unless declared
   unconditional.
+
+## Pointers
+
+- **Pointer** — a bevy_picking pointer: the mouse, one per finger, and the
+  custom ones (the **transform3d pointer**, a `<surface>`'s). Hover, press,
+  drags and clicks are derived per pointer from the picking hover map; no
+  code path is specific to the window cursor.
+- **Device** — what a user holds: the mouse and the transform3d pointer (the
+  mouse remapped into a 3D-transformed layer) are ONE device; every other
+  pointer is its own. A device runs one drag at a time.
+- **Virtual pointer** — a pointer registered in `VirtualPointers`: not the
+  window's. Its hover and drags stay out of `PointerCapture`. (The
+  transform3d pointer is deliberately not one — it IS the window's mouse.)
+- **Interaction state** — `ReactInteraction` (`None`/`Hovered`/`Pressed`) on
+  an interactive element: hover is hover-map membership (it stops at the
+  first `focusPolicy: "block"` node — not CSS `:hover`-with-descendants),
+  press is sticky until the primary button's release.
+- **Click owner** — the element a click is reported on: the nearest
+  `ClickOwner`/`<button>`/`<editableText>` at or above the topmost hit.
+  Hover/press styling never makes an owner.
+- **Drag owner** — the element a device is dragging: the topmost element
+  with `onPointer*` handlers under the press, until that button's release.

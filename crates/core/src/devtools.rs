@@ -231,9 +231,10 @@ impl Plugin for DevtoolsPlugin {
         // pending settings on `AppExit`, which is written during `Update` —
         // `Last` still runs on that final frame.
         .add_systems(Last, flush_settings_on_exit)
-        // In the pointer-capture set, after the system that ASSIGNS
-        // `PointerCapture::over_ui` each frame, so pick mode's claim
-        // survives for world-input systems ordered `.after(PointerCaptureSet)`.
+        // In the pointer-capture set, after the system that resets
+        // `PointerCapture::wheel_captured` each frame (`over_ui` is assigned
+        // in `PreUpdate`), so pick mode's claims survive for world-input
+        // systems ordered `.after(PointerCaptureSet)`.
         .add_systems(
             Update,
             drive_pick_mode

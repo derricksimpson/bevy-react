@@ -16,15 +16,14 @@ use crate::style::props::{FLEX_DIRECTION, FOCUS_POLICY, GLOBAL_Z_INDEX, HEIGHT, 
 pub static NODE: Element = Element::new("node");
 
 /// `<button>`: a node carrying bevy's headless `ui_widgets::Button` (plus the
-/// `Interaction` the hover/press styling rides) that captures the pointer by
-/// default — like bevy_ui's native buttons, so a button doesn't leak its click
-/// to a sibling, an ancestor, or the 3D scene behind it.
+/// `ReactInteraction` the hover/press styling rides) that captures the
+/// pointer by default — like bevy_ui's native buttons, so a button doesn't
+/// leak its click to a sibling, an ancestor, or the 3D scene behind it.
 pub static BUTTON: Element = Element {
     default_style: Some(button_style),
-    // The headless widget button (`Role::Button` for accessibility). bevy_ui's
-    // old `Button` (0.20-deprecated, now private) also required `Interaction`,
-    // which the hover/press styling still rides — so it is inserted here.
-    spawn: Some(|ctx| ctx.spawn((bevy::ui_widgets::Button, Interaction::default()))),
+    // The headless widget button (`Role::Button` for accessibility), always
+    // interactive: hover/press state with or without handlers or variants.
+    spawn: Some(|ctx| ctx.spawn((bevy::ui_widgets::Button, crate::ReactInteraction::default()))),
     ..Element::new("button")
 };
 

@@ -151,7 +151,7 @@ pub fn apply_touch_scroll(
                 continue;
             }
             // Bound to a handler-node drag this frame → contested (see above).
-            let contested = active_drag.touch_id() == Some(touch.id());
+            let contested = active_drag.owns_touch(touch.id());
             // `ComputedNode`/`UiGlobalTransform` are physical; touch positions
             // are logical top-left — same conversion as the wheel path's cursor.
             let point = touch.position() * window.scale_factor();
@@ -387,13 +387,13 @@ mod tests {
     /// of travel are the slider's.
     #[test]
     fn contested_touch_panning_along_scroll_axis_steals_the_drag() {
-        use crate::reconcile::DragSource;
         use bevy::input::touch::TouchPhase;
 
         let (mut app, container) = touch_app();
         app.world_mut().resource_mut::<ActiveDrag>().begin(
             container,
-            DragSource::Touch { id: 7 },
+            PointerId::Touch(7),
+            PointerButton::Primary,
             Vec2::ZERO,
             Vec2::ZERO,
         );
@@ -438,13 +438,13 @@ mod tests {
     /// scrolls, then or later, and the click is not suppressed by this path.
     #[test]
     fn contested_touch_panning_across_scroll_axis_yields_to_the_drag() {
-        use crate::reconcile::DragSource;
         use bevy::input::touch::TouchPhase;
 
         let (mut app, container) = touch_app();
         app.world_mut().resource_mut::<ActiveDrag>().begin(
             container,
-            DragSource::Touch { id: 7 },
+            PointerId::Touch(7),
+            PointerButton::Primary,
             Vec2::ZERO,
             Vec2::ZERO,
         );
@@ -477,14 +477,14 @@ mod tests {
     /// dropped that second touch permanently.
     #[test]
     fn second_finger_scrolls_during_touch_handler_drag() {
-        use crate::reconcile::DragSource;
         use bevy::input::touch::TouchPhase;
 
         let (mut app, container) = touch_app();
         let slider = app.world_mut().spawn_empty().id();
         app.world_mut().resource_mut::<ActiveDrag>().begin(
             slider,
-            DragSource::Touch { id: 7 },
+            PointerId::Touch(7),
+            PointerButton::Primary,
             Vec2::ZERO,
             Vec2::ZERO,
         );
@@ -508,17 +508,14 @@ mod tests {
     /// the exclusion is the drag-owning touch only, not "any drag".
     #[test]
     fn touch_claims_during_mouse_drag() {
-        use crate::reconcile::DragSource;
         use bevy::input::touch::TouchPhase;
 
         let (mut app, container) = touch_app();
         let slider = app.world_mut().spawn_empty().id();
         app.world_mut().resource_mut::<ActiveDrag>().begin(
             slider,
-            DragSource::Mouse {
-                button: MouseButton::Left,
-                dom_button: 0,
-            },
+            PointerId::Mouse,
+            PointerButton::Primary,
             Vec2::ZERO,
             Vec2::ZERO,
         );

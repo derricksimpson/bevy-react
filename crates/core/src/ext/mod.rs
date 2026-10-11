@@ -25,8 +25,8 @@
 //!   image-rendering module must never copy or mutate it.
 //!
 //! And one resource: [`VirtualPointers`] — the picking pointers a feature
-//! drives over UI the window cursor cannot reach, whose events the core turns
-//! into the common UI events.
+//! drives over UI the window cursor cannot reach, which the core keeps out
+//! of the window's `PointerCapture`.
 
 use bevy::prelude::*;
 
@@ -125,9 +125,11 @@ impl ElementFlags {
 
 /// An element-defined coordinate for pointer events on this entity: while
 /// `Some`, the hover/pointer collectors report it as the event's `x`/`y`
-/// instead of the node-relative position. Written per frame by the feature
-/// that owns the element's coordinate space (an SVG shape reports its root's
-/// user space); `None` while the pointer is not over the element.
+/// instead of the node-relative position. Written per frame, in
+/// [`InteractionSyncSet`], by the feature that owns the element's coordinate
+/// space (an SVG shape reports its root's user space); `None` while the
+/// pointer is not over the element. A node-less element that never fills it
+/// reports `0, 0`.
 ///
 /// The position lives in an interior `Option` (rather than the component
 /// being inserted/removed per hover flip) so a hover boundary never causes
@@ -153,15 +155,18 @@ pub struct LiveTexture;
 
 /// The picking pointers a feature drives over UI the window cursor cannot
 /// reach (a `<surface>`'s texture-space subtree, driven from an in-world
-/// ray-cast): their `Pointer<…>` picking events are the core's to turn into
-/// the common UI events (`click`, `onPointer*`, hover styling) — the
-/// main-window collectors skip them — and their hover map feeds the OS
-/// cursor. A feature registers its pointer once, when it spawns it.
+/// ray-cast). The core turns every pointer's picking state into the common
+/// UI events (`click`, `onPointer*`) and hover/press styling, so such a
+/// pointer needs nothing to work; registering it says it is *not the
+/// window's*: its hover and drags stay out of
+/// [`PointerCapture`](crate::PointerCapture), and its hover map is asked
+/// first for the OS cursor. A feature registers its pointer once, when it
+/// spawns it.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct VirtualPointers(Vec<bevy::picking::pointer::PointerId>);
 
 impl VirtualPointers {
-    /// Route `id`'s picking events through the virtual-pointer collectors.
+    /// Mark `id` as a virtual pointer.
     pub fn register(&mut self, id: bevy::picking::pointer::PointerId) {
         if !self.0.contains(&id) {
             self.0.push(id);
@@ -245,11 +250,14 @@ impl VirtualButtons {
     }
 
     /// The pointer left every target: release every owed press at
-    /// `location` (off-bounds) and move there, so picking fires `Out`.
+    /// `release_at` — where the pointer last was, which is where a drag it
+    /// began reports its `pointerUp` — then move to `park_at` (off-bounds),
+    /// so picking fires `Out`.
     pub fn leave(
         &mut self,
         id: bevy::picking::pointer::PointerId,
-        location: bevy::picking::pointer::Location,
+        release_at: bevy::picking::pointer::Location,
+        park_at: bevy::picking::pointer::Location,
         input: &mut MessageWriter<bevy::picking::pointer::PointerInput>,
     ) {
         use bevy::picking::pointer::{PointerAction, PointerInput};
@@ -257,14 +265,14 @@ impl VirtualButtons {
             if std::mem::take(&mut self.pressed[i]) {
                 input.write(PointerInput::new(
                     id,
-                    location.clone(),
+                    release_at.clone(),
                     PointerAction::Release(button),
                 ));
             }
         }
         input.write(PointerInput::new(
             id,
-            location,
+            park_at,
             PointerAction::Move { delta: Vec2::ZERO },
         ));
     }
@@ -340,10 +348,12 @@ impl DrivenExtValues {
 /// - [`PickRefineSet`] (`PreUpdate`): rewrite this frame's `PointerHits`
 ///   (refine a node hit into a sub-element hit). After the picking backends
 ///   and the transformed-layer suppression; before the hover map is built.
-/// - [`InteractionSyncSet`] (`Update`): synthesize `Interaction` /
-///   `RelativeCursorPosition` / [`EventLocalPos`] for elements
-///   `ui_focus_system` cannot see. After the transformed-layer correction;
-///   before interaction styling and the hover/pointer event collectors.
+/// - [`InteractionSyncSet`] (`Update`): fill the pointer state the core
+///   cannot derive — an [`EventLocalPos`], or a
+///   [`ReactInteraction`](crate::ReactInteraction) for an entity no picking
+///   backend reports. Before interaction styling and the hover/pointer event
+///   collectors. (An element a picking backend does hit needs no system at
+///   all: hover, enter/leave and the drag handlers follow the hover map.)
 /// - [`ElementRasterSet`] (`Update`): repaint an element-owned texture from
 ///   this frame's final state. After the op drain, the animation appliers,
 ///   and the transition drive, so a driven or eased value paints the same

@@ -3,7 +3,7 @@
 //! bevy_picking. bevy's `build_hover_map` treats an entity **without** a
 //! `Pickable` as blocking (it inserts the entity, then `break`s), so a
 //! Node-less shape at the top of the stack would otherwise swallow the hover
-//! map for everything beneath it — no `Interaction`, no press, no
+//! map for everything beneath it — no hover, no press, no
 //! `Pointer<Click>` for an enclosing `<button>` or its press surface.
 //!
 //! Harness: the reconciler's real op path (`apply_js_ops` builds the tree, so

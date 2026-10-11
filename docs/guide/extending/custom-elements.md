@@ -323,16 +323,22 @@ fn drive_sizes(
 ## Pointer events
 
 A styled element takes the pointer handlers like `<node>`. A node-less
-element needs help from your code:
+element needs one thing from your code: a picking backend that hits its
+entity (Bevy's `MeshPickingPlugin` for a mesh). bevy-react derives the rest
+from Bevy picking, for every pointer:
 
-- `onClick` fires for any picking hit on the entity, so bring a picking
-  backend that sees it (Bevy's `MeshPickingPlugin` for a mesh).
-- `onPointerEnter` and `onPointerLeave` follow the entity's `Interaction`.
-  The core inserts one on a node-less element while it has pointer handlers,
-  but `bevy_ui` only updates it for UI nodes: drive it yourself in a system
-  in `InteractionSyncSet`, as the demo cube does from the hover map.
-- The drag handlers (`onPointerDown`, `onPointerMove`, `onPointerUp`) are
-  only delivered to UI nodes; a node-less element never receives them.
+- `onClick`, `onPointerEnter`, `onPointerLeave`, `onPointerHover` and the
+  drag handlers (`onPointerDown`, `onPointerMove`, `onPointerUp`) work as on
+  a node. While the element has a pointer handler its entity carries a
+  `ReactInteraction`, kept up to date for you, as the demo cube's does.
+- A node-less element has no box, so its events report `x`/`y` as `0`
+  (`clientX`/`clientY` are the pointer's, as always). To report a position of
+  your own, write it into the entity's `EventLocalPos` (present while it has
+  pointer handlers) from a system in `InteractionSyncSet`. The `<svg>` shapes
+  do that with the pointer's position in SVG user space.
+- For an entity no picking backend can hit, write its `ReactInteraction`
+  yourself, also in `InteractionSyncSet`: enter and leave follow it. bevy-react
+  only resets the values it set itself.
 
 ## System ordering
 
@@ -343,7 +349,7 @@ names:
 | --------------------- | ------------ | ---------------------------------------------------------------- |
 | `ReactApplySet`       | `Update`     | Run `.after` it to see this frame's mounts and attribute changes |
 | `AnimationSet::Apply` | `Update`     | Run `.after` it to read this frame's `DrivenExtValues`           |
-| `InteractionSyncSet`  | `Update`     | Write `Interaction` for entities `bevy_ui` doesn't track         |
+| `InteractionSyncSet`  | `Update`     | Fill `EventLocalPos`, or `ReactInteraction` where picking can't  |
 | `ElementOverrideSet`  | `Update`     | Override this frame's animated and eased values                  |
 | `ElementRasterSet`    | `Update`     | Repaint an element-owned texture from this frame's final state   |
 | `PickRefineSet`       | `PreUpdate`  | Refine a node's picking hit into a sub-element hit               |
@@ -387,9 +393,8 @@ React-facing half of the system:
 - Element events with typed payloads.
 - `name` for lookups from your systems, when the element takes the
   identity props (see [Named nodes](../communication/named-nodes.md)).
-- `onClick` through any picking backend that hits the entity, and
-  `onPointerEnter`/`onPointerLeave` once you drive its `Interaction` (see
-  [Pointer events](#pointer-events)).
+- `onClick`, hover and the drag handlers through any picking backend that
+  hits the entity (see [Pointer events](#pointer-events)).
 - Generated JSX typing.
 
 Everything built on `bevy_ui` stays with UI nodes:
@@ -398,9 +403,7 @@ Everything built on `bevy_ui` stays with UI nodes:
   [style transitions](../animations/style-transitions.md), and no
   transforms, opacity, filters or [layers](../styling/layers.md). The entity
   is positioned and shaped by its attributes and your systems.
-- No picking by default: add a backend (`MeshPickingPlugin` for meshes) and
-  sync `Interaction` yourself.
-- No drag events (`onPointerDown`/`Move`/`Up`).
+- No picking by default: add a backend (`MeshPickingPlugin` for meshes).
 - No [shared elements](../animations/shared-elements.md): those need a
   `transition` style.
 - No easing of static attribute changes. Use `{ animated }` bindings, or

@@ -5,7 +5,7 @@
 //! world position (plus an optional offset) through the UI camera. That is how
 //! floating labels, nameplates, and health bars track a 3D entity while staying
 //! flat, fully interactive overlays — no render-to-texture, no second camera,
-//! no synthetic-pointer picking (clicks ride the normal `Interaction` path).
+//! no synthetic-pointer picking (clicks ride the window pointer's normal path).
 //!
 //! Apps normally get this crate through `bevy-react`'s `anchor` cargo feature
 //! (on by default): `bevy_react::anchor`, with [`AnchorPlugin`] a `ReactPlugins`

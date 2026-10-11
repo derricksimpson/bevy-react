@@ -1,185 +1,100 @@
-//! `Interaction` / `RelativeCursorPosition` / user-space cursor synthesis for
-//! JSX `<svg>` shape children.
+//! The user-space cursor of JSX `<svg>` shape children.
 //!
-//! Shapes are **Node-less** entities, so `ui_focus_system` (which drives
-//! `Interaction` + `RelativeCursorPosition` geometrically for layout nodes)
-//! never sees them. [`sync_shape_interactions`] re-derives both from the
-//! picking pipeline instead — the [`HoverMap`] (which contains a shape only
-//! because [`super::pick::refine_svg_pointer_hits`] emitted a refined
-//! `PointerHits` for it) plus the pointer's [`PointerPressState`] — mirroring
-//! [`bevy_react_core::layer::pick3d::correct_transformed_interactions`]. The refined
-//! hit's user-space cursor lands in [`EventLocalPos`], which the event
-//! collectors (the core's pointer/hover systems) read to report
-//! `x`/`y` in SVG **user units** instead of the node-normalized values.
+//! Shapes are **Node-less** entities, hit through
+//! [`super::pick::refine_svg_pointer_hits`], which puts the topmost painted
+//! shape under a pointer in the picking hover map. The core derives hover,
+//! press and drags from that map for every element, so a shape needs no
+//! interaction system of its own — only its position: a shape has no box,
+//! and its events report `x`/`y` in SVG **user units**.
+//! [`sync_shape_event_pos`] publishes the refined hit's user-space cursor in
+//! [`EventLocalPos`], which the core's hover/pointer collectors report
+//! instead of a node-relative position.
 //!
-//! Only handler-bearing shapes participate: the core's pointer stamps give a
-//! node-less element `Interaction` (+ `RelativeCursorPosition`/[`EventLocalPos`])
-//! exactly when it declares `onClick`/`onPointer*`, and this system queries through
-//! `Interaction` — a handler-less shape is skipped entirely, so its hits fall
-//! through to the `<svg>` root's own handlers via the event collectors'
-//! `ChildOf` climb.
+//! Only handler-bearing shapes carry the slot (the core's pointer stamps give
+//! it to a node-less element exactly when it declares `onClick`/
+//! `onPointer*`); a handler-less shape is skipped, and its hits fall through
+//! to the `<svg>` root's own handlers via the click collector's `ChildOf`
+//! climb.
 
 use bevy::picking::hover::HoverMap;
-use bevy::picking::pointer::{PointerId, PointerPressState};
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, RelativeCursorPosition};
 
-use super::paint::view_box_transform;
-use super::pick::{SvgPointerShapeHits, map_point};
-use super::{SvgJsxSurface, SvgShape};
+use super::SvgShape;
+use super::pick::SvgPointerShapeHits;
 // The user-space cursor slot: the contract component the event collectors
 // read (`x`/`y` in SVG user units while hovered, `None` otherwise). Stamped/
 // removed alongside the shape's handler components by the core's node-less
 // pointer stamps.
 use bevy_react_core::ext::EventLocalPos;
 
-/// Drive `Interaction`, `RelativeCursorPosition`, and [`EventLocalPos`] for
-/// handler-bearing SVG shapes from this frame's [`HoverMap`] + press state +
-/// refined shape hits. Runs before `apply_interaction_styles` /
-/// `collect_hover_events` / `collect_pointer_events` (the
-/// `correct_transformed_interactions` slot) so styling, enter/leave, and
-/// drag positions all see the synthesized state.
+/// Fill [`EventLocalPos`] on the shape each pointer hovers, from this frame's
+/// refined shape hits, and clear it on the shapes left. Runs in
+/// `InteractionSyncSet`, before the core's hover/pointer collectors.
 ///
-/// Leave contract (the pick3d one): pointer off the shape → `Interaction::None`,
-/// `cursor_over: false` + `normalized: None`, user pos `None` — nothing sticky.
-#[allow(clippy::type_complexity)]
-pub(crate) fn sync_shape_interactions(
+/// Costs the pointers' hits, not the shape count; every write is
+/// compare-before-write. When two pointers hover one shape the last hit
+/// wins — acceptable: a virtual pointer only exists where the real one is
+/// suppressed.
+pub(crate) fn sync_shape_event_pos(
     hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPressState)>,
     shape_hits: Res<SvgPointerShapeHits>,
-    roots: Query<(&SvgJsxSurface, &ComputedNode)>,
-    mut shapes: Query<
-        (
-            Entity,
-            &mut Interaction,
-            Option<&mut RelativeCursorPosition>,
-            Option<&mut EventLocalPos>,
-        ),
-        With<SvgShape>,
-    >,
+    mut shapes: Query<&mut EventLocalPos, With<SvgShape>>,
+    // The shapes the last run filled.
+    mut live: Local<Vec<Entity>>,
 ) {
-    for (entity, mut interaction, rel, user) in &mut shapes {
-        // Hovered under ANY pointer: the mouse, the surface virtual pointer,
-        // and the transform3d virtual pointer all deliver shapes into the
-        // hover map the same way (the D2 refinement rides each hit entry's
-        // own pointer id). When several pointers hover the same shape the
-        // `find` over the HashMap picks an arbitrary one — acceptable: hit
-        // suppression makes simultaneous hover on one shape practically
-        // unreachable (a virtual pointer only exists where the real one is
-        // suppressed).
-        let hovering = hover_map.as_ref().and_then(|map| {
-            map.iter()
-                .find(|(_, hits)| hits.contains_key(&entity))
-                .map(|(id, _)| *id)
-        });
-        let pressed = hovering.is_some_and(|id| {
-            pointers
-                .iter()
-                .any(|(pid, press)| *pid == id && press.is_primary_pressed())
-        });
-        let desired = match (hovering.is_some(), pressed) {
-            (true, true) => Interaction::Pressed,
-            (true, false) => Interaction::Hovered,
-            (false, _) => Interaction::None,
-        };
-        interaction.set_if_neq(desired);
-        // This frame's refined hit for the hovering pointer — when it is ours
-        // (two overlapping `<svg>` roots can hand the pointer's handoff entry
-        // to the OTHER root's topmost shape).
-        let hit = hovering
-            .and_then(|id| shape_hits.hits.get(&id))
-            .filter(|h| h.shape == entity);
-        // The relative cursor is normalized against the SVG ROOT's box (the
-        // shape has no box of its own), centered like `ui_focus_system`'s
-        // own write; `normalized_01` shifts it for the wire.
-        if let Some(mut rel) = rel {
-            let normalized = hit.and_then(|h| {
-                roots
-                    .get(h.root)
-                    .ok()
-                    .and_then(|(surface, node)| user_to_root_normalized(surface, node, h.user_pos))
-            });
-            rel.set_if_neq(RelativeCursorPosition {
-                cursor_over: hovering.is_some(),
-                normalized,
-            });
-        }
-        if let Some(mut user) = user {
-            user.set_if_neq(EventLocalPos(hit.map(|h| h.user_pos)));
+    let mut filled = Vec::new();
+    for (pointer, hit) in &shape_hits.hits {
+        // A refined hit only counts while its shape is hovered: something
+        // above the `<svg>` may keep it out of the hover map.
+        let hovered = hover_map
+            .as_ref()
+            .and_then(|map| map.get(pointer))
+            .is_some_and(|hits| hits.contains_key(&hit.shape));
+        if hovered && let Ok(mut slot) = shapes.get_mut(hit.shape) {
+            slot.set_if_neq(EventLocalPos(Some(hit.user_pos)));
+            filled.push(hit.shape);
         }
     }
-}
-
-/// Map an SVG-user-space point into the root's centered-normalized box
-/// coordinates (the `ComputedNode::normalize_point` convention: `(-0.5,-0.5)`
-/// top-left … `(0.5,0.5)` bottom-right) — the exact forward of
-/// [`super::pick::cursor_to_user_space`]'s inverse. `None` on a zero-sized
-/// box.
-fn user_to_root_normalized(
-    surface: &SvgJsxSurface,
-    node: &ComputedNode,
-    user_pos: Vec2,
-) -> Option<Vec2> {
-    let (w, h) = bevy_react_core::raster::clamp_physical_size(node.size);
-    if w == 0 || h == 0 {
-        return None;
+    for shape in live.drain(..) {
+        if !filled.contains(&shape)
+            && let Ok(mut slot) = shapes.get_mut(shape)
+        {
+            slot.set_if_neq(EventLocalPos(None));
+        }
     }
-    let scale_factor = bevy_react_core::raster::node_scale_factor(node);
-    let local = map_point(
-        view_box_transform(surface.view_box.as_ref(), w, h, scale_factor),
-        user_pos,
-    );
-    Some(local / node.size - Vec2::splat(0.5))
+    *live = filled;
 }
 
 #[cfg(test)]
 mod tests {
     use bevy::ecs::entity::EntityHashMap;
-    use bevy::ecs::system::RunSystemOnce;
     use bevy::picking::backend::HitData;
-    use bevy::reflect::structs::Struct;
+    use bevy::picking::pointer::PointerId;
 
     use super::super::pick::SvgShapeHit;
     use super::*;
-    use crate::{ShapeAttrs, ShapeKind, ViewBox, st};
+    use crate::{ShapeAttrs, ShapeKind};
 
-    /// A world with one `<svg>` root (200×200 physical box, viewBox
-    /// `0 0 100 100`) and one handler-bearing circle shape carrying the full
-    /// synthesis component set. Returns `(world, root, shape)`.
-    fn shape_world() -> (World, Entity, Entity) {
-        let mut world = World::new();
-        world.init_resource::<bevy::picking::pointer::PointerMap>();
-        world.init_resource::<SvgPointerShapeHits>();
-        let root = world
-            .spawn((
-                SvgJsxSurface::new(Some(ViewBox {
-                    min: Vec2::ZERO,
-                    size: Vec2::splat(100.0),
-                })),
-                ComputedNode {
-                    size: Vec2::splat(200.0),
-                    ..Default::default()
-                },
-            ))
+    /// An app running the sync, with one `<svg>` root entity and one
+    /// handler-bearing shape (it carries the slot). Returns
+    /// `(app, root, shape)`.
+    fn shape_app() -> (App, Entity, Entity) {
+        let mut app = App::new();
+        app.init_resource::<SvgPointerShapeHits>()
+            .add_systems(Update, sync_shape_event_pos);
+        let root = app.world_mut().spawn_empty().id();
+        let shape = app
+            .world_mut()
+            .spawn((bare_shape(), ChildOf(root), EventLocalPos::default()))
             .id();
-        let shape = world
-            .spawn((
-                SvgShape {
-                    kind: ShapeKind::Circle,
-                    attrs: ShapeAttrs {
-                        cx: st(50.0),
-                        cy: st(50.0),
-                        r: st(40.0),
-                        ..Default::default()
-                    },
-                },
-                ChildOf(root),
-                Interaction::None,
-                RelativeCursorPosition::default(),
-                EventLocalPos::default(),
-            ))
-            .id();
-        (world, root, shape)
+        (app, root, shape)
+    }
+
+    fn bare_shape() -> SvgShape {
+        SvgShape {
+            kind: ShapeKind::Rect,
+            attrs: ShapeAttrs::default(),
+        }
     }
 
     /// Put `entity` (alone) under `pointer` in the hover map.
@@ -191,12 +106,11 @@ mod tests {
         world.insert_resource(map);
     }
 
-    /// Record the D2 handoff entry for `pointer`.
-    fn set_hit(world: &mut World, pointer: PointerId, root: Entity, shape: Entity, user_pos: Vec2) {
+    /// Record the refined hit for `pointer`.
+    fn set_hit(world: &mut World, pointer: PointerId, shape: Entity, user_pos: Vec2) {
         world.resource_mut::<SvgPointerShapeHits>().hits.insert(
             pointer,
             SvgShapeHit {
-                root,
                 shape,
                 user_pos,
                 depth: 0.0,
@@ -204,154 +118,50 @@ mod tests {
         );
     }
 
-    /// A `PointerPressState` with the primary button held. The real writer is
-    /// bevy_picking's `PointerInput::receive` (fields are private), so the
-    /// test drives the reflected field directly.
-    fn primary_pressed() -> PointerPressState {
-        let mut press = PointerPressState::default();
-        *press
-            .field_mut("primary")
-            .expect("PointerPressState has a `primary` field")
-            .try_downcast_mut::<bool>()
-            .expect("primary is a bool") = true;
-        press
+    fn slot(app: &App, shape: Entity) -> Option<Vec2> {
+        app.world().get::<EventLocalPos>(shape).unwrap().0
     }
 
-    /// Hovered shape: `Interaction::Hovered`; `RelativeCursorPosition` is
-    /// over and normalized against the ROOT's box (user (25,50) in a
-    /// 100-unit viewBox on a 200px box → centered (-0.25, 0.0)); and
-    /// `EventLocalPos(Some(user_pos))`.
+    /// A hovered shape publishes the refined hit's user-space cursor; once
+    /// the pointer is off it, the slot is cleared — nothing sticky.
     #[test]
-    fn hovered_shape_synthesizes_full_state() {
-        let (mut world, root, shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPressState::default()));
-        hover(&mut world, PointerId::Mouse, shape);
-        set_hit(
-            &mut world,
-            PointerId::Mouse,
-            root,
-            shape,
-            Vec2::new(25.0, 50.0),
-        );
-        world.run_system_once(sync_shape_interactions).unwrap();
+    fn hovered_shape_publishes_its_user_space_cursor() {
+        let (mut app, _root, shape) = shape_app();
+        let at = Vec2::new(25.0, 50.0);
+        hover(app.world_mut(), PointerId::Mouse, shape);
+        set_hit(app.world_mut(), PointerId::Mouse, shape, at);
+        app.update();
+        assert_eq!(slot(&app, shape), Some(at));
 
-        assert_eq!(
-            *world.get::<Interaction>(shape).unwrap(),
-            Interaction::Hovered
-        );
-        let rel = world.get::<RelativeCursorPosition>(shape).unwrap();
-        assert!(rel.cursor_over, "hovered → cursor_over");
-        let n = rel.normalized.expect("a refined hit yields a position");
-        assert!(
-            n.distance(Vec2::new(-0.25, 0.0)) < 1e-4,
-            "user (25,50) normalizes against the ROOT box; got {n:?}"
-        );
-        assert_eq!(
-            world.get::<EventLocalPos>(shape).unwrap().0,
-            Some(Vec2::new(25.0, 50.0)),
-            "the user-space cursor is published while hovered"
-        );
+        // The pointer moves off: empty hover map, hits rebuilt empty.
+        app.world_mut().insert_resource(HoverMap::default());
+        app.world_mut()
+            .resource_mut::<SvgPointerShapeHits>()
+            .hits
+            .clear();
+        app.update();
+        assert_eq!(slot(&app, shape), None);
     }
 
-    /// The hovering pointer's primary button held → `Interaction::Pressed`.
+    /// A refined hit whose shape is not hovered — something above the
+    /// `<svg>` blocks the pointer — publishes nothing.
     #[test]
-    fn pressed_pointer_presses_shape() {
-        let (mut world, root, shape) = shape_world();
-        world.spawn((PointerId::Mouse, primary_pressed()));
-        hover(&mut world, PointerId::Mouse, shape);
-        set_hit(&mut world, PointerId::Mouse, root, shape, Vec2::splat(50.0));
-        world.run_system_once(sync_shape_interactions).unwrap();
-        assert_eq!(
-            *world.get::<Interaction>(shape).unwrap(),
-            Interaction::Pressed
-        );
+    fn a_blocked_hit_publishes_nothing() {
+        let (mut app, _root, shape) = shape_app();
+        set_hit(app.world_mut(), PointerId::Mouse, shape, Vec2::ONE);
+        app.update();
+        assert_eq!(slot(&app, shape), None);
     }
 
-    /// The leave contract: pointer off the shape → `Interaction::None`,
-    /// `cursor_over: false` + `normalized: None`, user pos `None` — nothing
-    /// sticky from the hovered frame.
+    /// A handler-less shape carries no slot and must not grow one, hovered
+    /// or not.
     #[test]
-    fn pointer_leave_clears_everything() {
-        let (mut world, root, shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPressState::default()));
-        hover(&mut world, PointerId::Mouse, shape);
-        set_hit(&mut world, PointerId::Mouse, root, shape, Vec2::splat(50.0));
-        world.run_system_once(sync_shape_interactions).unwrap();
-        assert_eq!(
-            *world.get::<Interaction>(shape).unwrap(),
-            Interaction::Hovered
-        );
-
-        // The pointer moves off: empty hover map, handoff rebuilt empty.
-        world.insert_resource(HoverMap::default());
-        world.resource_mut::<SvgPointerShapeHits>().hits.clear();
-        world.run_system_once(sync_shape_interactions).unwrap();
-
-        assert_eq!(*world.get::<Interaction>(shape).unwrap(), Interaction::None);
-        let rel = world.get::<RelativeCursorPosition>(shape).unwrap();
-        assert!(!rel.cursor_over, "leave clears cursor_over");
-        assert_eq!(rel.normalized, None, "leave clears the position");
-        assert_eq!(
-            world.get::<EventLocalPos>(shape).unwrap().0,
-            None,
-            "leave clears the user-space cursor"
-        );
-    }
-
-    /// Handler-less shapes (no `Interaction` component) are skipped — the
-    /// system must not grow components on them; and a non-shape entity's
-    /// `Interaction` is untouched even while the hover map lists it.
-    #[test]
-    fn handlerless_shapes_and_non_shapes_untouched() {
-        let (mut world, root, _shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPressState::default()));
-        let bare = world
-            .spawn((
-                SvgShape {
-                    kind: ShapeKind::Rect,
-                    attrs: ShapeAttrs::default(),
-                },
-                ChildOf(root),
-            ))
-            .id();
-        let node = world.spawn(Interaction::Hovered).id();
-        hover(&mut world, PointerId::Mouse, bare);
-        world.run_system_once(sync_shape_interactions).unwrap();
-
-        assert!(
-            world.get::<Interaction>(bare).is_none(),
-            "a handler-less shape must not gain Interaction"
-        );
-        assert_eq!(
-            *world.get::<Interaction>(node).unwrap(),
-            Interaction::Hovered,
-            "non-shape entities are not this system's business"
-        );
-    }
-
-    /// An `onClick`-only shape carries `Interaction` but no
-    /// `RelativeCursorPosition` (the generic handler-stamping rule): the
-    /// optional fetches must tolerate that.
-    #[test]
-    fn click_only_shape_drives_interaction_alone() {
-        let (mut world, root, _full) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPressState::default()));
-        let click_only = world
-            .spawn((
-                SvgShape {
-                    kind: ShapeKind::Rect,
-                    attrs: ShapeAttrs::default(),
-                },
-                ChildOf(root),
-                Interaction::None,
-            ))
-            .id();
-        hover(&mut world, PointerId::Mouse, click_only);
-        set_hit(&mut world, PointerId::Mouse, root, click_only, Vec2::ONE);
-        world.run_system_once(sync_shape_interactions).unwrap();
-        assert_eq!(
-            *world.get::<Interaction>(click_only).unwrap(),
-            Interaction::Hovered
-        );
+    fn a_handlerless_shape_is_left_bare() {
+        let (mut app, root, _shape) = shape_app();
+        let bare = app.world_mut().spawn((bare_shape(), ChildOf(root))).id();
+        hover(app.world_mut(), PointerId::Mouse, bare);
+        set_hit(app.world_mut(), PointerId::Mouse, bare, Vec2::ONE);
+        app.update();
+        assert!(app.world().get::<EventLocalPos>(bare).is_none());
     }
 }

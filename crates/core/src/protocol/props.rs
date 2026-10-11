@@ -27,7 +27,7 @@ pub struct Props {
     /// allocation.
     pub style: Option<Style>,
     /// Style overlaid on `style` while the element is hovered. Decoded exactly
-    /// like `style`; applied on the Bevy side from the node's `Interaction`.
+    /// like `style`; applied on the Bevy side from the node's `ReactInteraction`.
     pub hover_style: Option<Style>,
     /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
     pub press_style: Option<Style>,

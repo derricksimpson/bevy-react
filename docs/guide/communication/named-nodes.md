@@ -60,21 +60,31 @@ Every element accepts `name`, a string.
 When several entities share a name, `get` returns the first mounted one and
 reports a `nameAmbiguous` warning (in the Bevy log and in
 [devtools](../tooling/devtools.md)). Use `all` for groups. This system reads
-each card's hover state; a node has an `Interaction` when it declares a
-pointer handler, `onClick`, `hoverStyle` or `pressStyle`:
+each card's hover state:
 
 ```rust
+use bevy_react::ReactInteraction;
+
 fn glow_hovered_cards(
     nodes: ReactNodes,
-    cards: Query<&Interaction>,
+    cards: Query<&ReactInteraction>,
 ) {
     for &card in nodes.all("card") {
-        if let Ok(Interaction::Hovered) = cards.get(card) {
+        if let Ok(ReactInteraction::Hovered) = cards.get(card) {
             // …
         }
     }
 }
 ```
+
+`ReactInteraction` is `None`, `Hovered` or `Pressed` (the primary button or a
+touch went down on the node and is still held). A node has one when it
+declares a pointer handler, `onClick`, `hoverStyle` or `pressStyle`; every
+`<button>` and `<editableText>` has one too. It follows whichever pointer
+reaches the node (the mouse, a touch, the pointer of a
+[`<surface>`](../elements/surface.md)) and is up to date for the whole of
+`Update`. React nodes don't carry Bevy's own `Interaction` (deprecated in
+Bevy 0.20) or `RelativeCursorPosition`.
 
 ### Queries
 
@@ -121,7 +131,7 @@ what a change touches is re-applied). Read them freely; don't write them:
   `ZIndex`, `GlobalZIndex`, `LayoutConfig`, `Visibility`, `UiTransform`,
   `ImageNode`
 - `Text`, `TextSpan`, `TextFont`, `TextColor`, `TextLayout`
-- `ScrollPosition`, `Interaction`, `FocusPolicy`, `Pickable`
+- `ScrollPosition`, `FocusPolicy`, `Pickable`, `ReactInteraction`
 - `Name`, `Children`, `ChildOf`
 
 Every other component is yours: your own components and markers,

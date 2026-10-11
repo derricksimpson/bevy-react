@@ -30,7 +30,7 @@ fn sync_pins(
     cards: Query<(
         &ComputedNode,
         &UiGlobalTransform,
-        Option<&Interaction>,
+        Option<&ReactInteraction>,
     )>,
 ) {
     for &card in nodes.all("pin") {
@@ -56,8 +56,8 @@ const PAGE: ExplanationData = {
         entity as a Bevy <InlineCode>Name</InlineCode> component, so Rust code
         can find React-created entities and do whatever it wants with them:
         attach its own components, read layout or{" "}
-        <InlineCode>Interaction</InlineCode>, spawn 3D things that follow them.
-        Nothing else crosses the wire — no messages, no entity ids.
+        <InlineCode>ReactInteraction</InlineCode>, spawn 3D things that follow
+        them. Nothing else crosses the wire — no messages, no entity ids.
       </Paragraph>
       <CodeTabs tsx={TSX} rust={RUST} />
       <Paragraph>

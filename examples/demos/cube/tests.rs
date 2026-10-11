@@ -5,11 +5,14 @@
 use bevy::picking::Pickable;
 use bevy::picking::backend::HitData;
 use bevy::picking::hover::HoverMap;
-use bevy::picking::pointer::PointerId;
+use bevy::picking::pointer::{PointerId, PointerMap};
 use bevy::prelude::*;
+use bevy_react::ReactInteraction;
 use bevy_react::ext::{DrivenExt, DrivenExtValues, DrivenValue};
 use bevy_react::protocol::{ROOT_ID, op::Op};
-use bevy_react_core::test_util::{create, create_node, ent, op_app_with, update};
+use bevy_react_core::test_util::{
+    create, create_node, ent, op_app_with, sync_interactions, update,
+};
 use serde_json::json;
 
 use super::{Cube, register_bindings, register_systems};
@@ -169,8 +172,9 @@ fn removing_the_parent_despawns_the_cube() {
     );
 }
 
-/// A cube is pickable exactly while it has pointer handlers, and the hover
-/// map drives its `Interaction`.
+/// A cube is pickable exactly while it has pointer handlers — and being a
+/// picking target is all it takes to be hovered: the core derives its
+/// `ReactInteraction` from the hover map, no cube system involved.
 #[test]
 fn handlers_make_the_cube_pickable_and_hoverable() {
     let (mut app, tx) = mount(json!({}));
@@ -189,6 +193,9 @@ fn handlers_make_the_cube_pickable_and_hoverable() {
     app.update();
     assert!(app.world().entity(cube).contains::<Pickable>());
 
+    app.init_resource::<PointerMap>();
+    app.world_mut().spawn(PointerId::Mouse);
+    app.add_systems(PreUpdate, sync_interactions);
     let mut hover = HoverMap::default();
     hover
         .0
@@ -198,8 +205,8 @@ fn handlers_make_the_cube_pickable_and_hoverable() {
     app.world_mut().insert_resource(hover);
     app.update();
     assert_eq!(
-        app.world().entity(cube).get::<Interaction>(),
-        Some(&Interaction::Hovered)
+        app.world().entity(cube).get::<ReactInteraction>(),
+        Some(&ReactInteraction::Hovered)
     );
 
     tx.send(vec![update(2, "cube", json!({}), &["onPointerEnter"], &[])])

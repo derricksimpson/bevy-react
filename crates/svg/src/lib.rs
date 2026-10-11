@@ -91,7 +91,7 @@ impl Plugin for SvgPlugin {
         use bevy_react_core::ext::{ElementRasterSet, InteractionSyncSet, PickRefineSet};
 
         // Per-pointer refined svg shape hits — the picking refinement's
-        // handoff to the Interaction/event synthesis.
+        // handoff to the event-position sync.
         app.init_resource::<pick::SvgPointerShapeHits>();
         app.add_systems(
             PreUpdate,
@@ -100,8 +100,8 @@ impl Plugin for SvgPlugin {
         // The crate's per-frame systems, ordered by the contract's sets: the
         // shape transition drive (after the op drain snapped the targets), the
         // driven-attr consumer (after the engine's publish), both before the
-        // raster so a moving attr paints the same frame; the interaction
-        // synthesis in its slot before styling and the event collectors.
+        // raster so a moving attr paints the same frame; the event-position
+        // sync in its slot before the event collectors.
         app.add_systems(
             Update,
             (
@@ -112,7 +112,7 @@ impl Plugin for SvgPlugin {
                     .after(bevy_react_core::animations::AnimationSet::Apply)
                     .before(ElementRasterSet),
                 surface::update_jsx_svg_surfaces.in_set(ElementRasterSet),
-                interact::sync_shape_interactions.in_set(InteractionSyncSet),
+                interact::sync_shape_event_pos.in_set(InteractionSyncSet),
             ),
         );
     }

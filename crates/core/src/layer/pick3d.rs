@@ -15,10 +15,11 @@
 //!    on members of visually-transformed layers (their layout rects are
 //!    visually stale) and scopes the virtual pointer's hits to the layer it
 //!    is remapping into (its window location overlaps unrelated nodes).
-//! 3. [`correct_transformed_interactions`] re-derives the legacy
-//!    `Interaction` for those members from the virtual pointer's `HoverMap`
-//!    entry — `ui_focus_system` runs its own geometric hit-test that neither
-//!    1 nor 2 reaches.
+//!
+//! That is all it takes: hover, press, drags and clicks are derived from
+//! bevy_picking per pointer (`reconcile::picking`), so the members are simply
+//! in the virtual pointer's hover map, and event positions come from its
+//! remapped location.
 //!
 //! Identity-valued transforms keep everything here inert (visual == layout);
 //! nested transformed-in-transformed layers invert the *nearest* transformed
@@ -30,10 +31,7 @@ use bevy::ecs::message::MessageMutator;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use bevy::picking::backend::PointerHits;
-use bevy::picking::hover::HoverMap;
-use bevy::picking::pointer::{
-    Location, PointerAction, PointerId, PointerInput, PointerLocation, PointerPressState,
-};
+use bevy::picking::pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
@@ -200,8 +198,23 @@ pub fn drive_transform3d_pointer(
         .and_then(|(_, loc)| loc.location().cloned());
     let scale = windows.single().map(|w| w.scale_factor()).unwrap_or(1.0);
 
+    // A press this pointer forwarded keeps its layer until the release, past
+    // the layer's edge: the drag it began there follows the cursor.
+    let held = state
+        .buttons
+        .any_pressed()
+        .then_some(state.over_layer)
+        .flatten();
     let candidate = mouse.as_ref().and_then(|loc| {
         let cursor = loc.position * scale;
+        if let Some(root) = held {
+            let (_, _, _, matrix) = layers.get(root).ok()?;
+            if !matrix.remaps_picking() {
+                return None;
+            }
+            let local = invert_screen_to_plane(&matrix.model, cursor)?;
+            return Some((root, local, loc.target.clone()));
+        }
         // Topmost-first: the highest UiStack (paint-order) index wins among
         // transformed layers whose inverted cursor lands in their border box.
         let mut best: Option<(usize, Entity, Vec2)> = None;
@@ -259,16 +272,20 @@ pub fn drive_transform3d_pointer(
         return;
     }
 
-    // Parked: release owed presses and move off-bounds once, so picking fires
-    // `Out` and no control sticks (the surface driver's leave contract).
+    // Parked: release owed presses where the pointer last was and move
+    // off-bounds once, so picking fires `Out` and no control sticks (the
+    // surface driver's leave contract).
     if state.over_layer.is_some()
         && let Some(target) = state.last_target.clone()
     {
-        let location = Location {
-            target,
-            position: Vec2::splat(-1.0),
+        let at = |position| Location {
+            target: target.clone(),
+            position,
         };
-        state.buttons.leave(pointer_id, location, &mut input);
+        let (release_at, park_at) = (at(state.last_pos), at(Vec2::splat(-1.0)));
+        state
+            .buttons
+            .leave(pointer_id, release_at, park_at, &mut input);
         state.over_layer = None;
         state.last_pos = Vec2::splat(-1.0);
     }
@@ -303,85 +320,6 @@ pub fn suppress_transformed_layer_hits(
             hits.picks.retain(|(entity, _)| {
                 transformed_root_of(*entity, &membership, &matrices, &child_of).is_none()
             });
-        }
-    }
-}
-
-/// Re-derive the legacy `Interaction` — and `RelativeCursorPosition` — for
-/// members of visually-transformed layers from the virtual pointer
-/// (`HoverMap` entry + press state + remapped location). `ui_focus_system`
-/// computes both geometrically from the *real* cursor against the stale
-/// layout rect ([`suppress_transformed_layer_hits`] never reaches it), so
-/// without this the real pointer lights hover/press styling — and reports
-/// drag positions — where layout put the subtree, not where it renders.
-/// Runs before `apply_interaction_styles`/`collect_hover_events`/
-/// `collect_pointer_events` so styling, enter/leave, and `onPointer*`
-/// positions all see the corrected state.
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub fn correct_transformed_interactions(
-    state: Option<Res<Transform3dPointer>>,
-    hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPressState, &PointerLocation)>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    membership: Res<LayerMembership>,
-    matrices: Query<&LayerTransform3dMatrix>,
-    child_of: Query<&ChildOf>,
-    mut interactions: Query<(
-        Entity,
-        &mut Interaction,
-        Option<&mut bevy::ui::RelativeCursorPosition>,
-        Option<&ComputedNode>,
-        Option<&UiGlobalTransform>,
-    )>,
-) {
-    let Some(state) = state else {
-        return;
-    };
-    // Fast path: no visually-transformed layer this frame → nothing to fix.
-    if !matrices.iter().any(|m| m.remaps_picking()) {
-        return;
-    }
-    let hovered = hover_map.as_ref().and_then(|map| map.get(&state.id));
-    let virtual_pointer = pointers.iter().find(|(id, _, _)| **id == state.id);
-    let pressed = virtual_pointer.is_some_and(|(_, press, _)| press.is_primary_pressed());
-    // The remapped position in physical px (the space of node geometry) —
-    // only meaningful while the pointer is remapped into a layer.
-    let scale = windows.single().map(|w| w.scale_factor()).unwrap_or(1.0);
-    let remapped_physical = state.over_layer.and_then(|_| {
-        virtual_pointer
-            .and_then(|(_, _, loc)| loc.location())
-            .map(|loc| loc.position * scale)
-    });
-    for (entity, mut interaction, rel, computed, transform) in &mut interactions {
-        if transformed_root_of(entity, &membership, &matrices, &child_of).is_none() {
-            continue;
-        }
-        let over = hovered.is_some_and(|map| map.contains_key(&entity));
-        let desired = if over {
-            if pressed {
-                Interaction::Pressed
-            } else {
-                Interaction::Hovered
-            }
-        } else {
-            Interaction::None
-        };
-        interaction.set_if_neq(desired);
-        // Remap the relative cursor from the virtual pointer's untransformed
-        // position (centered convention, like `ui_focus_system`'s own write).
-        if let Some(mut rel) = rel {
-            let normalized = remapped_physical.and_then(|pos| {
-                computed
-                    .zip(transform)
-                    .and_then(|(c, t)| c.normalize_point(*t, pos))
-            });
-            let next = bevy::ui::RelativeCursorPosition {
-                cursor_over: over,
-                normalized,
-            };
-            if rel.cursor_over != next.cursor_over || rel.normalized != next.normalized {
-                *rel = next;
-            }
         }
     }
 }
@@ -551,79 +489,104 @@ mod tests {
         assert_eq!(got[0].1, Vec::<Entity>::new());
     }
 
-    /// Interaction correction: a transformed-layer member follows the virtual
-    /// pointer's hover map (Hovered / Pressed / None); untransformed nodes
-    /// are untouched.
+    /// A press forwarded into a layer keeps that layer until the release:
+    /// the cursor leaving the quad neither parks the pointer nor releases
+    /// the button — the drag it began there keeps following the cursor.
     #[test]
-    fn interaction_correction_follows_virtual_pointer() {
-        use bevy::ecs::entity::EntityHashMap;
+    fn a_held_press_keeps_its_layer_past_the_edge() {
         use bevy::ecs::system::RunSystemOnce;
-        use bevy::picking::backend::HitData;
+        use bevy::picking::pointer::PointerMap;
 
         let mut world = World::new();
-        world.init_resource::<bevy::picking::pointer::PointerMap>();
-        let camera = world.spawn_empty().id();
-        let root = world
-            .spawn(LayerTransform3dMatrix {
-                model: Mat4::from_rotation_y(0.5),
-                identity: false,
-                windowed: true,
-            })
+        world.init_resource::<PointerMap>();
+        world.init_resource::<Messages<PointerInput>>();
+        world.init_resource::<ButtonInput<MouseButton>>();
+        let window = world.spawn((Window::default(), PrimaryWindow)).id();
+        let target = bevy::camera::NormalizedRenderTarget::Window(
+            bevy::window::WindowRef::Entity(window)
+                .normalize(None)
+                .unwrap(),
+        );
+        let mouse = world
+            .spawn((
+                PointerId::Mouse,
+                PointerLocation::new(Location {
+                    target: target.clone(),
+                    position: Vec2::new(150.0, 50.0),
+                }),
+            ))
             .id();
-        let member = world.spawn((ChildOf(root), Interaction::None)).id();
-        let outside = world.spawn(Interaction::Hovered).id();
-
-        let mut membership = LayerMembership::default();
-        membership.node_to_layer.insert(root, root);
-        membership.node_to_layer.insert(member, root);
-        membership.enclosing.insert(root, None);
-        world.insert_resource(membership);
-
-        let virtual_id = PointerId::Custom(TRANSFORM3D_POINTER_UUID);
-        world.spawn((virtual_id, PointerPressState::default()));
-        world.insert_resource(Transform3dPointer {
-            id: virtual_id,
-            over_layer: Some(root),
-            last_pos: Vec2::ZERO,
-            last_target: None,
-            buttons: Default::default(),
+        world.run_system_once(init_transform3d_pointer).unwrap();
+        // A 100×100 layer at 0..100, drawn 100 px to the right.
+        let root = world
+            .spawn((
+                PromotedLayer {
+                    reasons: crate::layer::PromotionReasons(
+                        crate::layer::PromotionReasons::TRANSFORM3D,
+                    ),
+                },
+                ComputedNode {
+                    size: Vec2::splat(100.0),
+                    inverse_scale_factor: 1.0,
+                    ..Default::default()
+                },
+                UiGlobalTransform::from_translation(Vec2::splat(50.0)),
+                LayerTransform3dMatrix {
+                    model: Mat4::from_translation(Vec3::new(100.0, 0.0, 0.0)),
+                    identity: false,
+                    windowed: true,
+                },
+            ))
+            .id();
+        world.insert_resource(UiStack {
+            uinodes: vec![root],
+            partition: std::iter::once(0..1).collect(),
         });
+        let id = world.resource::<Transform3dPointer>().id;
+        let step = |world: &mut World, cursor: Vec2| -> Vec<(Vec2, PointerAction)> {
+            world.get_mut::<PointerLocation>(mouse).unwrap().location = Some(Location {
+                target: target.clone(),
+                position: cursor,
+            });
+            world.run_system_once(drive_transform3d_pointer).unwrap();
+            world.resource_mut::<ButtonInput<MouseButton>>().clear();
+            world
+                .resource_mut::<Messages<PointerInput>>()
+                .drain()
+                .filter(|input| input.pointer_id == id)
+                .map(|input| (input.location.position, input.action))
+                .collect()
+        };
+        let over = |world: &World| world.resource::<Transform3dPointer>().over_layer;
 
-        // Virtual pointer hovers the member → Hovered.
-        let mut hover = HoverMap::default();
-        let mut entry: EntityHashMap<HitData> = EntityHashMap::default();
-        entry.insert(member, HitData::new(camera, 0.0, None, None));
-        hover.insert(virtual_id, entry);
-        world.insert_resource(hover);
+        // Press on the quad (screen 150 → plane 50).
         world
-            .run_system_once(correct_transformed_interactions)
-            .unwrap();
-        assert_eq!(
-            *world.get::<Interaction>(member).unwrap(),
-            Interaction::Hovered
-        );
-        assert_eq!(
-            *world.get::<Interaction>(outside).unwrap(),
-            Interaction::Hovered,
-            "nodes outside transformed layers are untouched"
-        );
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        let inputs = step(&mut world, Vec2::new(150.0, 50.0));
+        assert!(matches!(inputs.last(), Some((_, PointerAction::Press(_)))));
+        assert_eq!(over(&world), Some(root));
 
-        // Empty hover entry → the stale-rect Interaction the real pointer set
-        // geometrically is cleared.
-        if let Some(mut i) = world.get_mut::<Interaction>(member) {
-            *i = Interaction::Hovered;
-        }
-        world.insert_resource({
-            let mut hover = HoverMap::default();
-            hover.insert(virtual_id, EntityHashMap::default());
-            hover
-        });
+        // Dragged off the quad's right edge: still remapped, nothing released.
+        let inputs = step(&mut world, Vec2::new(400.0, 50.0));
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].0, Vec2::new(300.0, 50.0));
+        assert!(matches!(inputs[0].1, PointerAction::Move { .. }));
+        assert_eq!(over(&world), Some(root));
+
+        // Released out there: the release is where the cursor is…
         world
-            .run_system_once(correct_transformed_interactions)
-            .unwrap();
-        assert_eq!(
-            *world.get::<Interaction>(member).unwrap(),
-            Interaction::None
-        );
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        let inputs = step(&mut world, Vec2::new(400.0, 50.0));
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].0, Vec2::new(300.0, 50.0));
+        assert!(matches!(inputs[0].1, PointerAction::Release(_)));
+
+        // …and only then does the pointer park.
+        let inputs = step(&mut world, Vec2::new(400.0, 50.0));
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].0, Vec2::splat(-1.0));
+        assert_eq!(over(&world), None);
     }
 }

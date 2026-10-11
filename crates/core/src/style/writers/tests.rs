@@ -51,7 +51,7 @@ fn button_keeps_block_focus_across_hover() {
     let button = ent(&app, 1);
     app.world_mut()
         .entity_mut(button)
-        .insert(Interaction::Hovered);
+        .insert(crate::ReactInteraction::Hovered);
     app.update();
     let entity = app.world().entity(button);
     assert_eq!(entity.get::<FocusPolicy>(), Some(&FocusPolicy::Block));
@@ -175,7 +175,7 @@ fn image_refolds_opacity_on_hover() {
     let image = ent(&app, 1);
     app.world_mut()
         .entity_mut(image)
-        .insert(Interaction::Hovered);
+        .insert(crate::ReactInteraction::Hovered);
     app.update();
     let color = app.world().entity(image).get::<ImageNode>().unwrap().color;
     assert!(

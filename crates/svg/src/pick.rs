@@ -54,7 +54,7 @@ mod tests;
 const HALF_DEPTH_STEP: f32 = 0.000_005;
 
 /// The frame's winning shape hit per pointer — the handoff to the
-/// Interaction/event synthesis ([`super::interact`]), which needs "which
+/// event-position sync ([`super::interact`]), which needs "which
 /// shape, at which user-space position" without re-deriving the transform
 /// chain.
 /// [`HitData::position`] is deliberately **not** used for this: picking
@@ -69,11 +69,9 @@ pub(crate) struct SvgPointerShapeHits {
 }
 
 /// One pointer's refined shape hit. See [`SvgPointerShapeHits`]; consumed by
-/// [`super::interact::sync_shape_interactions`].
+/// [`super::interact::sync_shape_event_pos`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SvgShapeHit {
-    /// The `<svg>` root whose refinement won.
-    pub root: Entity,
     /// The topmost painted shape under the pointer.
     pub shape: Entity,
     /// The cursor in the root's SVG user space.
@@ -166,7 +164,6 @@ pub(crate) fn refine_svg_pointer_hits(
             };
             let depth = data.depth - HALF_DEPTH_STEP;
             let candidate = SvgShapeHit {
-                root: *entity,
                 shape,
                 user_pos,
                 depth,

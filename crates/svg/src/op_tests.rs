@@ -500,7 +500,7 @@ fn stray_delta_on_shape_is_ignored() {
         "a stray style delta must not paint a shape entity"
     );
     assert!(
-        entity.get::<Interaction>().is_none(),
+        entity.get::<bevy_react_core::ReactInteraction>().is_none(),
         "a style-only delta must not stamp interaction state"
     );
     assert_eq!(

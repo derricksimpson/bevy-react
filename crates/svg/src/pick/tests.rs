@@ -273,7 +273,6 @@ fn system_refines_root_hit_to_topmost_shape() {
     let hits = world.resource::<SvgPointerShapeHits>();
     let hit = hits.hits.get(&POINTER).expect("handoff entry written");
     assert_eq!(hit.shape, top);
-    assert_eq!(hit.root, root);
     assert!(
         hit.user_pos.distance(Vec2::new(30.0, 30.0)) < 1e-3,
         "no viewBox at DPR 1: user space == node-local logical px (float \
@@ -346,10 +345,9 @@ fn system_keeps_topmost_root_in_handoff_across_overlapping_roots() {
         let hits = world.resource::<SvgPointerShapeHits>();
         let hit = hits.hits.get(&POINTER).expect("handoff entry written");
         assert_eq!(
-            hit.root, top_root,
+            hit.shape, top_top,
             "the topmost (smallest-depth) root wins the handoff (deeper_first={deeper_first})"
         );
-        assert_eq!(hit.shape, top_top);
     }
 }
 

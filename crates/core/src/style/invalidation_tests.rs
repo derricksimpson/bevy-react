@@ -64,7 +64,9 @@ fn promote(app: &mut App, e: Entity) {
 }
 
 fn hover(app: &mut App, e: Entity) {
-    app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+    app.world_mut()
+        .entity_mut(e)
+        .insert(crate::ReactInteraction::Hovered);
     app.update();
 }
 

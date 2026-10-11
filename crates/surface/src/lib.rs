@@ -34,10 +34,10 @@
 //! A surface is **clickable in-world**: tag the mesh that displays the texture
 //! with [`SurfacePointer`] (the mesh needs UVs). [`drive_surface_pointer`]
 //! ray-casts the main camera through the cursor and drives a virtual picking
-//! pointer over the offscreen subtree; the core's `VirtualPointers` (where the
-//! crate registers it) turns its picking events into the usual
-//! `onClick`/`onPointer*` calls and hover/press styling, and its hover into
-//! the OS cursor.
+//! pointer over the offscreen subtree; the core turns its picking state into
+//! the usual `onClick`/`onPointer*` calls and hover/press styling, like any
+//! pointer's. Registered in the core's `VirtualPointers`, it stays out of the
+//! window's `PointerCapture` and its hover sets the OS cursor.
 //!
 //! The named render-target registry a `<portal>` displays (and
 //! `backgroundImage: { texture }` reads) is the core's, not this crate's.

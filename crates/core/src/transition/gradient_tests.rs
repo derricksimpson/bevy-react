@@ -21,7 +21,7 @@ fn gradient_json(color: &str) -> serde_json::Value {
     })
 }
 
-/// The resolver's own build of a wire gradient — what `apply_style` writes
+/// The resolver's own build of a wire gradient — what `apply_style_masked` writes
 /// (folded) and what settle must equal bit-exactly.
 fn expect_gradients(json: serde_json::Value, opacity: Option<f32>) -> Vec<Gradient> {
     let list: crate::protocol::visual::GradientList =
@@ -105,7 +105,7 @@ fn background_gradient_transition_eases_matched_stops() {
 
 /// Mid-ease retarget — the state-owned-current mechanism: red→blue eased to
 /// the midpoint, then retargeted to green. The next frame continues from
-/// ≈the mid color (not the old target, not `apply_style`'s fresh snap),
+/// ≈the mid color (not the old target, not `apply_style_masked`'s fresh snap),
 /// settles bit-exact, and goes quiet.
 #[test]
 fn gradient_transition_mid_ease_retarget_starts_from_current() {
@@ -137,7 +137,7 @@ fn gradient_transition_mid_ease_retarget_starts_from_current() {
         "midpoint expected ~(0.5, 0, 0.5), got {mid:?}"
     );
 
-    // Retarget to green mid-ease. `apply_style` snaps the component to green
+    // Retarget to green mid-ease. `apply_style_masked` snaps the component to green
     // this same frame; the channel must re-ease from its own current (~the
     // mid color). 10% along a linear (0.5,0,0.5) → (0,1,0) ease:
     // (0.45, 0.1, 0.45). Starting from the old target (blue) would read
@@ -367,7 +367,7 @@ fn border_gradient_channel_is_independent() {
 
 /// A childless (unpromoted) node with a static `opacity: 0.5`: the ease
 /// folds the opacity at write time (mid-ease stop alphas ≈ lerped alpha ×
-/// 0.5) and settle equals `apply_style`'s own folded build bit-exactly
+/// 0.5) and settle equals `apply_style_masked`'s own folded build bit-exactly
 /// (pinned via `fold_gradients` — the split-builder contract).
 #[test]
 fn gradient_transition_folds_static_opacity() {
@@ -384,7 +384,7 @@ fn gradient_transition_folds_static_opacity() {
         .unwrap();
     app.update();
     let e = entity_of(&app, 1);
-    // Seeded folded: apply_style's own build.
+    // Seeded folded: apply_style_masked's own build.
     assert_eq!(
         app.world().get::<BackgroundGradient>(e).unwrap().0,
         expect_gradients(gradient_json("#ff0000"), Some(0.5))
@@ -411,7 +411,7 @@ fn gradient_transition_folds_static_opacity() {
     );
 
     // Settle: bit-exact against the write-time fold of the unfolded stamp,
-    // which the split-builder contract pins to apply_style's own build.
+    // which the split-builder contract pins to apply_style_masked's own build.
     tick(&mut app, 0.6);
     let unfolded = expect_gradients(gradient_json("#0000ff"), None);
     let settled = &app.world().get::<BackgroundGradient>(e).unwrap().0;
@@ -423,7 +423,7 @@ fn gradient_transition_folds_static_opacity() {
     assert_eq!(
         *settled,
         expect_gradients(gradient_json("#0000ff"), Some(0.5)),
-        "…which is apply_style's own folded build"
+        "…which is apply_style_masked's own folded build"
     );
 }
 
@@ -449,7 +449,7 @@ fn gradient_fold_tracks_eased_opacity() {
     let e = entity_of(&app, 1);
 
     // Fade to 0.2: half through a 1s linear ease the fold alpha is 0.6 —
-    // apply_style's own snap on the delta frame wrote 0.2, so an eased
+    // apply_style_masked's own snap on the delta frame wrote 0.2, so an eased
     // reading here proves the re-fold is live.
     ops_tx
         .send(vec![update(1, json!({ "style": { "opacity": 0.2 } }), &[])])
@@ -482,10 +482,10 @@ fn gradient_fold_tracks_eased_opacity() {
 /// The hover-restyle path (`apply_interaction_styles`, not an op) retargets
 /// the gradient channel exactly like an op-driven delta: a `hoverStyle`
 /// gradient with a base `transition: { backgroundGradient }` eases on
-/// `Interaction::Hovered` instead of snapping.
+/// `ReactInteraction::Hovered` instead of snapping.
 #[test]
 fn hover_restyle_eases_background_gradient() {
-    use bevy::ui::Interaction;
+    use crate::ReactInteraction;
     let (mut app, ops_tx) = ease_app();
     ops_tx
         .send(vec![create(
@@ -503,7 +503,9 @@ fn hover_restyle_eases_background_gradient() {
     let e = entity_of(&app, 1);
     drain_dirt(&mut app);
 
-    app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+    app.world_mut()
+        .entity_mut(e)
+        .insert(ReactInteraction::Hovered);
     tick(&mut app, 0.5);
     for rgba in linear_stop_rgba(&app.world().get::<BackgroundGradient>(e).unwrap().0) {
         assert!(

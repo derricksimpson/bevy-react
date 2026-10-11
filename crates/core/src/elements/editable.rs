@@ -147,9 +147,9 @@ fn spawn_editable(ctx: &mut SpawnCtx) -> Entity {
             // The input is a click owner BY TYPE — `collect_ui_events`
             // matches `EditableText` directly — so a press inside it resolves
             // to the input, not to an `onClick` ancestor behind it. The
-            // `Interaction` serves hover/press styling and the pointer-capture
-            // claim.
-            Interaction::default(),
+            // `ReactInteraction` serves hover/press styling and the
+            // pointer-capture claim.
+            crate::ReactInteraction::default(),
             // Announce as a text field; the live value is kept in sync by
             // `sync_editable_a11y`.
             AccessibilityNode(a11y),

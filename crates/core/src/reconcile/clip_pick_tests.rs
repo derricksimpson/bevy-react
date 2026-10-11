@@ -34,11 +34,9 @@ pub(crate) struct ClipScene {
     pub clipped: Entity,
 }
 
-/// A 100×100 `overflow: clip` box holding a 200 px wide wrapper (visible
-/// overflow — the shape the old walk got wrong) of two 100×100 rows, with the
-/// mouse at `pointer`. Call `app.update()` twice: layout and clipping settle
-/// in the first frame, picking reads them in the second.
-pub(crate) fn clip_scene(pointer: Vec2) -> ClipScene {
+/// Real layout ([`layout_app`]), bevy's clipping system, UI picking backend
+/// and hover map, with a headless primary window (returned).
+pub(crate) fn picking_app() -> (App, Entity) {
     let mut app = layout_app();
     app.add_plugins((PickingPlugin, InteractionPlugin));
     app.init_resource::<UiPickingSettings>();
@@ -47,17 +45,38 @@ pub(crate) fn clip_scene(pointer: Vec2) -> ClipScene {
         PostUpdate,
         bevy::ui::update::update_clipping_system.after(bevy::ui::ui_layout_system),
     );
-    let world = app.world_mut();
-    let window = world.spawn((Window::default(), PrimaryWindow)).id();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    (app, window)
+}
+
+/// Put the mouse pointer — and the window's cursor — at `position`.
+pub(crate) fn mouse_at(world: &mut World, window: Entity, position: Vec2) {
+    world
+        .get_mut::<Window>(window)
+        .unwrap()
+        .set_cursor_position(Some(position));
     world.spawn((
         PointerId::Mouse,
         PointerLocation::new(Location {
             target: bevy::camera::NormalizedRenderTarget::Window(
                 WindowRef::Entity(window).normalize(None).unwrap(),
             ),
-            position: pointer,
+            position,
         }),
     ));
+}
+
+/// A 100×100 `overflow: clip` box holding a 200 px wide wrapper (visible
+/// overflow — the shape the old walk got wrong) of two 100×100 rows, with the
+/// mouse at `pointer`. Call `app.update()` twice: layout and clipping settle
+/// in the first frame, picking reads them in the second.
+pub(crate) fn clip_scene(pointer: Vec2) -> ClipScene {
+    let (mut app, window) = picking_app();
+    mouse_at(app.world_mut(), window, pointer);
+    let world = app.world_mut();
     let fixed = |width: f32| Node {
         width: Val::Px(width),
         height: Val::Px(100.0),

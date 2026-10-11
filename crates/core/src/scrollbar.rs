@@ -698,8 +698,8 @@ pub fn position_scrollbars(
 
 /// Bridge Bevy's scrollbar interaction into bevy-react's frame state. Hovering
 /// any scrollbar part claims the hover channel — the widget entities carry
-/// picking's `Hovered`, not `Interaction`, so `collect_pointer_events` can't see
-/// them, and a world grab (the camera) latches on the *press* frame, before
+/// picking's `Hovered`, not `ReactInteraction`, so `sync_interactions` doesn't
+/// count them, and a world grab (the camera) latches on the *press* frame, before
 /// Bevy's drag threshold flips `ScrollbarDragState.dragging` on. While a thumb
 /// is then being dragged, claim the pointer for the whole gesture (so world
 /// input ignores it even once the cursor leaves the bar) and — if the target
@@ -1106,7 +1106,7 @@ mod tests {
     }
 
     /// Hovering any scrollbar part claims the hover channel: the widget entities
-    /// carry picking's `Hovered`, not `Interaction`, so without this claim a press
+    /// carry picking's `Hovered`, not `ReactInteraction`, so without this claim a press
     /// on the bar reads as free ground and a world grab (the orbit camera) latches
     /// on the press frame — before the drag threshold flips `dragging` on.
     #[test]

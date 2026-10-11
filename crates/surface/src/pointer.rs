@@ -2,11 +2,12 @@
 //! [`drive_surface_pointer`] ray-casts the main camera through the cursor,
 //! reads the hit **UV**, and drives a single virtual [`PointerId::Custom`]
 //! pointer parked on the surface's image render target. Bevy's UI picking
-//! backend then hit-tests the offscreen subtree, and — because
-//! [`init_surface_pointer`] registers the pointer with the core's
-//! [`VirtualPointers`] — the core turns its `Pointer<…>` events into the
-//! common UI events (`onClick`/`onPointer*`, hover/press styling) and its
-//! hover into the OS cursor.
+//! backend then hit-tests the offscreen subtree, and the core turns the
+//! pointer's picking state into the common UI events (`onClick`/
+//! `onPointer*`, hover/press styling) like any other pointer's.
+//! [`init_surface_pointer`] registers it with the core's [`VirtualPointers`],
+//! which keeps it out of the window's `PointerCapture` and feeds its hover to
+//! the OS cursor.
 
 use bevy::camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::mesh::{Indices, VertexAttributeValues};
@@ -85,7 +86,7 @@ pub struct SurfaceVirtualPointer {
 /// core's [`VirtualPointers`].
 pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<VirtualPointers>) {
     let id = PointerId::Custom(SURFACE_POINTER_UUID);
-    // The core turns its picking events into the common UI events.
+    // Not the window's pointer: out of `PointerCapture`, first for the cursor.
     pointers.register(id);
     // `PointerId` requires `PointerLocation`/`PointerPressState`/`PointerInteraction`,
     // which are added automatically.
@@ -178,8 +179,11 @@ pub fn drive_surface_pointer(
     // No surface under the cursor: move the pointer off-bounds so picking fires an
     // `Out`, and release every press we still owe so a control never sticks.
     if let Some((handle, scale)) = state.over_target.clone() {
-        let location = image_location(&handle, scale, Vec2::splat(-1.0));
-        state.buttons.leave(pointer_id, location, &mut input);
+        let release_at = image_location(&handle, scale, state.last_pos);
+        let park_at = image_location(&handle, scale, Vec2::splat(-1.0));
+        state
+            .buttons
+            .leave(pointer_id, release_at, park_at, &mut input);
         state.over_target = None;
     }
 }
