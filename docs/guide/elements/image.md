@@ -128,6 +128,20 @@ corner.
 - Pointer events hit the node's whole box. Transparent texels are not
   click-through.
 
+## Inside `<text>`
+
+An `<image>` written inside a [`<text>`](text.md#inline-images) is an inline
+image: it flows with the glyphs instead of being a node of its own. Only
+`src`, `tint`, `flipX`, `flipY` and the `width`, `height` and `opacity`
+styles carry over; it takes no handlers, no other style and no `.svg`
+source.
+
+```tsx
+<text>
+  Costs 3 <image src="icons/coin.png" style={{ height: "1em" }} /> per turn
+</text>
+```
+
 ## SVG files
 
 ```tsx
@@ -167,6 +181,8 @@ To compose vector graphics from React instead of loading files, use the
 
 - No `object-fit`-style fitting for raster images: the texture stretches to
   the box (SVG files are the exception).
+- An `<image>` inside a `<text>` is an
+  [inline image](text.md#inline-images), with a subset of these features.
 - `src` is an asset path only. To show a render target, use the `<portal>`
   element or a `backgroundImage` with a `{ texture }` source.
 - A large texture drawn small aliases by default. The `imageRendering` style

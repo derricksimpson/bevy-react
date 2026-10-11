@@ -51,8 +51,10 @@ shadow offsets are lengths:
   [`<text>`](../elements/text.md) or an
   [`<editableText>`](../elements/editable-text.md), and the root font size
   on every other element, where `"1em"` equals `"1rem"` (a `<node>` has no
-  font size, and a text does not inherit one through it). Both are scaled
-  by the scale factor and `UiScale`, like pixels.
+  font size, and a text does not inherit one through it). On an
+  [inline image](../elements/text.md#inline-images) it is the font size of
+  the text around the image. Both are scaled by the scale factor and
+  `UiScale`, like pixels.
 - `"auto"` sizes from content on `width`, `height`, the min and max sizes
   and `flexBasis`; means "not set" on the insets; absorbs free space on
   `margin`; and is `0` on `padding`, `border` and the gaps.

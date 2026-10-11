@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Inline images in text.** An `<image>` written inside a `<text>` or a
+  span flows with the glyphs as an inline box (Bevy 0.20's `InlineImage`).
+  It takes `src`, `tint`, `flipX`, `flipY`, `opacity` and a `width`/`height`
+  in px, `em` (a multiple of the surrounding text's font size) or `rem`; it
+  sits on the baseline, wraps as a unit, and belongs to its block for clicks
+  and layers. A box with both sides given is reserved before the texture
+  loads.
 - **`em` and `rem` lengths.** Every length (sizes, insets, margins, padding,
   borders, radii, gaps, grid tracks, translations, shadows, outlines,
   gradient stops) takes `"2rem"`, a multiple of Bevy's `RemSize` resource

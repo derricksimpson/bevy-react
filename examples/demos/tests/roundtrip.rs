@@ -204,6 +204,39 @@ fn canvas_resize_replay_round_trip() {
     eprintln!("PASS canvas resize end-to-end");
 }
 
+/// An `<image>` written inside a `<text>` crosses as the `inlineImage` wire
+/// kind and is attached under its text — the reconciler's kind swap, which
+/// only a real render exercises.
+#[test]
+fn inline_image_kind_round_trip() {
+    let Some(mut h) = Harness::start("inline_image_kind_round_trip") else {
+        return;
+    };
+
+    // Navigate to the `<text>` demo ("Elements" is expanded by default).
+    h.click_label("<text>");
+
+    let (mut texts, mut images) = (Vec::new(), Vec::new());
+    let under_text = h.wait_op(Duration::from_secs(10), |op| match op {
+        Op::Create { id, kind, .. } if kind == "text" => {
+            texts.push(*id);
+            None
+        }
+        Op::Create { id, kind, .. } if kind == "inlineImage" => {
+            images.push(*id);
+            None
+        }
+        Op::Append { parent, child } if images.contains(child) => Some(texts.contains(parent)),
+        _ => None,
+    });
+    assert_eq!(
+        under_text,
+        Some(true),
+        "no inlineImage attached under a text in the '<text>' demo"
+    );
+    eprintln!("PASS inline image kind end-to-end");
+}
+
 /// End-to-end check of the `<root>` host element from APP code (the modal demo):
 /// opening the modal must mount a detached `<root>` whose `name` prop crossed as
 /// the `target` wire field, and closing it must remove that root — exercising

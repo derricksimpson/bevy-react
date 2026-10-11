@@ -1098,12 +1098,16 @@ pub fn fold_member_geometry(
 /// direct tap). `AssetChanged` is the filter bevy_ui_render's own "re-extract
 /// this image node" mark rides; it is current once `AssetEventSystems` ran,
 /// so scheduled after them the layer re-captures on the frame the new pixels
-/// are first drawn.
+/// are first drawn. An inline image (an `<image>` inside a `<text>`) is a
+/// member of its block's layer: a texture arriving in a box that was
+/// reserved for it re-shapes nothing, so this is its only tap.
 pub fn watch_layer_image_assets(
     images: Query<Entity, AssetChanged<bevy::ui::widget::ImageNode>>,
+    inline_images: Query<Entity, AssetChanged<bevy::ui::widget::InlineImage>>,
     mut dirt: ResMut<LayerContentDirt>,
 ) {
     dirt.nodes.extend(&images);
+    dirt.nodes.extend(&inline_images);
 }
 
 /// Turn this frame's dirt into per-layer repaint decisions. Runs in
@@ -1944,13 +1948,18 @@ mod tests {
         assert!(run(&mut world).is_empty(), "then cached again");
     }
 
-    /// An image asset changing under an `ImageNode` — an async load landing,
-    /// a hot reload, an in-place write — repaints the node's layer on that
-    /// frame, with no write to the node itself; an idle asset leaves it
-    /// cached.
+    /// An image asset changing under an `ImageNode` or an `InlineImage` — an
+    /// async load landing, a hot reload, an in-place write — repaints the
+    /// node's layer on that frame, with no write to the node itself; an idle
+    /// asset leaves it cached.
     #[test]
     fn image_asset_change_repaints_the_nodes_layer() {
-        use bevy::ui::widget::ImageNode;
+        use bevy::ui::widget::{ImageNode, InlineImage};
+        image_asset_change_repaints(ImageNode::new);
+        image_asset_change_repaints(|image| InlineImage { image, ..default() });
+    }
+
+    fn image_asset_change_repaints<B: Bundle>(image: impl FnOnce(Handle<Image>) -> B) {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
         app.init_asset::<Image>();
@@ -1970,7 +1979,7 @@ mod tests {
             .resource_mut::<Assets<Image>>()
             .add(Image::default());
         let root = app.world_mut().spawn_empty().id();
-        let node = app.world_mut().spawn(ImageNode::new(handle.clone())).id();
+        let node = app.world_mut().spawn(image(handle.clone())).id();
         let mut membership = LayerMembership::default();
         membership.node_to_layer.insert(root, root);
         membership.node_to_layer.insert(node, root);

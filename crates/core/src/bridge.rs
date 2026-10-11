@@ -52,7 +52,8 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 ///   `FixedNode` (`positionType: "fixed"`), `Visibility`,
 ///   `UiTransform`, `EmSize` (the root size, `RemSize`, on an element with no
 ///   font), `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
-///   `TextLayout`, `ScrollPosition`, `FocusPolicy`/`Pickable` (the
+///   `TextLayout`, `InlineImage`/`InlineBox` (an `<image>` inside a
+///   `<text>`), `ScrollPosition`, `FocusPolicy`/`Pickable` (the
 ///   `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
 ///   `TabIndex` (the `tabIndex` mirror; `TabGroup` on a `<root>` or
 ///   `<surface>`), `Children`/`ChildOf`, plus this crate's own markers and

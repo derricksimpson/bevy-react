@@ -58,6 +58,9 @@ pub enum TextRole {
     /// A text input (`<editableText>`): the text writers keep its color and
     /// font (and caret); its layout comes from its own attributes.
     Input,
+    /// An inline box in a block's text flow (an `<image>` inside a `<text>`):
+    /// `Node`-less, a leaf of the text tree, no text style of its own.
+    InlineBox,
 }
 
 /// What kind of element an entity is, as far as the core's shared systems

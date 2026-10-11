@@ -1050,6 +1050,23 @@ impl Plugin for ReactUiPlugin {
             PostUpdate,
             crate::em_size::sync_em_size_to_rem.before(bevy::ui::UiSystems::Layout),
         );
+        // Around bevy's own inline image box sizing: an `em`/`rem` side
+        // resolves to px first (the viewport a `vw` font needs is
+        // propagated by then), and an inline image with both sides given
+        // holds its box while the texture loads. Bevy names no set for the
+        // gap between its box sizing and the text re-shape detection, hence
+        // the two functions.
+        app.add_systems(
+            PostUpdate,
+            (
+                crate::elements::inline_image::resolve_font_relative_sizes
+                    .after(bevy::ui::UiSystems::Propagate)
+                    .before(bevy::ui::widget::update_inline_image_boxes),
+                crate::elements::inline_image::reserve_inline_image_boxes
+                    .after(bevy::ui::widget::update_inline_image_boxes)
+                    .before(bevy::text::detect_text_needs_rerender),
+            ),
+        );
         // `positionType: "fixed"` → bevy's `FixedNode`. After every `Update`
         // writer of `Node.display` and of the request marker; the edge puts a
         // sync point before layout, which re-roots the node the same frame.

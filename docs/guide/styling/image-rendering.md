@@ -80,6 +80,8 @@ These sources are drawn as they are, and an explicit mode on them reports one
   samples its capture smoothly.
 - The copy is made per image and mode, so many large images with an
   explicit mode cost memory accordingly.
+- An [inline image](../elements/text.md#inline-images) (an `<image>` inside
+  a `<text>`) ignores `imageRendering`. Use a source close to the drawn size.
 
 See [`imageRendering`](../reference/style-properties.md#imageRendering) in
 the style reference.

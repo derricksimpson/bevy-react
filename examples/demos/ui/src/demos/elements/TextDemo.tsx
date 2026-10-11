@@ -32,8 +32,10 @@ const PAGE: ExplanationData = {
       <Paragraph>
         Alignment-class fields (<InlineCode>textAlign</InlineCode>,{" "}
         <InlineCode>lineBreak</InlineCode>, <InlineCode>textShadow</InlineCode>)
-        apply on the root <InlineCode>{"<text>"}</InlineCode> only. Click any
-        example below for details and its code.
+        apply on the root <InlineCode>{"<text>"}</InlineCode> only. An{" "}
+        <InlineCode>{"<image>"}</InlineCode> inside a{" "}
+        <InlineCode>{"<text>"}</InlineCode> is an <Bold>inline image</Bold>: it
+        flows with the glyphs. Click any example below for details and its code.
       </Paragraph>
     </>
   ),
@@ -63,6 +65,10 @@ export function TextDemo() {
       <DemoRow>
         <TypographyDemo />
         <LineBreakDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <InlineImageDemo />
       </DemoRow>
     </>
   );
@@ -323,6 +329,92 @@ function LineBreakCard() {
         </text>
       </Stage>
       <Radio wrap value={mode} options={LINE_BREAKS} onChange={setMode} />
+    </node>
+  );
+}
+
+function InlineImageDemo() {
+  return (
+    <Example
+      title="Inline images"
+      info={
+        <>
+          <Paragraph>
+            An <InlineCode>{"<image>"}</InlineCode> written inside a{" "}
+            <InlineCode>{"<text>"}</InlineCode> is an <Bold>inline image</Bold>:
+            it sits on the baseline, wraps with the words around it, and belongs
+            to the block for clicks and layer styles. Size it with{" "}
+            <InlineCode>width</InlineCode> / <InlineCode>height</InlineCode> in
+            px, or in <InlineCode>em</InlineCode> to follow the font size of the
+            text around it; one side alone keeps the texture's aspect ratio. A
+            taller image grows its line.
+          </Paragraph>
+          <Paragraph>
+            It takes <InlineCode>src</InlineCode>, <InlineCode>tint</InlineCode>
+            , <InlineCode>flipX</InlineCode> / <InlineCode>flipY</InlineCode>{" "}
+            and <InlineCode>opacity</InlineCode>; without a{" "}
+            <InlineCode>src</InlineCode> it is a solid{" "}
+            <InlineCode>tint</InlineCode> box. Use a texture close to the drawn
+            size: <InlineCode>imageRendering</InlineCode> does not reach inline
+            images.
+          </Paragraph>
+          <Code lang="tsx">{`<text style={{ fontSize: 18 }}>
+  Built with{" "}
+  <image
+    src="images/inline/bevy-logo.png"
+    style={{ height: "1em" }}
+  />{" "}
+  Bevy
+</text>`}</Code>
+        </>
+      }
+      demo={InlineImageCard}
+    />
+  );
+}
+
+const TINTS: { label: string; value: string }[] = [
+  { label: "none", value: "#ffffff" },
+  { label: "amber", value: Colors.amber },
+  { label: "rose", value: Colors.rose },
+];
+
+function InlineImageCard() {
+  const [fontSize, setFontSize] = useState(20);
+  const [height, setHeight] = useState(1.2);
+  const [tint, setTint] = useState(TINTS[0].value);
+  const icon: BevyStyle = { height: `${height}em` };
+  return (
+    <node style={{ flexDirection: "column", alignItems: "center", gap: 16 }}>
+      <Stage style={{ width: 300 }}>
+        <text style={{ fontSize, color: Colors.textBody }}>
+          <image
+            tint={Colors.cyan}
+            style={{ width: "0.5em", height: "0.5em" }}
+          />{" "}
+          Built with{" "}
+          <image src="images/inline/bevy-logo.png" tint={tint} style={icon} />{" "}
+          Bevy and <image src="images/inline/react-logo.png" style={icon} />{" "}
+          React. Icons sit on the baseline and wrap with the words.
+        </text>
+      </Stage>
+      <Slider
+        value={fontSize}
+        min={12}
+        max={28}
+        onChange={setFontSize}
+        name="fontSize"
+      />
+      <Slider
+        value={height}
+        min={0.5}
+        max={2.5}
+        onChange={setHeight}
+        name="height"
+        decimals={1}
+        unit="em"
+      />
+      <Radio value={tint} options={TINTS} onChange={setTint} />
     </node>
   );
 }

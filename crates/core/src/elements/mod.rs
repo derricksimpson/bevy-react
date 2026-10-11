@@ -3,6 +3,7 @@
 
 pub mod editable;
 pub mod image;
+pub mod inline_image;
 mod node;
 mod text;
 
@@ -20,5 +21,6 @@ pub static CORE_ELEMENTS: &[&Element] = &[
     &TEXT_SPAN,
     &editable::EDITABLE_TEXT,
     &image::IMAGE,
+    &inline_image::INLINE_IMAGE,
     &ROOT,
 ];

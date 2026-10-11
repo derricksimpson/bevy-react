@@ -177,6 +177,9 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   `add_react_element(s)` — the core's `CORE_ELEMENTS` the same way. It
   carries its flags, attributes, common prop groups, writers, events, default
   style, and spawn hook — never an update function (ADR-0005).
+- **Inline image** — an `<image>` written inside a `<text>`: the wire kind
+  `inlineImage` (the reconciler picks it, as it picks `textSpan` for a nested
+  `<text>`), a `Node`-less inline box of its block on Bevy's `InlineImage`.
 - **Attribute** — an element-specific prop (`src`, `value`, `target`, `cx`),
   declared as a `static Attribute<T>` — the static is the typed key the
   merged attributes are read with (`attrs.get(&SRC)`). **Per element**: an

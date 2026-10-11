@@ -94,9 +94,10 @@ impl WriterCtx<'_> {
         self.events.get(attribute)
     }
 
-    /// Whether the node takes part in the text model (its text writers run).
+    /// Whether the node carries text (its text writers run).
     pub fn text(&self) -> bool {
-        self.flags.text != crate::ext::TextRole::None
+        use crate::ext::TextRole;
+        !matches!(self.flags.text, TextRole::None | TextRole::InlineBox)
     }
 }
 

@@ -31,11 +31,11 @@ pub(crate) fn props_interface(kind: &str) -> String {
     format!("Bevy{pascal}Props")
 }
 
-/// Whether `element` is a JSX intrinsic. A text span is not: it is the
-/// nested form of its block (`<text>` inside `<text>`), a wire kind the
-/// reconciler picks itself.
+/// Whether `element` is a JSX intrinsic. A text span and an inline box are
+/// not: they are the nested forms of other intrinsics (`<text>` and
+/// `<image>` inside a `<text>`), wire kinds the reconciler picks itself.
 pub(crate) fn is_intrinsic(element: &Element) -> bool {
-    element.flags.text != TextRole::Span
+    !matches!(element.flags.text, TextRole::Span | TextRole::InlineBox)
 }
 
 /// Whether `element` takes a `style`: every element with a box, plus a text

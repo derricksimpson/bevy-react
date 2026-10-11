@@ -97,6 +97,9 @@ const KIND_FIELDS: Record<string, KindSpec> = {
   // imageRendering: a refused mode (live texture / no CPU data / an
   // unsupported format for `trilinear`) — the node keeps its source.
   imageRendering: { style: ["imageRendering"] },
+  // An <image> inside a <text> (an inline box): an `.svg` source, or a
+  // size it cannot take (`%`, a viewport unit, an `{ animated }` binding).
+  inlineImage: { props: ["src"], style: ["width", "height"] },
   // svg-mode <image>: `atlas`/`sourceRect` are ignored (the document rasters
   // whole at laid-out size — no source texture to grid or crop).
   svgImageAttrs: { props: ["atlas", "sourceRect"] },

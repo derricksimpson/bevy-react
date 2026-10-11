@@ -1,5 +1,5 @@
 ---
-description: The <text> element renders text, with inline spans, fonts registered on the Rust side, and the color, font, spacing, alignment, wrapping and shadow styles.
+description: The <text> element renders text, with inline spans and inline images, fonts registered on the Rust side, and the color, font, spacing, alignment, wrapping and shadow styles.
 demo: <text>
 covers:
   [
@@ -22,7 +22,8 @@ covers:
 [`<node>`](node.md), with layout, background, border, pointer events, state
 styles and layer styles, whose content is its string children. A `<text>`
 nested inside another `<text>` is an inline span that restyles part of the
-block.
+block, and an `<image>` inside it is an inline image that flows with the
+glyphs.
 
 ## Usage
 
@@ -34,13 +35,14 @@ block.
 
 ## Content
 
-- Children are strings, numbers and nested `<text>` spans:
-  `<text>Score: {score}</text>` works as in the DOM.
+- Children are strings, numbers, nested `<text>` spans and
+  [inline images](#inline-images): `<text>Score: {score}</text>` works as in
+  the DOM.
 - A `"\n"` in a string starts a new line, whatever the `lineBreak` mode.
 - JSX whitespace rules apply: a line break between text and a tag is
   dropped, so write `{" "}` where a span needs a space beside it.
-- There are no inline elements. Put images and boxes next to the text in a
-  `<node>`, not inside the `<text>`.
+- An `<image>` is the only element that goes inside a `<text>`. Put any
+  other box next to the text in a `<node>`.
 - A bare string outside any `<text>` still renders, but as unstyled text:
   white, 20px, in Bevy's built-in font rather than your default font. Always
   wrap text in `<text>`.
@@ -74,6 +76,54 @@ const body: BevyStyle = { fontSize: 16, fontFamily: "Inter" };
   Status: <text style={{ ...body, color: "#9ece6a" }}>online</text>
 </text>;
 ```
+
+## Inline images
+
+An `<image>` written inside a `<text>`, directly or inside a span, is an
+inline image: a box in the text flow, placed by the text layout like a
+glyph.
+
+```tsx
+<text style={{ fontSize: 18 }}>
+  Built with <image src="icons/bevy.png" style={{ height: "1em" }} /> Bevy
+</text>
+```
+
+- **What applies.** The attributes `src`, `tint`, `flipX` and `flipY`, plus
+  `name` and `key`; from `style`, only `width`, `height` and `opacity`.
+- **Size.** `width` and `height` take pixels, `"em"` (a multiple of the font
+  size of the text directly around the image, block or span) and `"rem"`.
+  With neither, the image has its texture's size, one texel per logical
+  pixel. With one, the other follows the texture's aspect ratio. With both,
+  the texture stretches to that box.
+- **Placement.** The image's bottom edge sits on the baseline, and an image
+  taller than the text grows its line. It wraps as a unit: a line may break
+  before or after it, never inside. `textAlign` moves it with its line.
+- **Loading.** With both sides given, the box is reserved before the texture
+  loads, so the text does not move when it arrives. Otherwise the image takes
+  no space until it has loaded, and the block re-flows then.
+- Without `src`, the image is a solid box of `tint` (white by default): give
+  it a size.
+- There is no margin: write `{" "}` for a space beside the image.
+- The image is part of its block. A click on it is a click on the block, and
+  the block's `filter`, `transform3d` and other layer styles include it, as
+  does the block's `opacity` (except under `groupAlpha: false`, which fades
+  the glyphs only). `opacity` on the image fades the image alone.
+  `textShadow` does not shadow it.
+
+An inline image is less than an [`<image>`](image.md):
+
+- An `.svg` source is not drawn (an `inlineImage` warning). The other
+  `<image>` attributes (`imageMode`, `sourceRect`, `atlas`, `visualBox`)
+  report `unknownProp`.
+- A size in `%` or viewport units, or an `{ animated }` binding, reports an
+  `inlineImage` warning and counts as unset. Other style properties report
+  `styleIgnored`: there is no margin, border, radius or `filter` of its own.
+- Event handlers and state styles report `propIgnored`.
+- `imageRendering` does not apply. A large texture drawn small aliases, so
+  use a source close to the drawn size.
+- There is no vertical alignment other than the baseline, and an inline
+  image takes no children.
 
 ## Text styles
 
@@ -241,6 +291,8 @@ A `<text>` block is a full element: it takes pointer handlers, state styles
 
 - Spans don't inherit their parent's style, and they have no box, events or
   layer styles.
+- An `<image>` is the only inline element, with the limits listed under
+  [Inline images](#inline-images). Other boxes cannot flow with the text.
 - Unsetting both `textAlign` and `lineBreak`, including when a state style
   that set them ends, keeps the last alignment and wrapping. Set
   `textAlign: "left"` and `lineBreak: "wordBoundary"` explicitly instead.

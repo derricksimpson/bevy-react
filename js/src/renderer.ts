@@ -37,10 +37,11 @@ if (DEV) setupRefreshRuntime();
 interface Instance {
   id: number;
   type: string;
-  /** The wire kind the node was created as (`type`, except a nested `<text>`,
-   *  which is a `textSpan`) — every update op names it, since Rust decodes
-   *  the props against that element. Absent on a `<canvas>` handle (its kind
-   *  is its type). */
+  /** The wire kind the node was created as (`type`, except inside a
+   *  `<text>`: a nested `<text>` is a `textSpan`, an `<image>` an
+   *  `inlineImage`) — every update op names it, since Rust decodes the props
+   *  against that element. Absent on a `<canvas>` handle (its kind is its
+   *  type). */
   kind?: string;
 }
 interface TextInstance {
@@ -108,8 +109,9 @@ const hostConfig: Reconciler.HostConfig<
   supportsMicrotasks: true,
   scheduleMicrotask: (fn: () => void) => queueMicrotask(fn),
 
-  // Track whether we're inside a `<text>`, so nested `<text>` becomes a span and
-  // bare strings inside become inheriting `TextSpan` runs (Bevy's text model).
+  // Track whether we're inside a `<text>`, so a nested `<text>` becomes a span,
+  // an `<image>` an inline box, and bare strings inheriting `TextSpan` runs
+  // (Bevy's text model).
   getRootHostContext: (): HostContext => ROOT_CTX,
   getChildHostContext: (parent: HostContext, type: string): HostContext =>
     parent.inText || type !== "text" ? parent : TEXT_CTX,
@@ -166,8 +168,15 @@ const hostConfig: Reconciler.HostConfig<
   ): Instance {
     const id = allocId();
     if (DEV) noteOwner(id, internalHandle);
-    // A nested `<text>` is a styled span; a top-level one is a text block root.
-    const kind = type === "text" && hostContext.inText ? "textSpan" : type;
+    // Inside a `<text>`, a nested `<text>` is a styled span and an `<image>`
+    // an inline box in the text flow; everything else keeps its kind.
+    const kind = !hostContext.inText
+      ? type
+      : type === "text"
+        ? "textSpan"
+        : type === "image"
+          ? "inlineImage"
+          : type;
     // A single-string `<text>` child rides inline on the create op (see
     // shouldSetTextContent) instead of spawning its own text entity.
     const child = props.children;

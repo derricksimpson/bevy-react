@@ -130,10 +130,10 @@ impl ElementInfo {
         masked = masked.union(styles.writer_bits(decl.suppress));
         let global_mask = if decl.flags.node_less {
             // No `Node`: only the text writers apply, and only to a span.
-            if decl.flags.text == TextRole::None {
-                WriterMask::NONE
-            } else {
+            if decl.flags.text == TextRole::Span {
                 styles.masks.span
+            } else {
+                WriterMask::NONE
             }
         } else {
             styles.all_writers().without(masked)
@@ -141,9 +141,10 @@ impl ElementInfo {
 
         // `styleIgnored`: a property some global writer reads, none of the
         // kept ones nor the element's own do. (Node-less elements warn in
-        // their own terms.)
+        // their own terms — but an inline box, which takes a `style` for
+        // its size.)
         let mut ignored_styles = StyleDirty::NONE;
-        if !decl.flags.node_less {
+        if !decl.flags.node_less || decl.flags.text == TextRole::InlineBox {
             let own_reads = style_reads
                 .iter()
                 .fold(StyleDirty::NONE, |acc, s| acc.union(*s));
