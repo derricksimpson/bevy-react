@@ -96,8 +96,9 @@ Changing `target` moves the subtree to another surface.
   texture pixel; at `2.0` an 800 × 600 texture holds a 400 × 300 layout whose
   text and shapes rasterize at twice the resolution, the way a HiDPI window
   does. Raise it for a mesh that fills much of the screen.
-- The `<surface>` element fills the texture by default (`width` and `height`
-  `"100%"`). Its `style` overrides that and styles the root like a node.
+- The `<surface>` element fills the texture by default (`width: "100vw"`,
+  `height: "100vh"`; inside a surface the viewport is its texture). Its
+  `style` overrides that and styles the root like a node.
 - The `<surface>` takes no space where you write it in the React tree. Put it
   anywhere, for example beside the screen UI that controls it; unmounting it
   or an ancestor removes it.

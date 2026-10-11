@@ -25,6 +25,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rasterizes at the texture's full resolution, so a UI designed at a fixed
   size stays crisp on a large mesh. In-world picking maps hits to logical px.
 
+### Changed
+
+- **Bevy 0.20** (breaking). bevy-react now builds against Bevy 0.20, which
+  needs Rust 1.97.1 or newer. Apps on Bevy 0.19 stay on bevy-react 0.7.
+- **Shaders are WESL** (breaking). Bevy 0.20 composes shaders with WESL
+  only; a `.wgsl` file reaches the GPU as written, so its `#import` lines no
+  longer compile. A custom filter or morph shader must be a `.wesl` file
+  that imports the prelude with an `import` line:
+  `import bevy_react::filter::{FullscreenVertexOutput, sample_source, uniforms};`
+  in place of `#import bevy_react::filter::{…}`. Rename the files, update
+  each `shader = "…"` path, and turn `#ifdef` blocks into `@if(…)`. The
+  prelude's module path and functions are unchanged. Your app's own material
+  shaders need the same port (Bevy's change), for example
+  `@group(constants::MATERIAL_BIND_GROUP)` in place of
+  `@group(#{MATERIAL_BIND_GROUP})`.
+- **UI roots are sized in viewport units** (breaking). The window tree,
+  `<root>` and `<surface>` default to `width: "100vw"`, `height: "100vh"`
+  instead of `"100%"`. Bevy 0.20 grows a UI root's row to fit its content,
+  so a root sized `"100%"` outgrows the window (or the surface's texture)
+  once its content is taller, and nothing inside it scrolls. If you set
+  `"100%"` on a `<root>` or `<surface>` yourself, switch to viewport units.
+- **`<button>` carries `bevy::ui_widgets::Button`** (breaking for Rust code
+  that queries buttons). `bevy_ui`'s old `Button` component is private in
+  Bevy 0.20, so a `<button>` entity now has the headless widget `Button`,
+  with `Interaction` added explicitly. Its accessible name still comes from
+  the text under it, now with nested wrappers included and refreshed when
+  its direct children change.
+- **`<editableText>` follows Bevy 0.20's text input.** The entity carries
+  `bevy::ui_widgets::TextInput` next to `EditableText`. Clicking anywhere
+  else now blurs the field, and so does Escape. A field also keeps clicks
+  and scene picking from what lies beneath it, whatever its `focusPolicy`.
+- **`add_react_handler` and `add_react_request_handler` take one generic
+  parameter less** (breaking). Bevy's observers dropped their `Bundle`
+  parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.
+  Calls that leave the generics to inference are unaffected.
+
 ### Fixed
 
 - A composited layer captured while its subtree was hidden stayed empty once
@@ -38,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   texture position happened to lie under the window cursor.
 - `<editableText value="…">` mounted empty: an element's spawn hook now sees
   the create's act-now attributes, as documented.
+- UI under a virtual pointer (a `<surface>` subtree) lost its `focusStyle`
+  on the next hover or press change: releasing the pointer over a focused
+  `<editableText>` dropped its focus ring.
 
 ## [0.7.0] - 2026-10-05
 

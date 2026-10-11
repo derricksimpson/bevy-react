@@ -52,8 +52,12 @@ A `<root>` starts with this style, which its own `style` overrides property
 by property:
 
 ```tsx
-{ width: "100%", height: "100%", flexDirection: "column", globalZIndex: 1 }
+{ width: "100vw", height: "100vh", flexDirection: "column", globalZIndex: 1 }
 ```
+
+The size is in [viewport units](../styling/units.md), not `"100%"`: Bevy
+grows a UI root's row to fit its content, so a root sized `"100%"` outgrows
+the window once its content is taller, and nothing inside it scrolls.
 
 It has no alignment or gap of its own, so its children stretch across its
 width. Center them with `alignItems` and `justifyContent`, as above. (The

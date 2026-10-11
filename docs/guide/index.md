@@ -68,9 +68,12 @@ where it should be. **Do not use it in production.**
 
 ## Bevy compatibility
 
-| Bevy | bevy-react        |
-| ---- | ----------------- |
-| 0.19 | 0.1 – 0.6, `main` |
+| Bevy | bevy-react |
+| ---- | ---------- |
+| 0.20 | `main`     |
+| 0.19 | 0.1 – 0.7  |
+
+Bevy 0.20 needs Rust 1.97.1 or newer.
 
 ## Performance
 

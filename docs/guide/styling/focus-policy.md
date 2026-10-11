@@ -40,6 +40,11 @@ everything behind it:
 An explicit value overrides the element's default, on a `<button>` too. An
 unknown value reports a `focusPolicy` warning and acts as `"pass"`.
 
+An [`<editableText>`](../elements/editable-text.md) is the exception: it
+keeps clicks and scene picking from what lies beneath it whatever its
+`focusPolicy`. A click that also reached the nodes beneath would blur the
+field it just focused.
+
 ## What blocking stops
 
 Under the pointer, nodes are visited from the topmost down (see

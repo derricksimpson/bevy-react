@@ -9,7 +9,7 @@
   <a href="https://crates.io/crates/bevy-react"><img src="https://img.shields.io/crates/v/bevy-react" alt="crates.io" /></a>
   <a href="https://www.npmjs.com/package/bevy-react"><img src="https://img.shields.io/npm/v/bevy-react" alt="npm" /></a>
   <a href="https://docs.rs/bevy-react"><img src="https://img.shields.io/docsrs/bevy-react" alt="docs.rs" /></a>
-  <a href="#bevy-compatibility"><img src="https://img.shields.io/badge/bevy-0.19-232326?logo=bevy" alt="bevy 0.19" /></a>
+  <a href="#bevy-compatibility"><img src="https://img.shields.io/badge/bevy-0.20-232326?logo=bevy" alt="bevy 0.20" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="license: MIT OR Apache-2.0" /></a>
 </p>
 
@@ -141,7 +141,10 @@ guide covers configuration, cargo features, and the typed client.
 
 | bevy | bevy-react |
 | ---- | ---------- |
+| 0.20 | `main`     |
 | 0.19 | 0.1 – 0.7  |
+
+Bevy 0.20 needs Rust 1.97.1 or newer.
 
 ## License
 
