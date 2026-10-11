@@ -446,6 +446,7 @@ impl Plugin for ReactUiPlugin {
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
+                    .init_resource::<lr::park::ParkedUiNodes>()
                     // `precompile_filters`: the shader list crosses in extract,
                     // the pipelines are queued per newly seen camera format
                     // before any prepare that would specialize them lazily.
@@ -496,6 +497,10 @@ impl Plugin for ReactUiPlugin {
                     .add_systems(
                         Render,
                         (
+                            // Parking: a strict edge before the whole Queue
+                            // set, so it holds for every stock `queue_*`
+                            // system (an app's `UiMaterial` queues included).
+                            lr::park::park_cached_layer_members.before(RenderSystems::Queue),
                             lr::redistribute_ui_layers
                                 .in_set(RenderSystems::PhaseSort)
                                 .before(sort_phase_system::<TransparentUi>),

@@ -9,7 +9,8 @@
 //!    register an empty `TransparentUi` phase for it. Stock extraction / queue
 //!    never know it exists. (Stock extraction is retained: only nodes whose
 //!    data changed are re-extracted, so a cached layer's idle members cost
-//!    no extraction — their queued items are stolen and dropped.)
+//!    no extraction — and they are parked out of the stock queue ([`park`]);
+//!    what still reaches a camera phase is stolen and dropped.)
 //! 2. [`redistribute_ui_layers`] (`PhaseSort`, before the stock sort): move
 //!    the already-queued phase items whose `main_entity` lies in a promoted
 //!    subtree, **verbatim**, from the camera's UI phase into their layer's
@@ -49,11 +50,13 @@
 //! rely on pass shaders having no vertex entry of their own), and wgpu
 //! accepting per-stage shader modules in `RenderPipelineDescriptor` (filter
 //! vertex stage = bevy's fullscreen shader, fragment stage = pass module).
+//! [`park`] has its own list.
 
 pub mod backdrop;
 pub mod clip;
 pub mod mips;
 pub mod morph;
+pub mod park;
 pub mod store;
 pub mod transform3d;
 pub mod warm;
@@ -75,7 +78,7 @@ use bevy::render::Extract;
 use bevy::render::camera::CameraMainPassTextureFormats;
 use bevy::render::render_phase::{
     DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult,
-    SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
+    SetItemPipeline, SortedRenderPhase, TrackedRenderPass, ViewSortedRenderPhases,
 };
 use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_buffer};
 use bevy::render::render_resource::*;
@@ -307,8 +310,9 @@ pub struct ExtractedLayer {
     pub target_format: TextureFormat,
     /// Whether this layer's capture must re-render this frame. `false` = the
     /// persistent texture in [`LayerTextureStore`] already holds the correct
-    /// pixels: the capture pass skips it, and the items stolen for it are
-    /// dropped instead of re-drawn. Decided at extract time (main-world dirt ∪
+    /// pixels: the capture pass skips it, its members are parked out of the
+    /// stock queue ([`park`]), and any item still stolen for it is dropped
+    /// instead of re-drawn. Decided at extract time (main-world dirt ∪
     /// missing/mismatched slot), then propagated up the enclosing chain — a
     /// re-capturing layer's quad re-draws inside every enclosing capture.
     pub needs_capture: bool,
@@ -376,16 +380,32 @@ pub struct ExtractedLayer {
     /// (`stack_z_offsets::BACKGROUND_COLOR` is 0.0). `None` when the root has
     /// no `ComputedStackIndex` yet. Source of [`Self::fallback_sort_key`].
     pub root_sort_key: Option<FloatOrd>,
+    /// The root's `InheritedVisibility`. Visibility inherits, so `false`
+    /// means every member is invisible too — stock extracted nothing for the
+    /// subtree.
+    pub root_visible: bool,
+}
+
+/// Whether a layer that stole no phase items still draws its composite quad,
+/// at the root's own stacking position.
+pub const fn wants_root_key(morphing: bool, needs_capture: bool, root_visible: bool) -> bool {
+    morphing || (!needs_capture && root_visible)
 }
 
 impl ExtractedLayer {
     /// Composite-quad sort key to fall back on when the subtree stole no
-    /// phase items ([`Self::root_sort_key`]): only a layer with a **morph in
-    /// flight** — an empty morph carrier (content mounted/unmounted around
-    /// the blend) must still draw its blend quad. `None` everywhere else:
-    /// idle empty layers draw no quad.
+    /// phase items ([`Self::root_sort_key`]), in exactly two cases: a layer
+    /// **served from cache**, whose members are parked out of the stock queue
+    /// ([`park`]) — its quad still has to draw, where the subtree's first
+    /// pixel would have — provided its root is visible (an invisible root
+    /// extracts nothing, so it draws no quad); and a layer with a **morph in
+    /// flight**: an empty morph carrier (content mounted/unmounted around the
+    /// blend) must still draw its blend quad. `None` everywhere else. Read
+    /// after propagation (`needs_capture` must be final).
     pub fn fallback_sort_key(&self) -> Option<FloatOrd> {
-        self.morph.as_ref().and(self.root_sort_key)
+        wants_root_key(self.morph.is_some(), self.needs_capture, self.root_visible)
+            .then_some(self.root_sort_key)
+            .flatten()
     }
 }
 
@@ -404,8 +424,12 @@ pub struct ExtractedUiLayers {
     pub layers: Vec<ExtractedLayer>,
     /// node main entity → index into `layers` (steal routing). Derived from
     /// [`LayerMembership`] + the extraction order; rebuilt only when either
-    /// moved (`membership_rebuilds` / `roots`), kept otherwise.
-    pub membership: HashMap<MainEntity, usize>,
+    /// moved (`membership_rebuilds` / `roots`), kept otherwise. Rewritten
+    /// only through [`Self::reset_membership`].
+    membership: HashMap<MainEntity, usize>,
+    /// Counts the rewrites of `membership`: [`park`] re-routes every stock
+    /// entry when it moves.
+    membership_epoch: u64,
     /// layer index → index of its enclosing layer (quad routing); `None` =
     /// composite into its camera's phase. Rebuilt with `membership`.
     pub enclosing: Vec<Option<usize>>,
@@ -417,6 +441,15 @@ pub struct ExtractedUiLayers {
     /// Layer indices in capture order: deepest (innermost) first, so an outer
     /// capture's pass samples already-rendered inner captures.
     pub capture_order: Vec<usize>,
+}
+
+impl ExtractedUiLayers {
+    /// Empties `membership` for a rewrite — the only way it changes, so the
+    /// epoch can't be left behind.
+    fn reset_membership(&mut self) {
+        self.membership.clear();
+        self.membership_epoch += 1;
+    }
 }
 
 /// Extracts promoted layers into the render world and maintains their
@@ -443,6 +476,7 @@ pub fn extract_ui_layers(
             Option<&ComputedStackIndex>,
             Option<&crate::filters::MorphState>,
             Option<&crate::filters::ResolvedMorphChain>,
+            Option<&InheritedVisibility>,
         )>,
     >,
     membership: Extract<Res<LayerMembership>>,
@@ -459,7 +493,9 @@ pub fn extract_ui_layers(
     extracted.capture_order.clear();
 
     if layers.is_empty() {
-        extracted.membership.clear();
+        if !extracted.membership.is_empty() {
+            extracted.reset_membership();
+        }
         extracted.enclosing.clear();
         extracted.roots.clear();
         // No layers at all: every persistent entity set is stale.
@@ -496,6 +532,7 @@ pub fn extract_ui_layers(
         stack_index,
         morph_state,
         morph_chain,
+        root_visibility,
     ) in layers.iter()
     {
         let Some((camera_main, camera_render, target_format)) = camera_of(target_camera) else {
@@ -618,6 +655,7 @@ pub fn extract_ui_layers(
             bucketable,
             root_sort_key: stack_index
                 .map(|s| FloatOrd(s.0 as f32 + stack_z_offsets::BACKGROUND_COLOR)),
+            root_visible: root_visibility.is_some_and(|v| v.get()),
             morph,
             morph_warm,
         });
@@ -656,7 +694,7 @@ pub fn extract_ui_layers(
         extracted
             .roots
             .extend(extracted.layers.iter().map(|l| l.main_entity.id()));
-        extracted.membership.clear();
+        extracted.reset_membership();
         for (node, layer_root) in membership.node_to_layer.iter() {
             if let Some(&idx) = layer_index.get(layer_root) {
                 extracted.membership.insert(MainEntity::from(*node), idx);
@@ -811,6 +849,67 @@ fn despawn_layer_entities(commands: &mut Commands, entities: &LayerEntities) {
     }
 }
 
+/// Scratch buffers of [`redistribute_ui_layers`], kept across frames: a
+/// steady frame allocates nothing.
+#[derive(Default)]
+pub struct StealScratch {
+    /// Items on their way from a camera phase to a re-capturing layer's
+    /// phase, with the layer's index.
+    stolen: Vec<(usize, TransparentUi)>,
+    /// Per layer, the lowest sort key among its members' queued items.
+    quad_sort_keys: Vec<Option<FloatOrd>>,
+    /// Per layer, [`ExtractedLayer::needs_capture`]: the steal asks once per
+    /// item, and the layers themselves are too big to stay in cache for it.
+    capturing: Vec<bool>,
+    /// The distinct camera phases this frame's layers composite into.
+    camera_views: Vec<RetainedViewEntity>,
+}
+
+/// Takes every item of a promoted subtree out of a camera's UI phase, in
+/// place: the remaining items keep their order and the map its allocation
+/// (stock re-queues every item into it next frame). `quad_sort_keys[layer]`
+/// records each layer's first (lowest-sort-key) item — the composite quad
+/// draws exactly where the subtree would have started. The items of a
+/// re-capturing layer move to `stolen`; a cached layer's are dropped on the
+/// spot: the persistent texture already holds their pixels, so nothing
+/// re-draws them (and stock `prepare_uinodes` builds no vertices for them).
+fn steal_members(
+    camera_phase: &mut SortedRenderPhase<TransparentUi>,
+    membership: &HashMap<MainEntity, usize>,
+    capturing: &[bool],
+    quad_sort_keys: &mut [Option<FloatOrd>],
+    stolen: &mut Vec<(usize, TransparentUi)>,
+) {
+    // One O(n) partition pass (order-preserving): a `shift_remove` per
+    // stolen key shifts the IndexMap tail each time — O(n²), ~14ms/frame
+    // at 500 stress layers with most of the phase promoted.
+    camera_phase.items.retain(|_, item| {
+        let Some(&idx) = membership.get(&item.entity.1) else {
+            return true;
+        };
+        let best = &mut quad_sort_keys[idx];
+        if best.is_none_or(|best| item.sort_key < best) {
+            *best = Some(item.sort_key);
+        }
+        if capturing[idx] {
+            // `TransparentUi` is not `Clone`; `retain` only lends it.
+            stolen.push((
+                idx,
+                TransparentUi {
+                    sort_key: item.sort_key,
+                    entity: item.entity,
+                    pipeline: item.pipeline,
+                    draw_function: item.draw_function,
+                    batch_range: item.batch_range.clone(),
+                    extra_index: item.extra_index.clone(),
+                    indexed: item.indexed,
+                },
+            ));
+        }
+        false
+    });
+}
+
 /// Moves promoted subtrees' phase items from their camera's UI phase into
 /// their layer's synthetic phase, then injects one composite quad per layer.
 /// Runs after queueing, before the stock sort (which then sorts every phase,
@@ -822,6 +921,7 @@ pub fn redistribute_ui_layers(
     composite_pipeline: Option<Res<LayerCompositePipeline>>,
     mut specialized: ResMut<SpecializedRenderPipelines<LayerCompositePipeline>>,
     pipeline_cache: Res<PipelineCache>,
+    mut scratch: Local<StealScratch>,
 ) {
     if extracted.layers.is_empty() {
         return;
@@ -830,56 +930,46 @@ pub fn redistribute_ui_layers(
         return;
     };
 
-    // Steal: drain matching items out of each layered camera's phase in one
-    // pass per camera…
-    let mut stolen: Vec<(usize, (Entity, MainEntity), TransparentUi)> = Vec::new();
-    // …tracking each layer's first (lowest-sort-key) stolen item: the
-    // composite quad draws exactly where the subtree would have started.
-    let mut quad_sort_keys: Vec<Option<FloatOrd>> = vec![None; extracted.layers.len()];
-    let mut camera_views: Vec<RetainedViewEntity> = Vec::new();
+    let StealScratch {
+        stolen,
+        quad_sort_keys,
+        capturing,
+        camera_views,
+    } = &mut *scratch;
+    quad_sort_keys.clear();
+    quad_sort_keys.resize(extracted.layers.len(), None);
+    capturing.clear();
+    capturing.extend(extracted.layers.iter().map(|layer| layer.needs_capture));
+    camera_views.clear();
     for layer in &extracted.layers {
         if !camera_views.contains(&layer.camera_view) {
             camera_views.push(layer.camera_view);
         }
     }
-    for camera_view in camera_views {
-        let Some(camera_phase) = phases.get_mut(&camera_view) else {
-            continue;
-        };
-        // One O(n) partition pass (order-preserving): a `shift_remove` per
-        // stolen key shifts the IndexMap tail each time — O(n²), ~14ms/frame
-        // at 500 stress layers with most of the phase promoted.
-        let taken = std::mem::take(&mut camera_phase.items);
-        for (key, item) in taken {
-            let Some(&idx) = extracted.membership.get(&item.main_entity()) else {
-                camera_phase.items.insert(key, item);
-                continue;
-            };
-            let best = &mut quad_sort_keys[idx];
-            if best.is_none() || item.sort_key < best.unwrap() {
-                *best = Some(item.sort_key);
-            }
-            stolen.push((idx, key, item));
+    // Steal: one pass per layered camera's phase.
+    for camera_view in camera_views.iter() {
+        if let Some(camera_phase) = phases.get_mut(camera_view) {
+            steal_members(
+                camera_phase,
+                &extracted.membership,
+                capturing,
+                quad_sort_keys,
+                stolen,
+            );
         }
     }
-    // A morphing layer that stole nothing (an empty carrier) takes the
-    // root's own stacking position.
+    // A cached layer's members are parked ([`park`]), so it stole nothing;
+    // neither did an empty morph carrier. Both take the root's own stacking
+    // position.
     fill_fallback_sort_keys(
-        &mut quad_sort_keys,
+        quad_sort_keys,
         extracted
             .layers
             .iter()
             .map(ExtractedLayer::fallback_sort_key),
     );
-    propagate_quad_sort_keys(&mut quad_sort_keys, &extracted.enclosing);
-    for (idx, _key, item) in stolen {
-        // A cached layer's items are simply dropped: the persistent texture
-        // already holds their pixels, so nothing re-draws them (and stock
-        // `prepare_uinodes` builds no vertices for them either). The steal
-        // keeps them out of the stock phase.
-        if !extracted.layers[idx].needs_capture {
-            continue;
-        }
+    propagate_quad_sort_keys(quad_sort_keys, &extracted.enclosing);
+    for (idx, item) in stolen.drain(..) {
         if let Some(phase) = phases.get_mut(&extracted.layers[idx].retained) {
             phase.add_transient(item);
         }
@@ -1794,7 +1884,7 @@ fn walk_enclosing(start: usize, enclosing: &[Option<usize>], mut visit: impl FnM
 }
 
 /// A layer whose subtree stole no items but still needs its composite quad
-/// on screen — one served from cache (members hidden from extraction) or a
+/// on screen — one served from cache (members parked out of the queue) or a
 /// MORPHING empty carrier mid-blend — fills the missing key from the
 /// extract-time fallback ([`ExtractedLayer::fallback_sort_key`], the layer
 /// root's own stacking position). Runs before propagation so an enclosing
@@ -2472,6 +2562,96 @@ mod tests {
         fill_fallback_sort_keys(&mut keys, [None, key(6.0)]);
         propagate_quad_sort_keys(&mut keys, &enclosing);
         assert_eq!(keys, [key(6.0), key(6.0)]);
+    }
+
+    /// Which keyless layers still draw their quad at the root's position: a
+    /// morph in flight always; a layer served from cache while its root is
+    /// visible; never a capturing layer that queued nothing.
+    #[test]
+    fn wants_root_key_decision_table() {
+        // (morphing, needs_capture, root_visible) → root key
+        let cases = [
+            ((false, false, true), true),   // cached, visible: parked members
+            ((false, false, false), false), // cached, hidden: nothing to show
+            ((false, true, true), false),   // capturing: the stolen items decide
+            ((false, true, false), false),
+            ((true, true, false), true), // morphing empty carrier
+            ((true, false, false), true),
+        ];
+        for ((morphing, needs_capture, root_visible), expected) in cases {
+            assert_eq!(
+                wants_root_key(morphing, needs_capture, root_visible),
+                expected,
+                "morphing={morphing} needs_capture={needs_capture} root_visible={root_visible}"
+            );
+        }
+    }
+
+    /// The steal partitions a camera phase in place: non-members keep their
+    /// order and the map its allocation; a re-capturing layer's items move
+    /// to `stolen` in phase order; a cached layer's items are dropped. Both
+    /// kinds record the layer's lowest sort key.
+    #[test]
+    fn steal_members_in_place() {
+        use bevy::render::render_phase::DrawFunctionId;
+
+        let node = |i: u32| MainEntity::from(Entity::from_raw_u32(i).unwrap());
+        let item = |i: u32, key: f32| TransparentUi {
+            sort_key: FloatOrd(key),
+            // One drawable per node: the render entity only has to differ.
+            entity: (Entity::from_raw_u32(100 + i).unwrap(), node(i)),
+            pipeline: CachedRenderPipelineId::INVALID,
+            draw_function: DrawFunctionId(0),
+            batch_range: 0..0,
+            extra_index: PhaseItemExtraIndex::None,
+            indexed: true,
+        };
+        // Nodes 1, 2: layer 0 (re-captures). Nodes 3, 4: layer 1 (cached).
+        // Nodes 5..=7: plain UI. Layer 2 has no queued item.
+        let membership: HashMap<MainEntity, usize> =
+            [(node(1), 0), (node(2), 0), (node(3), 1), (node(4), 1)].into();
+        let mut phase = SortedRenderPhase::<TransparentUi>::default();
+        for (i, key) in [
+            (5, 9.0),
+            (2, 4.0),
+            (3, 8.0),
+            (6, 1.0),
+            (1, 3.0),
+            (4, 7.0),
+            (7, 2.0),
+        ] {
+            phase.add_transient(item(i, key));
+        }
+        let capacity = phase.items.capacity();
+        let mut keys = [None; 3];
+        let mut stolen = Vec::new();
+
+        steal_members(
+            &mut phase,
+            &membership,
+            &[true, false, false],
+            &mut keys,
+            &mut stolen,
+        );
+
+        let left: Vec<MainEntity> = phase.items.keys().map(|key| key.1).collect();
+        assert_eq!(left, [node(5), node(6), node(7)]);
+        assert_eq!(phase.items.capacity(), capacity);
+        // The index is rebuilt for what stayed.
+        assert!(
+            phase
+                .items
+                .contains_key(&(Entity::from_raw_u32(106).unwrap(), node(6)))
+        );
+        let moved: Vec<(usize, MainEntity, FloatOrd)> = stolen
+            .iter()
+            .map(|(idx, item)| (*idx, item.entity.1, item.sort_key))
+            .collect();
+        assert_eq!(
+            moved,
+            [(0, node(2), FloatOrd(4.0)), (0, node(1), FloatOrd(3.0))]
+        );
+        assert_eq!(keys, [Some(FloatOrd(3.0)), Some(FloatOrd(7.0)), None]);
     }
 
     /// The shared enclosing-chain walk: visits ancestors bottom-up
