@@ -110,24 +110,36 @@ keyword_fields! {
     // flow-relative ones — they diverge in grid and reversed-flex containers,
     // so the keywords must not collapse together. The alignment enums' bevy
     // default is the keyword-less `Default` variant ("align per the layout
-    // spec"), which is also the unrecognized-keyword fallback.
+    // spec"), which is also the unrecognized-keyword fallback. The `safe*`
+    // keywords are bevy's `*Safe` variants (aligned like the plain keyword
+    // while the content fits, at the start once it would overflow) — every
+    // one each enum has: the grid-only `justifyItems`/`justifySelf` have no
+    // flow-relative pair.
     fn de_align_items("alignItems") -> AlignItems as ALIGN_ITEMS_KEYWORDS {
         "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe,
+        "safeFlexStart" => FlexStartSafe, "safeFlexEnd" => FlexEndSafe,
+        "safeCenter" => CenterSafe,
     }
     fn de_justify_items("justifyItems") -> JustifyItems as JUSTIFY_ITEMS_KEYWORDS {
         "start" => Start, "end" => End,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe, "safeCenter" => CenterSafe,
     }
     fn de_align_self("alignSelf") -> AlignSelf as ALIGN_SELF_KEYWORDS {
         "auto" => Auto, "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe,
+        "safeFlexStart" => FlexStartSafe, "safeFlexEnd" => FlexEndSafe,
+        "safeCenter" => CenterSafe,
     }
     fn de_justify_self("justifySelf") -> JustifySelf as JUSTIFY_SELF_KEYWORDS {
         "auto" => Auto, "start" => Start, "end" => End,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe, "safeCenter" => CenterSafe,
     }
     fn de_align_content("alignContent") -> AlignContent as ALIGN_CONTENT_KEYWORDS {
         "start" => Start, "end" => End,
@@ -135,6 +147,9 @@ keyword_fields! {
         "center" => Center, "stretch" => Stretch,
         "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
         "spaceAround" => SpaceAround,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe,
+        "safeFlexStart" => FlexStartSafe, "safeFlexEnd" => FlexEndSafe,
+        "safeCenter" => CenterSafe,
     }
     fn de_justify_content("justifyContent") -> JustifyContent as JUSTIFY_CONTENT_KEYWORDS {
         "start" => Start, "end" => End,
@@ -142,6 +157,9 @@ keyword_fields! {
         "center" => Center, "stretch" => Stretch,
         "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
         "spaceAround" => SpaceAround,
+        "safeStart" => StartSafe, "safeEnd" => EndSafe,
+        "safeFlexStart" => FlexStartSafe, "safeFlexEnd" => FlexEndSafe,
+        "safeCenter" => CenterSafe,
     }
     fn de_flex_direction("flexDirection") -> FlexDirection as FLEX_DIRECTION_KEYWORDS {
         "row" => Row, "column" => Column,
@@ -239,7 +257,8 @@ mod tests {
     use crate::style::Style;
     use crate::style::props::{
         ALIGN_CONTENT, ALIGN_ITEMS, ALIGN_SELF, BOX_SIZING, DISPLAY, FLEX_DIRECTION, FLEX_WRAP,
-        FOCUS_POLICY, FONT_WEIGHT, JUSTIFY_CONTENT, LINE_BREAK, TEXT_ALIGN,
+        FOCUS_POLICY, FONT_WEIGHT, JUSTIFY_CONTENT, JUSTIFY_ITEMS, JUSTIFY_SELF, LINE_BREAK,
+        TEXT_ALIGN,
     };
 
     /// Keyword style fields decode straight into their `bevy_ui`/`bevy_text`
@@ -292,6 +311,101 @@ mod tests {
         );
         assert_eq!(s.get(&BOX_SIZING).copied(), Some(BoxSizing::BorderBox));
         assert_eq!(s.get(&FLEX_WRAP).copied(), Some(FlexWrap::NoWrap));
+    }
+
+    /// The `safe*` alignment keywords decode to bevy's `*Safe` variants, on
+    /// each property that has them: all five on the four flex/grid ones, the
+    /// three physical ones on the grid-only `justifyItems`/`justifySelf`.
+    #[test]
+    fn safe_alignment_keywords_decode_to_the_safe_variants() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "alignItems": "safeCenter",
+            "alignSelf": "safeFlexEnd",
+            "alignContent": "safeEnd",
+            "justifyContent": "safeFlexStart",
+            "justifyItems": "safeStart",
+            "justifySelf": "safeCenter",
+        }))
+        .expect("keyword style decodes");
+        assert_eq!(s.get(&ALIGN_ITEMS).copied(), Some(AlignItems::CenterSafe));
+        assert_eq!(s.get(&ALIGN_SELF).copied(), Some(AlignSelf::FlexEndSafe));
+        assert_eq!(s.get(&ALIGN_CONTENT).copied(), Some(AlignContent::EndSafe));
+        assert_eq!(
+            s.get(&JUSTIFY_CONTENT).copied(),
+            Some(JustifyContent::FlexStartSafe)
+        );
+        assert_eq!(
+            s.get(&JUSTIFY_ITEMS).copied(),
+            Some(JustifyItems::StartSafe)
+        );
+        assert_eq!(s.get(&JUSTIFY_SELF).copied(), Some(JustifySelf::CenterSafe));
+        for table in [
+            ALIGN_ITEMS_KEYWORDS.keywords,
+            JUSTIFY_CONTENT_KEYWORDS.keywords,
+        ] {
+            let safe = table.iter().filter(|k| k.starts_with("safe")).count();
+            assert_eq!(safe, 5, "{table:?}");
+        }
+        // No flow-relative pair on the grid-only keys: the keyword warns and
+        // falls back like any unknown one.
+        let s: Style =
+            serde_json::from_value(serde_json::json!({ "justifyItems": "safeFlexStart" }))
+                .expect("decodes");
+        assert_eq!(s.get(&JUSTIFY_ITEMS).copied(), Some(JustifyItems::Default));
+    }
+
+    /// What the keyword promises, under bevy's real layout: two 80px items
+    /// in a 100px row overflow on both sides when centered, and start at the
+    /// row's own start with `safeCenter`. Items that fit are centered by
+    /// both.
+    #[test]
+    fn safe_center_falls_back_to_start_on_overflow() {
+        use bevy::prelude::*;
+        let mut app = crate::transition::layout_tests::layout_app();
+        let root = app
+            .world_mut()
+            .spawn(Node {
+                width: Val::Vw(100.0),
+                height: Val::Vh(100.0),
+                flex_direction: FlexDirection::Column,
+                ..Default::default()
+            })
+            .id();
+        let mut row = |justify: &str, width: f32| {
+            let style: Style =
+                serde_json::from_value(serde_json::json!({ "justifyContent": justify }))
+                    .expect("decodes");
+            let row = Node {
+                width: Val::Px(100.0),
+                height: Val::Px(20.0),
+                justify_content: style.get(&JUSTIFY_CONTENT).copied().unwrap(),
+                ..Default::default()
+            };
+            let row = app.world_mut().spawn((row, ChildOf(root))).id();
+            let item = Node {
+                width: Val::Px(width),
+                flex_shrink: 0.0,
+                ..Default::default()
+            };
+            let first = app.world_mut().spawn((item.clone(), ChildOf(row))).id();
+            app.world_mut().spawn((item, ChildOf(row)));
+            (row, first)
+        };
+        let rows = [
+            (row("center", 80.0), -30.0),
+            (row("safeCenter", 80.0), 0.0),
+            (row("center", 20.0), 30.0),
+            (row("safeCenter", 20.0), 30.0),
+        ];
+        app.update();
+        let left = |e: Entity| {
+            let node = app.world().entity(e).get::<ComputedNode>().unwrap();
+            let global = app.world().entity(e).get::<UiGlobalTransform>().unwrap();
+            global.translation.x - 0.5 * node.size.x
+        };
+        for ((row, first), offset) in rows {
+            assert_eq!(left(first) - left(row), offset);
+        }
     }
 
     /// An unrecognized enum keyword falls back to the bevy default (and warns)

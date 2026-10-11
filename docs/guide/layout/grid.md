@@ -129,7 +129,9 @@ Inside its grid area, an item aligns on both axes:
 - Horizontally with `justifyItems` on the container (`"start"`, `"end"`,
   `"center"`, `"baseline"`, `"stretch"`), overridden per item by
   `justifySelf` (`"auto"`, the default, uses the container's value, plus the
-  same keywords).
+  same keywords). Both also take `"safeStart"`, `"safeEnd"` and
+  `"safeCenter"`, which fall back to `"start"` when the item overflows its
+  area (see [safe alignment](flexbox.md#safe-alignment)).
 - Vertically with `alignItems` on the container and `alignSelf` on the item,
   the keys described on [Flexbox](flexbox.md#alignment).
 

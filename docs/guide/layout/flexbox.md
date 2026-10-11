@@ -152,6 +152,25 @@ Accepted values:
 `justifyItems` and `justifySelf` have no effect on flex items; they belong
 to [Grid](grid.md).
 
+### Safe alignment
+
+Items that don't fit overflow on the side opposite the alignment: centered,
+they overflow on both sides, and what sticks out before the start of the
+container cannot be scrolled to. The safe keywords align the same way while
+the items fit and fall back to `"start"` when they would overflow, so the
+start of the content stays visible:
+
+```tsx
+<node style={{ overflowX: "scroll", justifyContent: "safeCenter" }}>
+  {tabs}
+</node>
+```
+
+`"safeCenter"`, `"safeStart"`, `"safeEnd"`, `"safeFlexStart"` and
+`"safeFlexEnd"` are accepted by `justifyContent`, `alignItems`, `alignSelf`
+and `alignContent`. The other keywords (`"stretch"`, `"baseline"`, the
+`space*` family) have no safe form.
+
 ## Gaps
 
 `gap` spaces the children of a flex or grid container, between items only,

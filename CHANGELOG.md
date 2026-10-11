@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gradients, shadows, outlines, backdrop filters, images and pointer
   hit-testing follow the ellipse, and `transition: { borderRadius }` eases
   every radius. Built on Bevy 0.20's `CornerRadius`.
+- **Safe alignment keywords.** `"safeCenter"`, `"safeStart"`, `"safeEnd"`,
+  `"safeFlexStart"` and `"safeFlexEnd"` on `justifyContent`, `alignItems`,
+  `alignSelf` and `alignContent` (the first three on `justifyItems` and
+  `justifySelf`): aligned like the plain keyword while the content fits, at
+  the start once it would overflow, so a centered row that outgrows its
+  scroll container keeps its beginning reachable.
 
 ### Changed
 

@@ -27,12 +27,12 @@ export interface BevyStyle {
   maxWidth?: Animatable<Length>;
   maxHeight?: Animatable<Length>;
   aspectRatio?: Animatable<number>;
-  alignItems?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "baseline" | "stretch";
-  justifyItems?: "start" | "end" | "center" | "baseline" | "stretch";
-  alignSelf?: "auto" | "start" | "end" | "flexStart" | "flexEnd" | "center" | "baseline" | "stretch";
-  justifySelf?: "auto" | "start" | "end" | "center" | "baseline" | "stretch";
-  alignContent?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "stretch" | "spaceBetween" | "spaceEvenly" | "spaceAround";
-  justifyContent?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "stretch" | "spaceBetween" | "spaceEvenly" | "spaceAround";
+  alignItems?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "baseline" | "stretch" | "safeStart" | "safeEnd" | "safeFlexStart" | "safeFlexEnd" | "safeCenter";
+  justifyItems?: "start" | "end" | "center" | "baseline" | "stretch" | "safeStart" | "safeEnd" | "safeCenter";
+  alignSelf?: "auto" | "start" | "end" | "flexStart" | "flexEnd" | "center" | "baseline" | "stretch" | "safeStart" | "safeEnd" | "safeFlexStart" | "safeFlexEnd" | "safeCenter";
+  justifySelf?: "auto" | "start" | "end" | "center" | "baseline" | "stretch" | "safeStart" | "safeEnd" | "safeCenter";
+  alignContent?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "stretch" | "spaceBetween" | "spaceEvenly" | "spaceAround" | "safeStart" | "safeEnd" | "safeFlexStart" | "safeFlexEnd" | "safeCenter";
+  justifyContent?: "start" | "end" | "flexStart" | "flexEnd" | "center" | "stretch" | "spaceBetween" | "spaceEvenly" | "spaceAround" | "safeStart" | "safeEnd" | "safeFlexStart" | "safeFlexEnd" | "safeCenter";
   margin?: Rect;
   padding?: Rect;
   border?: Rect;

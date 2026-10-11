@@ -123,6 +123,10 @@ export function FlexDemo() {
         <FlexWrapDemo />
         <FlexGrowDemo />
       </DemoRow>
+
+      <DemoRow>
+        <SafeAlignDemo />
+      </DemoRow>
     </>
   );
 }
@@ -307,6 +311,68 @@ function FlexGrowCard() {
     </Stage>
   );
 }
+
+function SafeAlignDemo() {
+  return (
+    <Example
+      title="Safe alignment"
+      info={
+        <>
+          <Paragraph>
+            Centered items that don't fit overflow on both sides, and the part
+            before the container's start is out of reach — a scroll container
+            cannot scroll to it. The safe keywords (
+            <InlineCode>"safeCenter"</InlineCode>,{" "}
+            <InlineCode>"safeEnd"</InlineCode>, …) align the same way while the
+            items fit and fall back to the start once they overflow.
+          </Paragraph>
+          <Code lang="tsx">{`<node
+  style={{
+    width: 160,
+    overflowX: "clip",
+    justifyContent: "safeCenter",
+  }}
+>
+  {swatches}
+</node>`}</Code>
+        </>
+      }
+      demo={SafeAlignCard}
+    />
+  );
+}
+
+const SAFE_PAIR = ["center", "safeCenter"] as const;
+
+function SafeAlignCard() {
+  return (
+    <node style={{ flexDirection: "column", gap: 14, alignItems: "center" }}>
+      {SAFE_PAIR.map((justifyContent) => (
+        <node key={justifyContent} style={safeSample}>
+          <Stage style={{ ...safeFrame, justifyContent }}>
+            <Swatches animate={false} />
+          </Stage>
+          <InlineCode>{`justifyContent: ${justifyContent}`}</InlineCode>
+        </node>
+      ))}
+    </node>
+  );
+}
+
+const safeSample: BevyStyle = {
+  flexDirection: "column",
+  gap: 6,
+  alignItems: "center",
+};
+
+// Four 40px swatches and their gaps need 184px; the frame has 160. No
+// horizontal padding, so the clip edge is the frame's own.
+const safeFrame: BevyStyle = {
+  width: 162,
+  padding: "10px 0",
+  gap: 8,
+  overflowX: "clip",
+};
 
 const playground: BevyStyle = {
   width: 350,
