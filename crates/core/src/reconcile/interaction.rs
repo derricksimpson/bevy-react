@@ -12,7 +12,8 @@ use crate::ui_map::overlay_style;
 /// [`ReactInteraction`] or `FocusState` changed (hover/press/focus in or out) — or whose
 /// variants changed from a React re-render. The interaction axis: `None` → base,
 /// `Hovered` → base+hover, `Pressed` → base+hover+press; then `focus` overlays last
-/// (so an explicit `focusStyle` wins on conflicting fields). Both the interaction and
+/// (so an explicit `focusStyle` wins on conflicting fields), and `focusVisibleStyle`
+/// on top of it while the focus indicator shows. Both the interaction and
 /// `FocusState` are optional — a focus-only node has no `ReactInteraction`, and
 /// a hover-only node has no `FocusState`. Runs entirely on the Bevy side: no
 /// round-trip to JS, no React re-render on mouse move or focus change.
@@ -67,7 +68,8 @@ pub fn apply_interaction_styles(
         let state_changed = interaction.as_ref().is_some_and(|i| i.is_changed())
             || focus.as_ref().is_some_and(|f| f.is_changed());
         let interaction = interaction.as_deref().copied();
-        let focused = focus.as_deref().is_some_and(|f| f.focused);
+        let focus = focus.as_deref().copied().unwrap_or_default();
+        let focused = focus.focused;
         // What changed: a base-only delta's properties; on a state edge the
         // properties any variant sets (hover-in/out swaps exactly those);
         // after a variant swap or a promotion poke, everything.
@@ -102,6 +104,9 @@ pub fn apply_interaction_styles(
         };
         if focused {
             style = overlay_style(style.as_ref(), variants.focus.as_ref());
+        }
+        if focus.visible {
+            style = overlay_style(style.as_ref(), variants.focus_visible.as_ref());
         }
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
         let rnode = rnodes.get(entity).ok();
@@ -474,5 +479,46 @@ mod tests {
             app.update();
             assert_eq!(top(&app), Color::srgb(0.0, 0.0, 1.0), "{when}");
         }
+    }
+
+    /// `focusVisibleStyle` overlays `focusStyle` only while the focus
+    /// indicator shows.
+    #[test]
+    fn the_focus_visible_overlay_wins() {
+        let (mut app, ops_tx) = op_app();
+        app.add_systems(
+            Update,
+            apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+        );
+        ops_tx
+            .send(vec![create(
+                1,
+                "node",
+                serde_json::json!({
+                    "style": { "backgroundColor": "red", "border": 1, "borderColor": "red" },
+                    "focusStyle": { "backgroundColor": "blue" },
+                    "focusVisibleStyle": { "borderColor": "white" },
+                }),
+            )])
+            .unwrap();
+        app.update();
+        let node = ent(&app, 1);
+        let colors = |app: &App| {
+            (
+                app.world().get::<BackgroundColor>(node).unwrap().0,
+                app.world().get::<BorderColor>(node).unwrap().top,
+            )
+        };
+        let color = crate::ui_map::parse_color;
+        assert_eq!(colors(&app), (color("red"), color("red")));
+
+        let mut show = |focused, visible| {
+            *app.world_mut().get_mut::<FocusState>(node).unwrap() = FocusState { focused, visible };
+            app.update();
+            colors(&app)
+        };
+        assert_eq!(show(true, false), (color("blue"), color("red")));
+        assert_eq!(show(true, true), (color("blue"), color("white")));
+        assert_eq!(show(false, false), (color("red"), color("red")));
     }
 }

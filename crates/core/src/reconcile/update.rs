@@ -100,10 +100,7 @@ pub(super) fn apply_update(
     // Dropping the last variant removes `StyleVariants`, so no interaction
     // restyle will ever clear an overlay still showing (a hovered row losing
     // its `hoverStyle`): re-apply the base for every key the variants set.
-    let touched = if props.hover_style.is_some()
-        || props.press_style.is_some()
-        || props.focus_style.is_some()
-    {
+    let touched = if props.has_variant() {
         dirty.style
     } else {
         dirty.style.union(old_variant_keys)
@@ -121,11 +118,7 @@ pub(super) fn apply_update(
             &NodeCtx { promoted, kind },
         )
         .union(info.attr_invalidation(dirty.attrs));
-    if invalidation.contains(Invalidation::PROMOTION)
-        || dirty.hover_style
-        || dirty.press_style
-        || dirty.focus_style
-    {
+    if invalidation.contains(Invalidation::PROMOTION) || dirty.variant() {
         bridge.layer_dirty.insert(id);
     }
     // The writers this delta re-runs: the global ones reading a touched

@@ -157,7 +157,8 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   detection handles. Fixed per property, or **computed** per change from the
   old value, the new one, and the node (a promoted root's opacity or
   translation is composite-only).
-- **Style variant** — `hoverStyle`/`pressStyle`/`focusStyle`: overlays that
+- **Style variant** — `hoverStyle`/`pressStyle`/`focusStyle`/
+  `focusVisibleStyle`: overlays that
   carry every property. Promotion is a union over every state (base and
   variants), so an interaction never flips it.
 

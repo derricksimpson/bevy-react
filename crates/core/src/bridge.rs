@@ -86,6 +86,9 @@ pub struct StyleVariants {
     pub hover: Option<Style>,
     pub press: Option<Style>,
     pub focus: Option<Style>,
+    /// Overlaid on `focus` while the focus indicator shows
+    /// ([`FocusState::visible`]).
+    pub focus_visible: Option<Style>,
     /// The properties any variant sets — what a hover/press/focus edge
     /// re-applies (the merged value of anything else is the base's, already
     /// applied).
@@ -153,7 +156,8 @@ pub enum ReactInteraction {
     None,
 }
 
-/// Whether a node with a `focusStyle` ([`StyleVariants::focus`]) holds the
+/// Whether a node with a `focusStyle` or `focusVisibleStyle`
+/// ([`StyleVariants::focus`], [`StyleVariants::focus_visible`]) holds the
 /// input focus, and whether the focus indicator shows on it. *Mutated*, never
 /// inserted or removed on a focus change, so the interaction-style system
 /// re-merges on `Changed<FocusState>`. Written by `reconcile::sync_focus`

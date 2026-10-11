@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   swallows the click), can't be focused and never shows its `pressStyle`;
   `hoverStyle` and the `onPointer*` handlers keep working. Style it through
   `style`: there is no `disabledStyle`.
+- **`focusVisibleStyle`.** A fifth state style, overlaid on `focusStyle`
+  while the focus indicator shows: under keyboard navigation (Bevy's
+  `InputFocusVisible`, which Tab turns on and a pointer press turns off) and
+  always on a focused `<editableText>`. The place for a focus ring that a
+  mouse click shouldn't draw.
 - **`onPointerHover`.** Fires on each frame the pointer moved while over the
   element (between its `onPointerEnter` and `onPointerLeave`), a button held
   or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only

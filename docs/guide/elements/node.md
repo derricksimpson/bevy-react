@@ -48,6 +48,7 @@ export function App() {
 | ---------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------- |
 | `style`                                  | Layout and paint, as a `BevyStyle` object                 | [Style properties](../reference/style-properties.md) |
 | `hoverStyle`, `pressStyle`, `focusStyle` | Style overlays for interaction states                     | [State styles](#state-styles) below                  |
+| `focusVisibleStyle`                      | Style overlay while the focus indicator shows             | [Focus](../events/focus.md#focus-styles)             |
 | `onClick`, `onPointer*`                  | Click, drag and hover events                              | [Mouse](../events/mouse.md)                          |
 | `onWheel`                                | Raw wheel deltas over the element                         | [Mouse](../events/mouse.md)                          |
 | `tabIndex`, `onFocus`, `onBlur`          | Keyboard focus                                            | [Focus](../events/focus.md)                          |
@@ -70,9 +71,9 @@ returns to `"block"` on a `<button>`).
 
 ## State styles
 
-`hoverStyle`, `pressStyle` and `focusStyle` overlay the base `style` while
-the element is in that state. They are applied on the Bevy side: no React
-state, no re-render.
+`hoverStyle`, `pressStyle`, `focusStyle` and `focusVisibleStyle` overlay the
+base `style` while the element is in that state. They are applied on the
+Bevy side: no React state, no re-render.
 
 ```tsx
 <node
@@ -89,7 +90,8 @@ state, no re-render.
 
 - The overlays stack in order: `style`, then `hoverStyle` while hovered,
   then `pressStyle` while pressed (a pressed element is also hovered), then
-  `focusStyle` while focused, so `focusStyle` wins any conflict.
+  `focusStyle` while focused, then `focusVisibleStyle` while the focus
+  indicator shows, so the focus styles win any conflict.
 - A state style carries any style property and only changes what it sets.
   When the state ends, those properties return to the base style.
 - With a `transition` on the base style, state changes ease instead of
@@ -104,8 +106,10 @@ state, no re-render.
 - `{ animated }` bindings work in the base `style` only. A binding in a state
   style is ignored with a `styleBinding` warning.
 - `focusStyle` applies while the element holds the keyboard focus: an
-  `<editableText>`, or any element with a `tabIndex`. See
-  [Focus](../events/focus.md).
+  `<editableText>`, or any element with a `tabIndex`. `focusVisibleStyle`
+  adds to it only while the focus indicator shows (keyboard navigation, or
+  a text field): the place for a focus ring. See
+  [Focus](../events/focus.md#focus-styles).
 
 ## Pointer behavior
 

@@ -1289,7 +1289,12 @@ mod tests {
         // (interaction must never flip promotion): a hover/press/focus-only
         // filter promotes EAGERLY, even while not hovered, so the capture
         // exists before the first hover.
-        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+        for variant in [
+            "hoverStyle",
+            "pressStyle",
+            "focusStyle",
+            "focusVisibleStyle",
+        ] {
             let variant_filter = props(serde_json::json!({
                 "style": { "width": 10 },
                 (variant): { "filter": { "name": "blur" } },
@@ -1329,7 +1334,12 @@ mod tests {
         assert!(promoted(&opted_out, 0, false));
         // Variant-only presence promotes eagerly (interaction never flips
         // promotion), and element eligibility still applies.
-        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+        for variant in [
+            "hoverStyle",
+            "pressStyle",
+            "focusStyle",
+            "focusVisibleStyle",
+        ] {
             let variant_3d = props(serde_json::json!({
                 "style": { "width": 10 },
                 (variant): { "transform3d": { "rotateX": 10 } },
@@ -1361,7 +1371,12 @@ mod tests {
             promotion_reasons(&both_chains, 0, false).0,
             PromotionReasons::BACKDROP | PromotionReasons::FILTER
         );
-        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+        for variant in [
+            "hoverStyle",
+            "pressStyle",
+            "focusStyle",
+            "focusVisibleStyle",
+        ] {
             let variant_backdrop = props(serde_json::json!({
                 "style": { "width": 10 },
                 (variant): { "backdropFilter": { "name": "blur" } },
@@ -1396,7 +1411,12 @@ mod tests {
             promotion_reasons(&morph_and_filter, 0, false).0,
             PromotionReasons::MORPH | PromotionReasons::FILTER
         );
-        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+        for variant in [
+            "hoverStyle",
+            "pressStyle",
+            "focusStyle",
+            "focusVisibleStyle",
+        ] {
             let variant_morph = props(serde_json::json!({
                 "style": { "width": 10 },
                 (variant): { "morphFilter": { "key": "a", "name": "crossfade" } },

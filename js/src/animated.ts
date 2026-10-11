@@ -124,7 +124,8 @@ export type AnimatedValue = SharedValue | Binding;
  *  SVG default) until then. Style fields ignore `seed`.
  *
  *  Bindings are honored in the base `style` only; a wrapper inside
- *  `hoverStyle`/`pressStyle`/`focusStyle` is ignored with a warning. */
+ *  `hoverStyle`/`pressStyle`/`focusStyle`/`focusVisibleStyle` is ignored
+ *  with a warning. */
 export type Animatable<T> = T | { animated: AnimatedValue; seed?: T };
 
 // Per-runtime shared-value id allocator. The isolate persists across hot

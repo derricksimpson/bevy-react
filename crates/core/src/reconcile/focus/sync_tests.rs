@@ -330,14 +330,22 @@ fn a_disabled_button_is_not_focusable() {
 }
 
 /// The indicator bit follows bevy's `InputFocusVisible` while the focus
-/// stays put; a text input shows it however it was focused.
+/// stays put; a text input shows it however it was focused — and its
+/// `focusVisibleStyle` applies, with or without a `focusStyle`.
 #[test]
 fn the_indicator_follows_input_focus_visible() {
     let (mut app, tx, _rx) = focus_app(|_| {});
     let styled = || json!({ "tabIndex": 0, "focusStyle": { "backgroundColor": "blue" } });
     tx.send(vec![
         create(1, "node", styled()),
-        create(2, "editableText", styled()),
+        create(
+            2,
+            "editableText",
+            json!({
+                "style": { "backgroundColor": "red" },
+                "focusVisibleStyle": { "backgroundColor": "blue" },
+            }),
+        ),
     ])
     .unwrap();
     app.update();
@@ -363,6 +371,7 @@ fn the_indicator_follows_input_focus_visible() {
     app.update();
     assert_eq!(state(&app, 1), FocusState::default());
     assert_eq!(state(&app, 2), on(true));
+    assert_eq!(background(&app, 2), crate::ui_map::parse_color("blue"));
 }
 
 /// With bevy's `TabNavigationPlugin` (the app's opt-in) Tab walks the

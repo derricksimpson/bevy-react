@@ -533,7 +533,8 @@ export interface WheelEventData extends ModifierKeys {
   deltaMode: "line" | "pixel";
 }
 
-/** Hover/press/focus style overlays (the `VARIANTS` common group). */
+/** Hover/press/focus style overlays (the `VARIANTS` common group). They stack
+ *  in this order, each over the previous one. */
 export interface BevyVariantProps {
   /** Style overlaid on `style` while the element is hovered. */
   hoverStyle?: BevyStyle;
@@ -543,6 +544,12 @@ export interface BevyVariantProps {
    *  Bevy side from the element's focus state, so it needs no React `onFocus`
    *  round-trip (the focus analogue of `hoverStyle`/`pressStyle`). */
   focusStyle?: BevyStyle;
+  /** Style overlaid on `focusStyle` while the element is focused **and** the
+   *  focus indicator shows — CSS `:focus-visible`: under keyboard navigation
+   *  (Bevy's `InputFocusVisible`, which Tab turns on and a pointer press
+   *  turns off), and always on a focused `<editableText>`. The place for a
+   *  focus ring a mouse click shouldn't draw. */
+  focusVisibleStyle?: BevyStyle;
 }
 
 /** Keyboard focus (the `FOCUS` common group). */

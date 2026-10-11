@@ -7,7 +7,8 @@ import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // Keyboard focus: `tabIndex` makes any element focusable, `onFocus`/`onBlur`
-// report it, `focusStyle` shows it. The gallery adds Bevy's
+// report it, `focusStyle` shows it and `focusVisibleStyle` rings it under
+// keyboard navigation. The gallery adds Bevy's
 // `TabNavigationPlugin` (examples/demos/main.rs), so Tab walks the page.
 
 const USAGE = `<button
@@ -20,6 +21,14 @@ const USAGE = `<button
 >
   <text>One</text>
 </button>`;
+
+const RING = `<button
+  tabIndex={0}
+  focusStyle={{ borderColor: "#5cd9ff" }}
+  focusVisibleStyle={{
+    outline: { width: 2, offset: 2 },
+  }}
+/>`;
 
 const TAB_PLUGIN = `use bevy::input_focus::tab_navigation
   ::TabNavigationPlugin;
@@ -53,6 +62,10 @@ const PAGE: ExplanationData = {
           TabNavigationPlugin — one line of Rust.
         </ListItem>
         <ListItem>Enter and Space click a focused {"<button>"}.</ListItem>
+        <ListItem>
+          focusVisibleStyle adds a ring only when the keyboard moved the focus
+          (and always on a text field).
+        </ListItem>
       </List>
       <Code lang="rust">{TAB_PLUGIN}</Code>
     </>
@@ -86,6 +99,14 @@ function TabOrderExample() {
             button; a click on the card's background blurs.
           </Paragraph>
           <Code lang="tsx">{USAGE}</Code>
+          <Paragraph>
+            The outer ring is a <InlineCode>focusVisibleStyle</InlineCode>: it
+            overlays <InlineCode>focusStyle</InlineCode> only while the focus
+            indicator shows — after Tab, not after a click — and always on a
+            focused text field, like CSS <InlineCode>:focus-visible</InlineCode>
+            .
+          </Paragraph>
+          <Code lang="tsx">{RING}</Code>
         </>
       }
       demo={TabOrderCard}
@@ -118,6 +139,7 @@ function TabOrderCard() {
             style={chipStyle}
             hoverStyle={chipHoverStyle}
             focusStyle={focusStyle}
+            focusVisibleStyle={ringStyle}
           >
             <text style={chipLabelStyle}>{label}</text>
           </button>
@@ -128,6 +150,7 @@ function TabOrderCard() {
           style={chipStyle}
           hoverStyle={chipHoverStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         >
           <text style={chipLabelStyle}>Click only</text>
         </button>
@@ -138,6 +161,7 @@ function TabOrderCard() {
           ariaLabel="Field"
           style={fieldStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         />
       </node>
     </>
@@ -185,6 +209,7 @@ function ActivationCard() {
         style={chipStyle}
         hoverStyle={chipHoverStyle}
         focusStyle={focusStyle}
+        focusVisibleStyle={ringStyle}
       >
         <text style={chipLabelStyle}>Fire</text>
       </button>
@@ -234,6 +259,7 @@ function DisabledCard() {
           style={chipStyle}
           hoverStyle={chipHoverStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         >
           <text style={chipLabelStyle}>First</text>
         </button>
@@ -244,6 +270,7 @@ function DisabledCard() {
           style={chip}
           hoverStyle={off ? undefined : chipHoverStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         >
           <text style={off ? disabledLabelStyle : chipLabelStyle}>Middle</text>
         </button>
@@ -254,12 +281,14 @@ function DisabledCard() {
           ariaLabel="Field"
           style={off ? disabledFieldStyle : fieldStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         />
         <button
           tabIndex={0}
           style={chipStyle}
           hoverStyle={chipHoverStyle}
           focusStyle={focusStyle}
+          focusVisibleStyle={ringStyle}
         >
           <text style={chipLabelStyle}>Last</text>
         </button>
@@ -333,6 +362,12 @@ const disabledFieldStyle: BevyStyle = {
   backgroundColor: Colors.raised,
   color: Colors.textFaint,
   cursor: "notAllowed",
+};
+
+// Overlaid on `focusStyle` while the focus indicator shows: after Tab, and
+// always on a focused text field.
+const ringStyle: BevyStyle = {
+  outline: { width: 2, offset: 2, color: Colors.cyanBright },
 };
 
 // Applied on the Bevy side while the element holds the focus.

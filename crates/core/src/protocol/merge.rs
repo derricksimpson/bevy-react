@@ -8,19 +8,29 @@ use crate::style::{Style, StyleDirty};
 
 impl Props {
     /// Iterate every present style slot: the base [`Self::style`] plus the
-    /// hover/press/focus variants, in that order. THE definition of "all
-    /// style slots" for presence-based unions (layer promotion's
-    /// opacity/filter reasons, the create-time layer-dirty seed) — a new
-    /// variant slot extends this once, not each call site.
+    /// hover/press/focus/focus-visible variants, in that order. THE
+    /// definition of "all style slots" for presence-based unions (layer
+    /// promotion's opacity/filter reasons, the create-time layer-dirty seed)
+    /// — a new variant slot extends this once, not each call site.
     pub fn all_styles(&self) -> impl Iterator<Item = &Style> {
         [
             self.style.as_ref(),
             self.hover_style.as_ref(),
             self.press_style.as_ref(),
             self.focus_style.as_ref(),
+            self.focus_visible_style.as_ref(),
         ]
         .into_iter()
         .flatten()
+    }
+
+    /// Whether the node has a variant slot at all (it then carries a
+    /// [`StyleVariants`](crate::bridge::StyleVariants)).
+    pub fn has_variant(&self) -> bool {
+        self.hover_style.is_some()
+            || self.press_style.is_some()
+            || self.focus_style.is_some()
+            || self.focus_visible_style.is_some()
     }
 
     /// Take the event-like fields (see [`UpdateEvents`]) out of `self`,
@@ -73,6 +83,10 @@ impl Props {
         if delta.focus_style.is_some() {
             self.focus_style = delta.focus_style.take();
             dirty.focus_style = true;
+        }
+        if delta.focus_visible_style.is_some() {
+            self.focus_visible_style = delta.focus_visible_style.take();
+            dirty.focus_visible_style = true;
         }
         // Attributes replace ATOMICALLY per key (the variant-style
         // precedent): compare-before-set keeps an idempotent re-send silent.
@@ -144,6 +158,7 @@ impl Props {
                 "hoverStyle" => hover_style = None => hover_style,
                 "pressStyle" => press_style = None => press_style,
                 "focusStyle" => focus_style = None => focus_style,
+                "focusVisibleStyle" => focus_visible_style = None => focus_visible_style,
                 "onClick" => on_click = false => pointer,
                 "onPointerDown" => on_pointer_down = false => pointer,
                 "onPointerMove" => on_pointer_move = false => pointer,

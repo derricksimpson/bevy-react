@@ -192,7 +192,7 @@ description: Every style property bevy-react accepts, with its type and whether 
 
 # Style properties
 
-Every property the \`style\` prop (and the \`hoverStyle\`/\`pressStyle\`/\`focusStyle\`
+Every property the \`style\` prop (and the \`hoverStyle\`/\`pressStyle\`/\`focusStyle\`/\`focusVisibleStyle\`
 state styles) accepts, generated from the library's style registry. An app
 can register its own properties on top of these.
 

@@ -24,7 +24,7 @@ pub struct Common(u8);
 impl Common {
     /// `name` + `sharedTag`.
     pub const IDENTITY: Self = Self(1);
-    /// `hoverStyle` / `pressStyle` / `focusStyle`.
+    /// `hoverStyle` / `pressStyle` / `focusStyle` / `focusVisibleStyle`.
     pub const VARIANTS: Self = Self(1 << 1);
     /// `onClick` + the `onPointer*` handlers.
     pub const POINTER: Self = Self(1 << 2);

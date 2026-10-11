@@ -86,11 +86,29 @@ block the pointer or own clicks.
 - An element that unmounts while focused gives the focus up; its `onBlur`
   doesn't fire, like any handler of an unmounted element.
 
-## Focus style
+## Focus styles
 
-`focusStyle` overlays the element's `style` while it holds the focus. It is
+`focusStyle` overlays the element's `style` while it holds the focus, and
+`focusVisibleStyle` overlays that while the focus indicator shows. Both are
 applied on the Bevy side, in the frame the focus moves, with no React state.
 See [State styles](../elements/node.md#state-styles).
+
+```tsx
+<button
+  tabIndex={0}
+  focusStyle={{ backgroundColor: "#2a2e42" }}
+  focusVisibleStyle={{ outline: { width: 2, color: "#7aa2f7" } }}
+/>
+```
+
+The indicator follows Bevy's `InputFocusVisible`, like CSS `:focus-visible`:
+
+- Tab navigation turns it on, a pointer press turns it off. A button focused
+  by a click gets `focusStyle` only; reached with Tab it gets both.
+- A focused `<editableText>` always shows it, however it was focused.
+- Without Tab navigation (below) nothing turns it on, so outside text fields
+  `focusVisibleStyle` never applies unless your Rust code sets
+  `InputFocusVisible` (a gamepad menu would keep it `true`).
 
 ## Tab navigation
 
@@ -162,6 +180,10 @@ set the prop, not the component.
   `<editableText>`, a click, Tab, or Rust.
 - `autofocus` exists on `<editableText>` only.
 - No per-element key handlers: keys are the window-wide `keyDown`/`keyUp`.
+- A `tabIndex` alone doesn't make an element interactive for
+  [`PointerCapture`](mouse.md#keeping-input-away-from-the-world): a press on
+  it can still start a camera drag. A `<button>`, or any pointer handler or
+  `hoverStyle` on the element, claims the pointer.
 - No focus trap for dialogs, and no arrow-key or gamepad navigation: both
   are available from Rust (`TabGroup::modal`, Bevy's directional
   navigation).

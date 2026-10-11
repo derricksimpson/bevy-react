@@ -178,7 +178,12 @@ export function installStyleKinds(
 /** The style variant props are opaque style objects under `props`; a bad value
  *  inside one (e.g. a `hoverStyle` color) should flag that prop's row, so they
  *  are always scanned in addition to the kind's own candidates. */
-const VARIANT_STYLE_PROPS = ["hoverStyle", "pressStyle", "focusStyle"];
+const VARIANT_STYLE_PROPS = [
+  "hoverStyle",
+  "pressStyle",
+  "focusStyle",
+  "focusVisibleStyle",
+];
 
 /** Whether a retained wire value "contains" the offending raw string: the
  *  value itself, a whitespace/paren-delimited token of it (rect shorthands,

@@ -321,6 +321,7 @@ pub(crate) fn warn_variant_bindings(props: &Props) {
         ("hoverStyle", props.hover_style.as_ref()),
         ("pressStyle", props.press_style.as_ref()),
         ("focusStyle", props.focus_style.as_ref()),
+        ("focusVisibleStyle", props.focus_visible_style.as_ref()),
     ] {
         if derive_bindings(style).is_some() {
             let msg =

@@ -35,6 +35,9 @@ pub struct Props {
     /// Bevy side from the node's focus state, so focus styling needs no React
     /// round-trip.
     pub focus_style: Option<Style>,
+    /// Style overlaid on `focus_style` while the focus indicator shows (CSS
+    /// `:focus-visible`: keyboard navigation, or a focused text input).
+    pub focus_visible_style: Option<Style>,
     /// Whether this element has an `onClick` handler registered in JS.
     pub on_click: bool,
     /// Whether this element has an `onPointerDown` handler registered in JS.
@@ -130,6 +133,8 @@ pub struct PropsDirty {
     pub press_style: bool,
     /// `focusStyle` set or unset.
     pub focus_style: bool,
+    /// `focusVisibleStyle` set or unset.
+    pub focus_visible_style: bool,
     /// Any of `onClick` / `onPointerDown|Move|Up|Enter|Leave` toggled.
     pub pointer: bool,
     /// `onScroll` toggled.
@@ -157,7 +162,13 @@ impl PropsDirty {
     /// between a full re-stamp, an in-place masked base update, or nothing
     /// for a variant-less node).
     pub fn any_style_variant(&self) -> bool {
-        self.style.any() || self.hover_style || self.press_style || self.focus_style
+        self.style.any() || self.variant()
+    }
+
+    /// Whether a variant slot (`hoverStyle`, `pressStyle`, `focusStyle`,
+    /// `focusVisibleStyle`) was set or unset.
+    pub fn variant(&self) -> bool {
+        self.hover_style || self.press_style || self.focus_style || self.focus_visible_style
     }
 }
 
@@ -181,6 +192,7 @@ enum Key {
     HoverStyle,
     PressStyle,
     FocusStyle,
+    FocusVisibleStyle,
     OnClick,
     OnPointerDown,
     OnPointerMove,
@@ -212,6 +224,7 @@ fn common_key(name: &str) -> Option<(Key, Option<Common>)> {
         "hoverStyle" => (Key::HoverStyle, Some(Common::VARIANTS)),
         "pressStyle" => (Key::PressStyle, Some(Common::VARIANTS)),
         "focusStyle" => (Key::FocusStyle, Some(Common::VARIANTS)),
+        "focusVisibleStyle" => (Key::FocusVisibleStyle, Some(Common::VARIANTS)),
         "onClick" => (Key::OnClick, Some(Common::POINTER)),
         "onPointerDown" => (Key::OnPointerDown, Some(Common::POINTER)),
         "onPointerMove" => (Key::OnPointerMove, Some(Common::POINTER)),
@@ -333,6 +346,7 @@ impl<'de> serde::Deserialize<'de> for Props {
                         Key::HoverStyle => props.hover_style = map.next_value()?,
                         Key::PressStyle => props.press_style = map.next_value()?,
                         Key::FocusStyle => props.focus_style = map.next_value()?,
+                        Key::FocusVisibleStyle => props.focus_visible_style = map.next_value()?,
                         Key::OnClick => props.on_click = flag(&mut map)?,
                         Key::OnPointerDown => props.on_pointer_down = flag(&mut map)?,
                         Key::OnPointerMove => props.on_pointer_move = flag(&mut map)?,

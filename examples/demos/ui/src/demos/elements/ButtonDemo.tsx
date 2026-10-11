@@ -111,6 +111,10 @@ function BasicButtonCard() {
     <>
       <Readout label="Clicks" value={count} />
       <button
+        // Focusable, so Tab reaches it and Enter / Space click it; the ring
+        // shows only under keyboard navigation.
+        tabIndex={0}
+        focusVisibleStyle={focusRingStyle}
         disabled={disabled}
         onClick={() => setCount((c) => c + 1)}
         style={disabled ? disabledButtonStyle : basicButtonStyle}
@@ -178,6 +182,10 @@ const basicButtonStyle: BevyStyle = {
   borderRadius: 10,
   backgroundColor: Colors.brass,
   cursor: "pointer",
+};
+
+const focusRingStyle: BevyStyle = {
+  outline: { width: 2, offset: 2, color: Colors.cyan },
 };
 
 // `disabled` has no look of its own.

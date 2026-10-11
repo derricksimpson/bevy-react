@@ -117,8 +117,9 @@ const [sel, setSel] = useState({ start: 0, end: 0 });
   `InputFocus` to it. Clicking anywhere else blurs it, as on the web; so
   does Escape, and Rust clearing `InputFocus`. See
   [Focus](../events/focus.md).
-- `focusStyle` applies while the field is focused, with no React state.
-  `hoverStyle` and `pressStyle` work as on a `<node>`.
+- `focusStyle` applies while the field is focused, with no React state, and
+  so does `focusVisibleStyle`: a field shows its focus indicator however it
+  was focused. `hoverStyle` and `pressStyle` work as on a `<node>`.
 - When the focus moves between two fields, the first one's `onBlur` fires
   before the second one's `onFocus`.
 - Editing keys are Bevy's: arrows, Home and End, word moves and deletes with
@@ -177,6 +178,11 @@ See [Keyboard](../events/keyboard.md) for the event payload.
   [`<text>`](text.md). `textAlign` and `lineBreak` have no effect.
 - A click inside the field never fires an ancestor's `onClick`. The field
   itself takes no `onClick`, `onPointer*`, scroll or wheel props.
+- The field passes the pointer like a `<node>`: a hover-styled card around
+  it stays hovered, and a press on it also reaches an ancestor's
+  `onPointerDown`. Inside a draggable element, give the field
+  `focusPolicy: "block"` so selecting text doesn't drag it. See
+  [Focus policy](../styling/focus-policy.md).
 - Assistive tech sees a text input (a multi-line one with `multiline`),
   named by `ariaLabel`, with the current text as its value.
 

@@ -124,7 +124,7 @@ warning:
 | Group              | Props                                               |
 | ------------------ | --------------------------------------------------- |
 | `Common::IDENTITY` | `name`, `sharedTag`                                 |
-| `Common::VARIANTS` | `hoverStyle`, `pressStyle`, `focusStyle`            |
+| `Common::VARIANTS` | `hoverStyle`, `pressStyle`, `focusStyle`, …         |
 | `Common::POINTER`  | `onClick`, `onPointerEnter`, `onPointerLeave`, …    |
 | `Common::SCROLL`   | `onScroll`, `scrollTop`, `scrollLeft`, `scrollStep` |
 | `Common::WHEEL`    | `onWheel`                                           |
