@@ -129,5 +129,9 @@ kept above every app overlay.
   style that.
 - The root is its own UI root for [shared elements](../animations/shared-elements.md):
   a `sharedTag` never pairs a node inside a root with one outside it.
+- For one element pinned to the window that should stay an ordinary child
+  (same tree, same stacking order, shared elements with the rest of the
+  app), [`positionType: "fixed"`](../layout/positioning.md#fixed) is the
+  lighter tool.
 
 See [`<root>`](../reference/elements.md#root) in the element reference.

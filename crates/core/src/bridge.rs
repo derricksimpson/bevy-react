@@ -48,7 +48,8 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 /// survive for a while — don't rely on it). Read them freely; own everything else:
 ///
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
-///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`, `Visibility`,
+///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`,
+///   `FixedNode` (`positionType: "fixed"`), `Visibility`,
 ///   `UiTransform`, `EmSize` (the root size, `RemSize`, on an element with no
 ///   font), `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
 ///   `TextLayout`, `ScrollPosition`, `FocusPolicy`/`Pickable` (the

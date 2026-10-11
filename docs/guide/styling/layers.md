@@ -161,6 +161,11 @@ every frame.
 
 - Content outside the node's border box (plus filter reach) is cut off
   while the node is a layer, unlike CSS opacity.
+- A [`positionType: "fixed"`](../layout/positioning.md#fixed) descendant is
+  not part of the layer. It is drawn on its own over the layer's image, even
+  over layer content that comes after it in the tree, and the layer's
+  opacity, filters, morph and 3D transform don't apply to it. Put them on
+  the fixed node itself.
 - Inside a `<surface>`, pointer hits ignore `transform3d` and land where the
   node would be without its transform; on the window they follow it.
 - Pixels written behind bevy-react's back freeze in a cached layer until

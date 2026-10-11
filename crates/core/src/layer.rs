@@ -43,7 +43,7 @@ use bevy::asset::asset_changed::AssetChanged;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, UiGlobalTransform};
+use bevy::ui::{ComputedNode, FixedNode, UiGlobalTransform};
 
 use crate::protocol::{NodeId, animatable::AnimatableField, props::Props};
 use crate::style::props::{
@@ -148,10 +148,15 @@ pub struct LayerCaptureRect {
 
 /// Which layer root each node under a promoted subtree belongs to
 /// (ancestor-or-self, nearest wins — so nested layers map their interior,
-/// including the inner root's own paint, to the *inner* root). Rebuilt from
-/// scratch by [`sync_layer_geometry`] on **structural** frames (a hierarchy
-/// edit, a promotion flip, a root (de)activating); on pure geometry frames
-/// the maps persist and only the touched roots' rects/hashes refresh.
+/// including the inner root's own paint, to the *inner* root). A `FixedNode`
+/// is a boundary: it and its subtree belong to no layer above it (bevy lays
+/// it out against the viewport, unclipped and untouched by its ancestors'
+/// transforms — as a member it would be cropped to the capture window and
+/// re-capture the layer on every scroll). Rebuilt from scratch by
+/// [`sync_layer_geometry`] on **structural** frames (a hierarchy edit, a
+/// promotion flip, a `FixedNode` flip, a root (de)activating); on pure
+/// geometry frames the maps persist and only the touched roots'
+/// rects/hashes refresh.
 /// Extracted to the render world to route stolen phase items. A layer root's
 /// *composite quad* is the one thing that routes by [`Self::enclosing`]
 /// instead (it draws inside the parent layer's capture, or the screen when
@@ -557,11 +562,12 @@ fn reapply_text_fold(
 /// filtered by every reader, and a reparent ticks `Changed<Children>`.
 ///
 /// Signals split into **structural** ones (any `Children` change or removal,
-/// a promotion flip) that rebuild the maps from scratch, and **geometry** ones
-/// (`ComputedNode`/`UiGlobalTransform`/resolved-chain changes) that refresh
-/// only the roots they map to through the preserved membership — so a node
-/// moving outside every layer (an orbit-camera anchor) costs one lookup, and
-/// a translating layer re-hashes itself alone.
+/// a promotion flip, a `FixedNode` added or removed — a node leaving or
+/// rejoining its ancestors' layers) that rebuild the maps from scratch, and
+/// **geometry** ones (`ComputedNode`/`UiGlobalTransform`/resolved-chain
+/// changes) that refresh only the roots they map to through the preserved
+/// membership — so a node moving outside every layer (an orbit-camera
+/// anchor) costs one lookup, and a translating layer re-hashes itself alone.
 ///
 /// The scrollbar exclusion: `bevy_ui_widgets`' `update_scrollbar_thumb`
 /// (`.after(ui_layout_system)`, both inside `UiSystems::Layout`) and
@@ -597,6 +603,8 @@ pub struct LayerGeometryGate<'w, 's> {
     removed_children: RemovedComponents<'w, 's, Children>,
     added_roots: Query<'w, 's, (), Added<PromotedLayer>>,
     removed_roots: RemovedComponents<'w, 's, PromotedLayer>,
+    added_fixed: Query<'w, 's, (), Added<FixedNode>>,
+    removed_fixed: RemovedComponents<'w, 's, FixedNode>,
     // The resolved chains feed the capture rect's outset (and the size folded
     // into the geometry hash) without any geometry/promotion tick.
     changed_chains: Query<
@@ -634,10 +642,13 @@ impl LayerGeometryGate<'_, '_> {
     ) -> GeometryWork {
         let structural = !self.changed_children.is_empty()
             || !self.added_roots.is_empty()
+            || !self.added_fixed.is_empty()
             || self.removed_children.read().next().is_some()
-            || self.removed_roots.read().next().is_some();
+            || self.removed_roots.read().next().is_some()
+            || self.removed_fixed.read().next().is_some();
         self.removed_children.clear();
         self.removed_roots.clear();
+        self.removed_fixed.clear();
         let removed_chains: Vec<Entity> = self
             .removed_filter_chains
             .read()
@@ -742,6 +753,7 @@ pub fn sync_layer_geometry(
     parents: Query<&'static ChildOf>,
     existing_rects: Query<&'static LayerCaptureRect>,
     geometry: Query<(&'static ComputedNode, &'static UiGlobalTransform)>,
+    fixed: Query<(), With<FixedNode>>,
     mut membership: ResMut<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
     mut repaints: ResMut<LayerRepaintState>,
@@ -758,6 +770,8 @@ pub fn sync_layer_geometry(
         parents: &parents,
         existing_rects: &existing_rects,
         geometry: &geometry,
+        // `None` while no node is fixed: the walks then test nothing.
+        fixed: (!fixed.is_empty()).then_some(&fixed),
         registry: &mut registry,
         repaints: &mut repaints,
     };
@@ -806,6 +820,7 @@ struct RootSync<'a, 'cw, 'cs, 'w, 's> {
     parents: &'a Query<'w, 's, &'static ChildOf>,
     existing_rects: &'a Query<'w, 's, &'static LayerCaptureRect>,
     geometry: &'a Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+    fixed: Option<&'a Query<'w, 's, (), With<FixedNode>>>,
     registry: &'a mut LayersRegistry,
     repaints: &'a mut LayerRepaintState,
 }
@@ -904,6 +919,7 @@ impl RootSync<'_, '_, '_, '_, '_> {
             children: self.children,
             roots: self.root_markers,
             geometry: self.geometry,
+            fixed: self.fixed,
         };
         let mut mode = match &mut membership {
             RootMode::Rebuild(m) => WalkMode::Claim(&mut m.node_to_layer),
@@ -920,11 +936,15 @@ impl RootSync<'_, '_, '_, '_, '_> {
             return true; // Refresh: enclosing/depth are structural, unchanged.
         };
         // The quad target: nearest strictly-enclosing promoted ancestor. Depth
-        // = number of promoted ancestors + 1.
+        // = number of promoted ancestors + 1. Nothing above a fixed node
+        // encloses it or the roots under it: their quads draw on screen.
         let mut enclosing = None;
         let mut depth = 1u32;
         let mut cursor = root;
         while let Ok(parent) = self.parents.get(cursor) {
+            if self.fixed.is_some_and(|fixed| fixed.contains(cursor)) {
+                break;
+            }
             cursor = parent.parent();
             if self.root_markers.contains(cursor) {
                 if enclosing.is_none() {
@@ -965,6 +985,7 @@ struct SubtreeWalk<'a, 'w, 's> {
     children: &'a Query<'w, 's, &'static Children>,
     roots: &'a Query<'w, 's, (), With<PromotedLayer>>,
     geometry: &'a Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+    fixed: Option<&'a Query<'w, 's, (), With<FixedNode>>>,
 }
 
 impl SubtreeWalk<'_, '_, '_> {
@@ -981,6 +1002,15 @@ impl SubtreeWalk<'_, '_, '_> {
         hash: &mut u64,
         mode: &mut WalkMode<'_>,
     ) {
+        // A fixed node is not this layer's content (see `LayerMembership`):
+        // it and its subtree draw on screen at their own stack position.
+        // Promoted itself, its own walk claims it.
+        if self
+            .fixed
+            .is_some_and(|fixed| node != self.dfs_root && fixed.contains(node))
+        {
+            return;
+        }
         // Geometry-hash contribution: a node is `dfs_root`'s *content* while
         // the incoming claim context is still `dfs_root` itself — that covers
         // its directly-owned members plus each directly nested layer root
@@ -1186,6 +1216,9 @@ pub fn resolve_layer_repaints(
         }
     }
 }
+
+#[cfg(test)]
+mod fixed_tests;
 
 #[cfg(test)]
 mod tests {

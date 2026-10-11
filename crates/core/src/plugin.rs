@@ -1050,6 +1050,13 @@ impl Plugin for ReactUiPlugin {
             PostUpdate,
             crate::em_size::sync_em_size_to_rem.before(bevy::ui::UiSystems::Layout),
         );
+        // `positionType: "fixed"` → bevy's `FixedNode`. After every `Update`
+        // writer of `Node.display` and of the request marker; the edge puts a
+        // sync point before layout, which re-roots the node the same frame.
+        app.add_systems(
+            PostUpdate,
+            crate::fixed::sync_fixed_nodes.before(bevy::ui::UiSystems::Layout),
+        );
         // The built-in requests and rumble messages (their payload types are
         // registered by `register_builtin_bindings`). `bevy.gamepad.getAll()`
         // is the pull companion to `gamepadConnected` for late-mounted

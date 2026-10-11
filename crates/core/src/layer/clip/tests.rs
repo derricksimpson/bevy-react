@@ -13,12 +13,12 @@ use crate::layer::{
 use crate::protocol::NodeId;
 use bevy::math::Affine2;
 use bevy::ui::update::update_clipping_system;
-use bevy::ui::{ComputedNode, Overflow, OverrideClip, UiGlobalTransform};
+use bevy::ui::{ComputedNode, FixedNode, Overflow, OverrideClip, UiGlobalTransform};
 
 /// World + schedule harness like `layer::tests::geometry_world`, with Bevy's
 /// clipping ahead of it and [`sync_layer_clips`] between geometry and repaint
 /// resolution — the production ordering.
-fn clip_world() -> (World, Schedule) {
+pub(crate) fn clip_world() -> (World, Schedule) {
     let mut world = World::new();
     world.init_resource::<LayerMembership>();
     world.init_resource::<LayersRegistry>();
@@ -41,7 +41,7 @@ fn clip_world() -> (World, Schedule) {
 /// A laid-out plain UI node under `parent`: `center` is the
 /// `UiGlobalTransform` translation (node center), so the border box is
 /// `center ± size/2`.
-fn node(
+pub(crate) fn node(
     world: &mut World,
     parent: Option<Entity>,
     size: Vec2,
@@ -69,7 +69,7 @@ fn node(
 
 /// A promoted layer root (adds the marker components
 /// [`sync_layer_geometry`] requires on top of [`node`]).
-fn layer(
+pub(crate) fn layer(
     world: &mut World,
     parent: Option<Entity>,
     id: NodeId,
@@ -78,6 +78,12 @@ fn layer(
     overflow: Overflow,
 ) -> Entity {
     let e = node(world, parent, size, center, overflow);
+    promote(world, e, id);
+    e
+}
+
+/// Promote a [`node`] to a layer root.
+pub(crate) fn promote(world: &mut World, e: Entity, id: NodeId) {
     world.entity_mut(e).insert((
         crate::bridge::ReactNode(id),
         LayerGroupAlpha(1.0),
@@ -85,7 +91,6 @@ fn layer(
             reasons: PromotionReasons(PromotionReasons::FILTER),
         },
     ));
-    e
 }
 
 /// The clip `e`'s items are extracted with — its `CalculatedClip` inside the
@@ -360,6 +365,78 @@ fn override_clip_and_display_none() {
     assert_eq!(interior(&mut world, hidden), Some(Rect::default()));
     assert_eq!(interior(&mut world, hidden_child), Some(Rect::default()));
     assert_eq!(interior(&mut world, plain), Some(root_rect));
+}
+
+/// A `FixedNode` restarts the clip list (bevy discards the inherited clip
+/// there), and a clipper under it can equal one above the layer root bit for
+/// bit — here a fixed panel clipping at the scrollport's own rect. Were the
+/// fixed subtree a member, its rect would be taken for the inherited one and
+/// stripped. It is not a member, so it has no row and extracts with its real
+/// clip; promoted, it is a top-level root whose quad nothing above clips.
+#[test]
+fn fixed_subtree_is_never_stripped() {
+    let (mut world, mut schedule) = clip_world();
+    let port_rect = Rect::new(0.0, 0.0, 400.0, 400.0);
+    let port = node(
+        &mut world,
+        None,
+        Vec2::splat(400.0),
+        Vec2::splat(200.0),
+        Overflow::clip(),
+    );
+    let root = layer(
+        &mut world,
+        Some(port),
+        1,
+        Vec2::splat(200.0),
+        Vec2::splat(100.0),
+        Overflow::visible(),
+    );
+    let member = node(
+        &mut world,
+        Some(root),
+        Vec2::splat(40.0),
+        Vec2::splat(100.0),
+        Overflow::visible(),
+    );
+    // Same size, same place, same overflow as the port.
+    let fixed = node(
+        &mut world,
+        Some(root),
+        Vec2::splat(400.0),
+        Vec2::splat(200.0),
+        Overflow::clip(),
+    );
+    world.entity_mut(fixed).insert(FixedNode);
+    let leaf = node(
+        &mut world,
+        Some(fixed),
+        Vec2::splat(40.0),
+        Vec2::splat(100.0),
+        Overflow::visible(),
+    );
+    schedule.run(&mut world);
+
+    assert_eq!(real(&world, fixed), None, "bevy resets the clip there");
+    assert_eq!(
+        world.get::<CalculatedClip>(leaf),
+        world.get::<CalculatedClip>(member),
+        "the corner: the list under the reset equals the one above the root"
+    );
+    assert_eq!(interior(&mut world, member), None, "a member: stripped");
+    assert_eq!(interior(&mut world, leaf), Some(port_rect), "kept whole");
+    let strip = &world.resource::<LayerClips>().strip;
+    assert!(!strip.contains_key(&fixed) && !strip.contains_key(&leaf));
+
+    // Promoted itself: its own top-level layer. The port above the outer
+    // root does not clip its quad, and its children keep its own clip.
+    promote(&mut world, fixed, 2);
+    schedule.run(&mut world);
+    assert_eq!(quad(&world, root), Some(port_rect));
+    assert_eq!(quad(&world, fixed), None, "unclipped: it left the port");
+    assert_eq!(interior(&mut world, fixed), None);
+    assert_eq!(interior(&mut world, leaf), Some(port_rect));
+    assert!(world.resource::<LayerClips>().strip.get(&leaf).is_none());
 }
 
 /// THE regression the whole change exists for: scrolling (uniform

@@ -1,5 +1,5 @@
 ---
-description: Take a node out of the layout flow with positionType absolute, offset it with left, right, top and bottom, and know what the offsets are relative to.
+description: Take a node out of the layout flow with positionType absolute or fixed, offset it with left, right, top and bottom, and know what the offsets are relative to.
 demo: Positioning
 covers: [style.positionType, style.left, style.right, style.top, style.bottom]
 ---
@@ -10,7 +10,8 @@ covers: [style.positionType, style.left, style.right, style.top, style.bottom]
 grid layout, and the inset keys `left`, `right`, `top` and `bottom` offset
 it. A `"relative"` node (the default) stays in the flow and is nudged from
 its laid-out spot; an `"absolute"` node leaves the flow and is placed
-against its parent's box.
+against its parent's box; a `"fixed"` node leaves the flow and is placed
+against the window.
 
 ## Usage
 
@@ -91,13 +92,60 @@ layout:
   container it scrolls with the content (see
   [Overflow](../styling/overflow.md)).
 
+## Fixed
+
+A `"fixed"` node is placed against the viewport instead of its parent: the
+window for the app's tree and for a [`<root>`](../elements/root.md), the
+texture for content inside a [`<surface>`](../elements/surface.md).
+
+```tsx
+<node style={{ height: 200, overflowY: "scroll" }}>
+  {rows}
+  <node
+    style={{
+      positionType: "fixed",
+      right: 24,
+      bottom: 24,
+    }}
+  >
+    <text>Saved</text>
+  </node>
+</node>
+```
+
+- Insets, percentages and stretching work as for `"absolute"`, measured
+  from the viewport's edges: `right: 24` and `bottom: 24` pin the node to
+  the bottom right corner, and all four insets at `0` cover the viewport.
+- Set an inset on each axis. Without one the node sits at the viewport's
+  left or top edge, not where it would have been in the flow. Its own
+  `justifySelf` and `alignSelf` place it on such an axis instead:
+  `"center"` on both centers it in the viewport.
+- It takes no space in its parent and adds nothing to a scroll container's
+  scroll range.
+- No ancestor scrolls, clips or transforms it. It stays put while its scroll
+  container and the page scroll, an ancestor's `overflow` doesn't cut it,
+  and an ancestor's `transform` neither moves nor scales it. Its own
+  `transform` applies.
+- An ancestor with `display: "none"` hides it, like any other descendant.
+
+For everything that isn't layout it is still a child of its parent:
+
+- It paints in tree order: over its parent and earlier siblings, under
+  whatever comes later in the tree. Add `globalZIndex` to float it above
+  everything (see [Z-index](../styling/z-index.md)).
+- Its events bubble to its React ancestors, and it unmounts with its parent.
+
+Each fixed node is laid out on its own, which suits a handful of badges,
+toasts and panels. It is not the tool for hundreds of list rows.
+
 ## Overlays outside the tree
 
-There is no `"fixed"`, `"sticky"` or `"static"` position. For UI that must
-stay put relative to the window or a 3D object, use an element made for it:
+A fixed node stays in your tree. For UI that should leave it, use an
+element made for it:
 
 - [`<root>`](../elements/root.md) is a separate window-filling root that
-  floats above your app's tree, for modals, toasts and panels.
+  floats above your app's tree, with its own stacking order and its own
+  entry in the devtools: for modals and screens of overlay UI.
 - [`<anchor>`](../elements/anchor.md) follows a 3D entity's projected
   position on screen.
 
@@ -109,13 +157,29 @@ stay put relative to the window or a 3D object, use an element made for it:
 - The insets have no transition channel of their own;
   `transition: { layout }` eases the move when a static inset changes. See
   [Style transitions](../animations/style-transitions.md).
+- Switching `positionType` to or from `"fixed"` snaps, also with
+  `transition: { layout }`: the two positions are measured against
+  different boxes. To glide between them, swap two nodes that share a
+  `sharedTag` (see [Shared elements](../animations/shared-elements.md)).
 
 ## Limits
 
-- The containing block is always the parent: an absolute node can't escape
-  to a grandparent's box. Restructure the tree, or use `<root>`.
-- `positionType` takes only `"relative"` and `"absolute"`; anything else
-  falls back to `"relative"` with a devtools warning.
+- An absolute node's containing block is always its parent: it can't escape
+  to a grandparent's box. Restructure the tree, or use `"fixed"`.
+- A fixed node's containing block is always the viewport. Unlike in CSS, an
+  ancestor with a `transform`, a `transform3d` or a `filter` does not become
+  its containing block.
+- A fixed node is not part of an ancestor's
+  [composited layer](../styling/layers.md): an ancestor's `opacity`,
+  `filter`, `backdropFilter`, `morphFilter` and `transform3d` don't apply to
+  it (CSS would fade it with an ancestor's opacity). It is drawn on its own,
+  over the layer's image. Put such a style on the fixed node itself.
+- On [`<root>`](../elements/root.md), [`<surface>`](../elements/surface.md)
+  and [`<anchor>`](../elements/anchor.md), which are placed by their own
+  rules, `"fixed"` means `"absolute"`.
+- There is no `"sticky"` or `"static"`. `positionType` takes `"relative"`,
+  `"absolute"` and `"fixed"`; anything else falls back to `"relative"` with
+  a devtools warning.
 
 See [`positionType`](../reference/style-properties.md#positionType),
 [`left`](../reference/style-properties.md#left),

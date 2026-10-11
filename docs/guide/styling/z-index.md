@@ -55,6 +55,10 @@ The blue node paints over the red one, although it comes first.
 - Layout is unaffected: the node keeps its place and size in its parent's
   layout. Only paint and hit-test order change.
 - Unset by default. Removing it puts the node back into its parent's order.
+- For an overlay pinned to the window, pair it with
+  [`positionType: "fixed"`](../layout/positioning.md#fixed): the position
+  takes the node out of its ancestors' layout, scrolling and clipping,
+  `globalZIndex` out of their paint order.
 
 Built-in overlays use the same scale: a [`<root>`](../elements/root.md)
 defaults to `globalZIndex: 1`, just above the app's tree, and
@@ -67,7 +71,9 @@ a `<root>`'s value with its own style.
 - Inside a [composited layer](layers.md) (for example under a node with
   `opacity` and children), a `globalZIndex` descendant is drawn as part of
   the layer's image: it can't rise above the layer's surroundings, and
-  whatever it paints outside the layer root's box is cut off.
+  whatever it paints outside the layer root's box is cut off. A
+  `positionType: "fixed"` node is not part of its ancestors' layers, so
+  `globalZIndex` works on it there too.
 
 See [`zIndex`](../reference/style-properties.md#zIndex) and
 [`globalZIndex`](../reference/style-properties.md#globalZIndex) in the style

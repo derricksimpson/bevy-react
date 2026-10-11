@@ -4,7 +4,7 @@
 use bevy::ui::{
     AlignContent, AlignItems, AlignSelf, BoxSizing, Display, FlexDirection, FlexWrap, GridAutoFlow,
     GridPlacement, GridTrack, JustifyContent, JustifyItems, JustifySelf, OverflowAxis,
-    PositionType, RepeatedGridTrack,
+    RepeatedGridTrack,
 };
 
 use super::inv::*;
@@ -33,7 +33,26 @@ pub static BOX_SIZING: StyleProperty<BoxSizing> = StyleProperty {
     invalidate: Invalidate::Fixed(LAYOUT_PAINT),
     ..StyleProperty::with_codec("boxSizing", Codec::keyword(&BOX_SIZING_KEYWORDS))
 };
-pub static POSITION_TYPE: StyleProperty<PositionType> = StyleProperty {
+/// The value of [`POSITION_TYPE`]. `Fixed` is ours — bevy's `PositionType`
+/// has no such variant: the node is `Absolute` plus bevy's `FixedNode`
+/// (`crate::fixed`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PositionMode {
+    #[default]
+    Relative,
+    Absolute,
+    Fixed,
+}
+
+/// `"relative"` (the default) keeps the node in its parent's flow, moved by
+/// its insets; `"absolute"` takes it out of the flow and places it against
+/// the parent's padding box; `"fixed"` places it against the viewport of
+/// its UI camera instead (the window, a `<surface>`'s texture): it takes no
+/// space, and its ancestors' scrolling, clipping, transforms and composited
+/// layers do not reach it. It keeps its place in the tree for paint order,
+/// events and lifetime. On a `<root>`, `<surface>` or `<anchor>` `"fixed"`
+/// is `"absolute"`.
+pub static POSITION_TYPE: StyleProperty<PositionMode> = StyleProperty {
     invalidate: Invalidate::Fixed(LAYOUT_PAINT),
     ..StyleProperty::with_codec("positionType", Codec::keyword(&POSITION_TYPE_KEYWORDS))
 };

@@ -12,7 +12,7 @@ import type { BackgroundImage, BevyTransform, BevyTransform3d, BevyTransition, B
 export interface BevyStyle {
   display?: "flex" | "grid" | "block" | "none";
   boxSizing?: "borderBox" | "border-box" | "contentBox" | "content-box";
-  positionType?: "absolute" | "relative";
+  positionType?: "absolute" | "relative" | "fixed";
   overflowX?: "visible" | "clip" | "hidden" | "scroll";
   overflowY?: "visible" | "clip" | "hidden" | "scroll";
   scrollbarWidth?: number;

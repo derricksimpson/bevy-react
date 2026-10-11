@@ -32,8 +32,8 @@ use crate::style::props::{
     GRID_AUTO_COLUMNS, GRID_AUTO_FLOW, GRID_AUTO_ROWS, GRID_COLUMN, GRID_ROW,
     GRID_TEMPLATE_COLUMNS, GRID_TEMPLATE_ROWS, HEIGHT, JUSTIFY_CONTENT, JUSTIFY_ITEMS,
     JUSTIFY_SELF, LEFT, LETTER_SPACING, LINE_BREAK, LINE_HEIGHT, MARGIN, MAX_HEIGHT, MAX_WIDTH,
-    MIN_HEIGHT, MIN_WIDTH, OPACITY, OVERFLOW_X, OVERFLOW_Y, PADDING, POSITION_TYPE, RIGHT, ROW_GAP,
-    SCROLLBAR, SCROLLBAR_WIDTH, TEXT_ALIGN, TEXT_SHADOW, TOP, WIDTH, Z_INDEX,
+    MIN_HEIGHT, MIN_WIDTH, OPACITY, OVERFLOW_X, OVERFLOW_Y, PADDING, POSITION_TYPE, PositionMode,
+    RIGHT, ROW_GAP, SCROLLBAR, SCROLLBAR_WIDTH, TEXT_ALIGN, TEXT_SHADOW, TOP, WIDTH, Z_INDEX,
 };
 use crate::style::{Invalidation, WriterCtx, WriterMask};
 
@@ -132,9 +132,13 @@ pub(crate) fn node_from(style: Option<&Style>) -> Node {
     if let Some(v) = s.get(&BOX_SIZING).copied() {
         node.box_sizing = v;
     }
-    if let Some(v) = s.get(&POSITION_TYPE).copied() {
-        node.position_type = v;
-    }
+    // `"fixed"` is absolute against the viewport: bevy's `FixedNode` makes
+    // the node its own layout root (`crate::fixed`), and only an absolute one
+    // has insets that pin it to an edge.
+    node.position_type = match s.get(&POSITION_TYPE) {
+        None | Some(PositionMode::Relative) => PositionType::Relative,
+        Some(PositionMode::Absolute | PositionMode::Fixed) => PositionType::Absolute,
+    };
     if let Some(v) = s.get(&OVERFLOW_X).copied() {
         node.overflow.x = v;
     }

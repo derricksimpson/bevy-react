@@ -56,6 +56,7 @@ pub mod diag;
 mod devtools;
 mod em_size;
 mod event;
+mod fixed;
 // The extension contract (feature-facing components, sets, registries).
 pub mod element;
 pub mod elements;

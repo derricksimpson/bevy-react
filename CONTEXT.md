@@ -24,15 +24,23 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   `UiGlobalTransform` (ADR-0001). Children ride the translation but not the
   scale: a size change eases the node's own box, its content stays crisp.
 - **Laid-out rect** — a node's local layout rect in its parent's layout
-  space (taffy `location + size`, physical px, rounded or not exactly as
-  bevy displays it — the node's effective `LayoutConfig`):
-  excludes parent scroll and every `UiTransform`. The layout transition's
-  measurement.
+  space — the viewport's for a **fixed node** — (taffy `location + size`,
+  physical px, rounded or not exactly as bevy displays it — the node's
+  effective `LayoutConfig`): excludes parent scroll and every `UiTransform`.
+  The layout transition's measurement.
+- **Fixed node** — a node with `positionType: "fixed"`, carrying bevy's
+  `FixedNode`: its own layout root, laid out against the viewport of its UI
+  camera and untouched by its ancestors' layout, scroll, clip and
+  transforms, yet still their child for stack order, events, visibility and
+  lifetime. A boundary for every engine that assumes a child lives in its
+  parent's frame: it is a member of no ancestor's composited layer, its
+  laid-out rect is in viewport space, and it does not ride an ancestor's
+  layout transition. Becoming or ceasing to be one snaps (the mount rule).
 - **Layout rounding** — bevy snapping every laid-out rect to whole physical
   pixels, per node and inherited (`LayoutConfig::use_rounding`), exposed as
   the `layoutRounding` style (unset inherits — downward only, restarting at
-  each detached root — so it goes on the parent that lays out the animated
-  node and its neighbours; root default on). Any size
+  each detached root and each fixed node — so it goes on the parent that
+  lays out the animated node and its neighbours; root default on). Any size
   animated through real layout steps under rounding and its neighbours hop;
   an unrounded subtree glides, and pays with soft edges and blurred text
   wherever content rests on a half pixel. The layout channel measures with

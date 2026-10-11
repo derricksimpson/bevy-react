@@ -33,7 +33,7 @@ use bevy::input::mouse::MouseButton;
 use bevy::picking::backend::PointerHits;
 use bevy::picking::pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation};
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
+use bevy::ui::{ComputedNode, FixedNode, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
 
 use super::transform3d::LayerTransform3dMatrix;
@@ -115,19 +115,33 @@ pub fn invert_screen_to_plane(model: &Mat4, screen: Vec2) -> Option<Vec2> {
     Some(local)
 }
 
+/// The layer root `entity` draws into, if any. Climbs `ChildOf` first — a
+/// picked leaf may be a text span outside the membership map — and stops at
+/// a `FixedNode`: its subtree left the layers above it
+/// ([`LayerMembership`]), so it is on screen where layout put it. `fixed`
+/// is `None` while no node is fixed.
+fn layer_of(
+    entity: Entity,
+    membership: &LayerMembership,
+    child_of: &Query<&ChildOf>,
+    fixed: Option<&Query<(), With<FixedNode>>>,
+) -> Option<Entity> {
+    let member = crate::reconcile::climb(entity, child_of, |e| {
+        membership.node_to_layer.contains_key(&e) || fixed.is_some_and(|fixed| fixed.contains(e))
+    })?;
+    membership.node_to_layer.get(&member).copied()
+}
+
 /// The nearest visually-transformed (non-identity matrix) layer root in
-/// `entity`'s enclosing-or-self layer chain, if any. Climbs `ChildOf` first —
-/// a picked leaf may be a text span outside the membership map.
+/// `entity`'s enclosing-or-self layer chain, if any.
 fn transformed_root_of(
     entity: Entity,
     membership: &LayerMembership,
     matrices: &Query<&LayerTransform3dMatrix>,
     child_of: &Query<&ChildOf>,
+    fixed: Option<&Query<(), With<FixedNode>>>,
 ) -> Option<Entity> {
-    let member = crate::reconcile::climb(entity, child_of, |e| {
-        membership.node_to_layer.contains_key(&e)
-    })?;
-    let mut root = *membership.node_to_layer.get(&member)?;
+    let mut root = layer_of(entity, membership, child_of, fixed)?;
     loop {
         if matrices.get(root).is_ok_and(|m| m.remaps_picking()) {
             return Some(root);
@@ -142,15 +156,10 @@ fn member_of_layer(
     layer: Entity,
     membership: &LayerMembership,
     child_of: &Query<&ChildOf>,
+    fixed: Option<&Query<(), With<FixedNode>>>,
 ) -> bool {
-    let Some(member) = crate::reconcile::climb(entity, child_of, |e| {
-        membership.node_to_layer.contains_key(&e)
-    }) else {
+    let Some(mut root) = layer_of(entity, membership, child_of, fixed) else {
         return false;
-    };
-    let mut root = match membership.node_to_layer.get(&member) {
-        Some(&root) => root,
-        None => return false,
     };
     loop {
         if root == layer {
@@ -318,22 +327,24 @@ pub fn suppress_transformed_layer_hits(
     membership: Res<LayerMembership>,
     matrices: Query<&LayerTransform3dMatrix>,
     child_of: Query<&ChildOf>,
+    fixed: Query<(), With<FixedNode>>,
 ) {
     let Some(state) = state else {
         return;
     };
+    let fixed = (!fixed.is_empty()).then_some(&fixed);
     for hits in hits.read() {
         if hits.pointer == state.id {
             match state.over_layer {
-                Some(layer) => hits
-                    .picks
-                    .retain(|(entity, _)| member_of_layer(*entity, layer, &membership, &child_of)),
+                Some(layer) => hits.picks.retain(|(entity, _)| {
+                    member_of_layer(*entity, layer, &membership, &child_of, fixed)
+                }),
                 // Parked off-bounds: nothing it reports is meaningful.
                 None => hits.picks.clear(),
             }
         } else if matches!(hits.pointer, PointerId::Mouse) {
             hits.picks.retain(|(entity, _)| {
-                transformed_root_of(*entity, &membership, &matrices, &child_of).is_none()
+                transformed_root_of(*entity, &membership, &matrices, &child_of, fixed).is_none()
             });
         }
     }
@@ -429,7 +440,9 @@ mod tests {
 
     /// Suppression: the mouse loses hits on transformed-layer members (but
     /// keeps unrelated ones); the virtual pointer keeps only members of the
-    /// layer it is over, and everything when parked is dropped.
+    /// layer it is over, and everything when parked is dropped. A fixed
+    /// node under a member left the layer with its subtree — it is on
+    /// screen where layout put it, so it is the mouse's.
     #[test]
     fn suppression_scopes_hits_per_pointer() {
         use bevy::ecs::system::RunSystemOnce;
@@ -448,6 +461,8 @@ mod tests {
             .id();
         let member = world.spawn(ChildOf(transformed_root)).id();
         let unrelated = world.spawn_empty().id();
+        let fixed = world.spawn((FixedNode, ChildOf(member))).id();
+        let fixed_leaf = world.spawn(ChildOf(fixed)).id();
 
         let mut membership = LayerMembership::default();
         membership
@@ -483,15 +498,19 @@ mod tests {
                 .collect()
         };
 
-        // Mouse: member dropped, unrelated kept.
-        send(&mut world, PointerId::Mouse, &[member, unrelated]);
-        // Virtual pointer over the layer: member kept, unrelated dropped.
-        send(&mut world, virtual_id, &[member, unrelated]);
+        // Mouse: member dropped, unrelated and the fixed subtree kept.
+        let all = [member, unrelated, fixed, fixed_leaf];
+        send(&mut world, PointerId::Mouse, &all);
+        // Virtual pointer over the layer: member kept, the rest dropped.
+        send(&mut world, virtual_id, &all);
         world
             .run_system_once(suppress_transformed_layer_hits)
             .unwrap();
         let got = survivors(&mut world);
-        assert_eq!(got[0], (PointerId::Mouse, vec![unrelated]));
+        assert_eq!(
+            got[0],
+            (PointerId::Mouse, vec![unrelated, fixed, fixed_leaf])
+        );
         assert_eq!(got[1], (virtual_id, vec![member]));
 
         // Parked virtual pointer: everything dropped.

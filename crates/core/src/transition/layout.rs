@@ -40,12 +40,19 @@
 //! root-space rects, so their delta composes against the parent's *pristine*
 //! frame ([`LayoutDelta::root_anchored`]) — an ancestor's own delta is never
 //! stacked on top.
+//!
+//! A `FixedNode` is the one node whose layout space is not its parent's:
+//! bevy lays it out as its own root, so its rect is in the **viewport's**
+//! space, its frame is the identity, and nothing above it — a frame, a
+//! `LayoutConfig`, an ancestor's delta — reaches it or its subtree
+//! ([`layout_chain`]). Becoming or ceasing to be one changes what the stored
+//! rect means, so that frame snaps ([`LayoutChannel::set_viewport_space`]).
 
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::math::Affine2;
 use bevy::prelude::*;
 use bevy::ui::ui_surface::UiSurface;
-use bevy::ui::{ComputedNode, LayoutConfig, UiGlobalTransform};
+use bevy::ui::{ComputedNode, FixedNode, LayoutConfig, UiGlobalTransform};
 
 use super::channels::{ProgressChannel, SIZE_ROWS};
 use super::shared::{SharedRect, SharedReflow};
@@ -104,6 +111,9 @@ pub struct LayoutChannel {
     /// An ancestor animated last frame (set per frame by the layout drive):
     /// a settling flight parks in [`SharedMode::Landed`] instead of `Off`.
     hold: bool,
+    /// The rect is in the viewport's space (a `FixedNode`), not the parent's
+    /// ([`Self::set_viewport_space`]).
+    viewport_space: bool,
 }
 
 /// Who is writing this node's rect this frame besides layout itself — the
@@ -414,6 +424,18 @@ impl LayoutChannel {
         *self = Self::default();
     }
 
+    /// Which space this frame's rect is in: the viewport's for a `FixedNode`,
+    /// else the parent's. A rect read in the other one is no starting point
+    /// for an ease, so crossing over forgets it — the node snaps to its new
+    /// place (the mount rule). A glide between the two is what `sharedTag`
+    /// is for.
+    pub fn set_viewport_space(&mut self, viewport_space: bool) {
+        if self.viewport_space != viewport_space {
+            self.reset();
+            self.viewport_space = viewport_space;
+        }
+    }
+
     /// Whether an ease is currently running.
     pub fn in_flight(&self) -> bool {
         self.channel.runner.is_some()
@@ -486,6 +508,26 @@ fn seed_in_parent_space(
     ])
 }
 
+/// `entity`, then its ancestors up to and including the nearest `FixedNode`:
+/// everything bevy's layout walk inherits through. A fixed node is laid out
+/// from the viewport as its own root — no ancestor's frame, rounding or
+/// re-flow reaches it or what is under it.
+///
+/// `fixed` is `None` while no node is fixed (the chain is then every
+/// ancestor, and no lookup is paid for).
+fn layout_chain(
+    entity: Entity,
+    parents: &Query<&ChildOf>,
+    fixed: Option<&Query<(), With<FixedNode>>>,
+) -> impl Iterator<Item = Entity> {
+    let mut done = false;
+    std::iter::once(entity)
+        .chain(parents.iter_ancestors(entity))
+        .take_while(move |&e| {
+            !std::mem::replace(&mut done, fixed.is_some_and(|fixed| fixed.contains(e)))
+        })
+}
+
 /// The seed frame shows the natural box through the FLIP `scale`, and the
 /// corner radii bevy resolved at the natural size would shrink with it (a
 /// 36px circle seed on a 72px thumb, shown as a 200px hero at 0.36, would
@@ -538,7 +580,9 @@ type LayoutNodeQuery = (
 /// `G' = P' · T(Δ) · P⁻¹ · G · S(s)` — the translation lands in the parent's
 /// frame, the scale is applied last so it affects only the node's own paint;
 /// its children compose from `P' · T(Δ) · P⁻¹ · G` (translated, unscaled).
-/// A plain descendant is `G' = P' · P⁻¹ · G`. A settled node writes nothing —
+/// A plain descendant is `G' = P' · P⁻¹ · G`. For a `FixedNode` `P` is the
+/// identity (its rect is the viewport's), and the walk never enters one from
+/// above: it does not ride an ancestor's delta. A settled node writes nothing —
 /// bevy's own value stands and change detection stays quiet. On a shared
 /// flight's seed frame the children's offsets from the node's center (the
 /// translation of `G⁻¹ · G_child`) are scaled by `s` too — the children
@@ -560,6 +604,7 @@ pub fn drive_layout_transitions(
     children: Query<&Children>,
     mut globals: Query<&mut UiGlobalTransform>,
     layout_configs: Query<&LayoutConfig>,
+    fixed: Query<(), With<FixedNode>>,
     // The nodes that composed a delta LAST frame — the hold gate for a
     // settling shared flight (`LayoutChannel::hold_shared`). One frame of lag
     // is harmless: an ancestor that settled last frame writes nothing now, so
@@ -581,6 +626,22 @@ pub fn drive_layout_transitions(
     // A singular frame (a `transform: { scale: 0 }` ancestor) has no local
     // frame to recover; its subtree is invisible anyway.
     let inverse = |a: Affine2| (a.matrix2.determinant().abs() > f32::EPSILON).then(|| a.inverse());
+    // `None` while no node is fixed: every lookup below is then skipped.
+    let fixed = (!fixed.is_empty()).then_some(&fixed);
+    let is_fixed = |entity: Entity| fixed.is_some_and(|fixed| fixed.contains(entity));
+    // The frame a node's layout rect lives in, this frame's pristine one:
+    // its parent's global — the viewport (identity) for a fixed node.
+    let frame_of = |entity: Entity| {
+        if is_fixed(entity) {
+            return Affine2::IDENTITY;
+        }
+        parents
+            .get(entity)
+            .ok()
+            .and_then(|c| globals.get(c.parent()).ok())
+            .map(|g| **g)
+            .unwrap_or(Affine2::IDENTITY)
+    };
     for (entity, input, mut state, anim, mut computed) in &mut states {
         // A shared flight drives the rect with the `sharedElement` spec
         // captured at the seed (a variant swap can't drop it mid-flight),
@@ -605,17 +666,17 @@ pub fn drive_layout_transitions(
             state.shared.reflow = None;
             continue;
         };
+        state.layout.set_viewport_space(is_fixed(entity));
         // Rounded or not exactly as bevy's walk consumed it — the node's
-        // effective `LayoutConfig` (its own, else the nearest ancestor's,
-        // else bevy's default of rounding): the change frame then shows the
-        // previously DISPLAYED rect, not a rounded/unrounded neighbour of it
-        // (a ≤1px shimmer otherwise, and a ≤0.5px composition error on a
-        // `layoutRounding: false` subtree).
+        // effective `LayoutConfig` (its own, else the nearest ancestor's up
+        // to a fixed node, else bevy's default of rounding): the change
+        // frame then shows the previously DISPLAYED rect, not a
+        // rounded/unrounded neighbour of it (a ≤1px shimmer otherwise, and a
+        // ≤0.5px composition error on a `layoutRounding: false` subtree).
         // Free when no node sets `layoutRounding` (bevy's walk then rounds
         // everything): the ancestor walk only runs once a config exists.
         let use_rounding = layout_configs.is_empty()
-            || std::iter::once(entity)
-                .chain(parents.iter_ancestors(entity))
+            || layout_chain(entity, &parents, fixed)
                 .find_map(|e| layout_configs.get(e).ok())
                 .is_none_or(|c| c.use_rounding);
         let Ok((layout, _unrounded)) = ui_surface.get_layout(entity, use_rounding) else {
@@ -635,12 +696,7 @@ pub fn drive_layout_transitions(
             .get(entity)
             .map(|g| **g)
             .unwrap_or(Affine2::IDENTITY);
-        let parent = parents
-            .get(entity)
-            .ok()
-            .and_then(|c| globals.get(c.parent()).ok())
-            .map(|g| **g)
-            .unwrap_or(Affine2::IDENTITY);
+        let parent = frame_of(entity);
         // A root-space rect in this node's parent layout space, off THIS
         // frame's pristine globals (see `seed_in_parent_space`).
         let in_parent_space = |rect: SharedRect| seed_in_parent_space(rect, own, parent, measured);
@@ -650,8 +706,8 @@ pub fn drive_layout_transitions(
         let in_flight = state.layout.shared_active();
         let external = match state.shared.reflow.as_mut() {
             Some(r) if in_flight => {
-                let ancestors: Vec<(Entity, Vec2)> = parents
-                    .iter_ancestors(entity)
+                let ancestors: Vec<(Entity, Vec2)> = layout_chain(entity, &parents, fixed)
+                    .skip(1)
                     .filter_map(|a| flying.get(&a).map(|step| (a, *step)))
                     .collect();
                 r.observe(own.translation, size, &ancestors)
@@ -732,8 +788,8 @@ pub fn drive_layout_transitions(
         // while still returning the destination — root-anchored too.
         let shared_flight = state.layout.shared_active();
         if shared_flight {
-            let hold = parents
-                .iter_ancestors(entity)
+            let hold = layout_chain(entity, &parents, fixed)
+                .skip(1)
                 .any(|a| last_animating.contains(&a));
             state.layout.hold_shared(hold);
         }
@@ -761,9 +817,13 @@ pub fn drive_layout_transitions(
     last_animating.extend(deltas.keys().copied());
 
     // Root-most animating nodes; every other animating node is reached by
-    // the top-down walk from its nearest animating ancestor.
-    let has_animating_ancestor =
-        |e: Entity| parents.iter_ancestors(e).any(|a| deltas.contains_key(&a));
+    // the top-down walk from its nearest animating ancestor. A fixed node
+    // has none: the walk stops short of it.
+    let has_animating_ancestor = |e: Entity| {
+        layout_chain(e, &parents, fixed)
+            .skip(1)
+            .any(|a| deltas.contains_key(&a))
+    };
     let roots: Vec<Entity> = deltas
         .keys()
         .copied()
@@ -775,12 +835,7 @@ pub fn drive_layout_transitions(
     // center — the parent's FLIP scale on its seed frame, else one)
     let mut stack: Vec<(Entity, Affine2, Affine2, Affine2, Vec2)> = Vec::new();
     for root in roots {
-        let parent = parents
-            .get(root)
-            .ok()
-            .and_then(|c| globals.get(c.parent()).ok())
-            .map(|g| **g)
-            .unwrap_or(Affine2::IDENTITY);
+        let parent = frame_of(root);
         if let Some(inv) = inverse(parent) {
             stack.push((root, inv, parent, parent, Vec2::ONE));
         }
@@ -828,6 +883,10 @@ pub fn drive_layout_transitions(
             && let Some(inv) = inverse(pristine)
         {
             for &child in kids {
+                // Its own layout root: it does not ride this node.
+                if is_fixed(child) {
+                    continue;
+                }
                 stack.push((child, inv, pristine, for_children, child_offsets));
             }
         }

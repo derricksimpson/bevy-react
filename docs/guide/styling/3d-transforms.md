@@ -161,6 +161,8 @@ function FlipCard() {
   the nearest transformed ancestor only.
 - No depth sorting, `transform-style: preserve-3d` or
   `backface-visibility`.
+- A [`positionType: "fixed"`](../layout/positioning.md#fixed) descendant
+  stays flat on the screen: it is not part of the transformed image.
 - Content scaled up past its layout size looks soft.
 - The layer limits apply: content painted outside the node's border box is
   cut off, and inside a `<surface>` the node renders untransformed. See

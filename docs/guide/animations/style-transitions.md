@@ -211,6 +211,9 @@ a changed flex or grid property, a window resize.
   changes.
 - An `{ animated }` binding on one of the node's layout fields (`width`,
   `left`, …) owns its rect, and the layout channel stays out of its way.
+- A [`positionType: "fixed"`](../layout/positioning.md#fixed) node eases
+  against the viewport and does not move with an ancestor's layout
+  transition. Switching a node to or from `"fixed"` snaps.
 
 ### Layout and size together
 

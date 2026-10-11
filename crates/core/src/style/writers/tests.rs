@@ -238,3 +238,70 @@ fn span_recolor_pushes_layer_content_dirt() {
         Some(parse_color("blue"))
     );
 }
+
+/// `positionType: "fixed"` stamps the request marker next to an absolute
+/// `Node` — on create (the layout writer rides the spawn bundle; this one
+/// does not), on an update either way, through a hover variant — and never
+/// on a detached element, where it means absolute.
+#[test]
+fn position_fixed_writer_stamps_and_clears() {
+    use crate::fixed::PositionFixed;
+    let (mut app, ops_tx) = op_app();
+    app.add_systems(
+        Update,
+        crate::reconcile::apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+    );
+    let style = |position: &str| serde_json::json!({ "style": { "positionType": position } });
+    ops_tx
+        .send(vec![
+            create(1, "node", style("fixed")),
+            create(2, "root", style("fixed")),
+            create(
+                3,
+                "node",
+                serde_json::json!({ "hoverStyle": { "positionType": "fixed" } }),
+            ),
+        ])
+        .unwrap();
+    app.update();
+    let marked = |app: &App, id| app.world().entity(ent(app, id)).contains::<PositionFixed>();
+    let position = |app: &App, id| {
+        let node = app.world().entity(ent(app, id)).get::<Node>().unwrap();
+        node.position_type
+    };
+    assert!(marked(&app, 1));
+    assert_eq!(position(&app, 1), PositionType::Absolute);
+    assert!(!marked(&app, 2), "a <root> already fills its viewport");
+    assert_eq!(position(&app, 2), PositionType::Absolute);
+    assert!(!marked(&app, 3));
+
+    let hovered = ent(&app, 3);
+    for (state, fixed) in [
+        (crate::ReactInteraction::Hovered, true),
+        (crate::ReactInteraction::None, false),
+    ] {
+        app.world_mut().entity_mut(hovered).insert(state);
+        app.update();
+        assert_eq!(marked(&app, 3), fixed, "{state:?}");
+    }
+
+    for (position_type, fixed) in [("absolute", false), ("fixed", true)] {
+        ops_tx
+            .send(vec![update_delta(1, props(style(position_type)), &[], &[])])
+            .unwrap();
+        app.update();
+        assert_eq!(marked(&app, 1), fixed, "{position_type}");
+        assert_eq!(position(&app, 1), PositionType::Absolute);
+    }
+    ops_tx
+        .send(vec![update_delta(
+            1,
+            Props::default(),
+            &[],
+            &["positionType"],
+        )])
+        .unwrap();
+    app.update();
+    assert!(!marked(&app, 1));
+    assert_eq!(position(&app, 1), PositionType::Relative);
+}

@@ -49,11 +49,18 @@
 //! fail if either changes). Where the lists differ the member keeps its whole
 //! clip:
 //!
-//! - An `OverrideClip`/`FixedNode` between the root and the member restarts
-//!   the member's list. (The one unsound corner: a clipper below such a reset
-//!   whose rect and transform equal, bit for bit, a clipper above the root
-//!   would be taken for it — the capture is then under-clipped by a rect the
-//!   quad clamp applies anyway. bevy-react inserts neither component.)
+//! - An `OverrideClip` between the root and the member restarts the member's
+//!   list. (The one unsound corner: a clipper below such a reset whose rect
+//!   and transform equal, bit for bit, a clipper above the root would be
+//!   taken for it — the capture is then under-clipped by a rect the quad
+//!   clamp applies anyway. bevy-react never inserts the component.)
+//! - A `FixedNode` restarts the list too, but never between a root and one
+//!   of its members: membership stops at a fixed node
+//!   ([`LayerMembership`]), so its subtree has no rows here and extracts
+//!   with its real clips. That matters: a `positionType: "fixed"` panel
+//!   clipping at the size of a scrollport above the root is the corner
+//!   above made common. A fixed *root* starts from an empty list, like any
+//!   unclipped root.
 //! - A fully clipped member (`display: none`, a clipper with a singular
 //!   transform) stays fully clipped. When the cause sits **above** the root
 //!   the whole subtree extracts fully clipped and the capture is empty; it is
@@ -202,7 +209,7 @@ pub(crate) fn screen_clip(rect: Rect) -> CalculatedClip {
 /// How many leading rects of `clip` are `above`'s whole list — the part of a
 /// node's clip that comes from above the layer root whose inherited clip is
 /// `above`. 0 when the root is unclipped or either is fully clipped, and when
-/// the lists differ (an `OverrideClip`/`FixedNode` reset in between).
+/// the lists differ (an `OverrideClip` reset in between).
 fn inherited_len(clip: &CalculatedClip, above: Option<&CalculatedClip>) -> usize {
     match (clip.rects(), above.and_then(CalculatedClip::rects)) {
         (Some(rects), Some(above)) if rects.starts_with(above) => above.len(),

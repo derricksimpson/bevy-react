@@ -54,7 +54,9 @@ layout, such as `transform`, `opacity` and the visual easing of
 - The setting restarts at every separate UI root: content inside
   [`<root>`](../elements/root.md), [`<surface>`](../elements/surface.md)
   and [`<anchor>`](../elements/anchor.md) is rounded again unless it sets
-  `layoutRounding` itself.
+  `layoutRounding` itself. So is a
+  [`positionType: "fixed"`](../layout/positioning.md#fixed) node and its
+  subtree, which are laid out on their own.
 
 ## The cost
 

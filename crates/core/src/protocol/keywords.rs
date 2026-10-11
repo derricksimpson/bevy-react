@@ -6,7 +6,7 @@ use std::fmt;
 use bevy::text::{FontWeight, Justify, LineBreak};
 use bevy::ui::{
     AlignContent, AlignItems, AlignSelf, BoxSizing, Display, FlexDirection, FlexWrap, FocusPolicy,
-    GridAutoFlow, JustifyContent, JustifyItems, JustifySelf, OverflowAxis, PositionType,
+    GridAutoFlow, JustifyContent, JustifyItems, JustifySelf, OverflowAxis,
 };
 
 use serde::de::{self, Deserializer, Visitor};
@@ -16,7 +16,7 @@ use super::decode_warn;
 use crate::image_rendering::ImageRendering;
 use crate::scrollbar::{HorizontalEdge, ScrollbarPosition, VerticalEdge};
 use crate::style::KeywordTable;
-use crate::style::props::LayerCache;
+use crate::style::props::{LayerCache, PositionMode};
 
 /// A keyword kind's [`KeywordTable`] (`as TABLE` in `keyword_fields!`) for
 /// the property codec that decodes through it; nothing for a kind that only
@@ -100,8 +100,8 @@ keyword_fields! {
         "borderBox" | "border-box" => BorderBox,
         "contentBox" | "content-box" => ContentBox,
     }
-    fn de_position_type("positionType") -> PositionType as POSITION_TYPE_KEYWORDS {
-        "absolute" => Absolute, "relative" => Relative,
+    fn de_position_type("positionType") -> PositionMode as POSITION_TYPE_KEYWORDS {
+        "absolute" => Absolute, "relative" => Relative, "fixed" => Fixed,
     }
     fn de_overflow_axis("overflow") -> OverflowAxis as OVERFLOW_KEYWORDS {
         "visible" => Visible, "clip" => Clip, "hidden" => Hidden, "scroll" => Scroll,

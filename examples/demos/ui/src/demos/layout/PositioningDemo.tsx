@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import {
+  Button,
   ControlColumn,
   DemoRow,
   Example,
@@ -9,9 +10,10 @@ import {
   RadioOption,
   Slider,
   Stage,
+  stage,
 } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors } from "@/theme";
+import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
@@ -34,7 +36,9 @@ const PAGE: ExplanationData = {
       <Paragraph>
         A <InlineCode>"relative"</InlineCode> node (the default) is nudged from
         its laid-out spot; an <InlineCode>"absolute"</InlineCode> node leaves
-        the flow and is placed against its direct parent's padding box.
+        the flow and is placed against its direct parent's padding box; a{" "}
+        <InlineCode>"fixed"</InlineCode> node is placed against the window, and
+        no ancestor scrolls or clips it.
       </Paragraph>
     </>
   ),
@@ -51,6 +55,9 @@ export function PositioningDemo() {
       <DemoRow>
         <CornerDemo />
         <StretchDemo />
+      </DemoRow>
+      <DemoRow>
+        <FixedDemo />
       </DemoRow>
     </>
   );
@@ -286,6 +293,85 @@ function StretchCard() {
   );
 }
 
+type Pinned = "absolute" | "fixed";
+
+const PINNED_OPTIONS: RadioOption<Pinned>[] = [
+  { label: "absolute", value: "absolute" },
+  { label: "fixed", value: "fixed" },
+];
+
+function FixedDemo() {
+  return (
+    <Example
+      title="Fixed to the window"
+      info={
+        <>
+          <Paragraph>
+            A fixed node is placed against the window, not its parent. It takes
+            no space and no ancestor scrolls or clips it: the badge leaves the
+            list for the window's corner, and stays there while the list and the
+            page scroll.
+          </Paragraph>
+          <Code lang="tsx">{`<node
+  style={{
+    positionType: "fixed",
+    right: 24,
+    bottom: 24,
+  }}
+/>`}</Code>
+          <Paragraph>
+            It is still a child of the list: it unmounts with it, its events
+            bubble through it, and it paints in tree order (
+            <InlineCode>globalZIndex</InlineCode> lifts it above everything). An
+            ancestor's <InlineCode>opacity</InlineCode>,{" "}
+            <InlineCode>filter</InlineCode> or 3D transform doesn't reach it.
+          </Paragraph>
+        </>
+      }
+      demo={FixedCard}
+    />
+  );
+}
+
+// Starts absolute: the page shouldn't open with a badge over the window, and
+// the Details modal mounts a second instance of this card.
+function FixedCard() {
+  const [position, setPosition] = useState<Pinned>("absolute");
+  // Which end the button last sent the list to. Not mirrored from
+  // `onScroll`: feeding the eased offset back as `scrollTop` would retarget
+  // the glide to where it already is.
+  const [atEnd, setAtEnd] = useState(false);
+  return (
+    <ControlColumn>
+      {/* `scrollTop` is a node prop Stage doesn't forward. */}
+      <node style={{ ...stage, ...list }} scrollTop={atEnd ? 10_000 : 0}>
+        {ROWS.map((row) => (
+          <node key={row} style={listRow}>
+            <text style={listLabel}>{row}</text>
+          </node>
+        ))}
+        <node
+          style={{
+            ...pill,
+            positionType: position,
+            ...(position === "fixed" ? windowCorner : listCorner),
+          }}
+        >
+          <BoxLabel>{position}</BoxLabel>
+        </node>
+      </node>
+      <node style={controls}>
+        <Radio
+          options={PINNED_OPTIONS}
+          value={position}
+          onChange={setPosition}
+        />
+        <Button onClick={() => setAtEnd(!atEnd)}>Scroll the list</Button>
+      </node>
+    </ControlColumn>
+  );
+}
+
 function Cell({ label, color }: { label: string; color: string }) {
   return (
     <node style={{ ...cell, backgroundColor: color }}>
@@ -320,4 +406,48 @@ const badge: BevyStyle = {
   height: 20,
   borderRadius: 10,
   backgroundColor: Colors.rose,
+};
+
+const ROWS = Array.from({ length: 8 }, (_, i) => `Row ${i + 1}`);
+
+const list: BevyStyle = {
+  flexDirection: "column",
+  gap: 6,
+  width: 240,
+  height: 140,
+  overflowY: "scroll",
+  scrollbarWidth: 8,
+  transition: { scroll: { duration: 300, easing: "easeOut" } },
+};
+
+const listRow: BevyStyle = {
+  flexShrink: 0,
+  padding: "8px 12px",
+  borderRadius: 6,
+  border: 1,
+  borderColor: Colors.line,
+  backgroundColor: Colors.raised,
+};
+
+const listLabel: BevyStyle = {
+  color: Colors.textBody,
+  fontSize: FontSizes.sm,
+};
+
+const pill: BevyStyle = {
+  padding: { horizontal: 12, vertical: 6 },
+  borderRadius: 14,
+  backgroundColor: Colors.rose,
+};
+
+// In the list: scrolls with the rows and is clipped with them.
+const listCorner: BevyStyle = { top: 12, right: 20 };
+
+// On the window: nothing above it moves or cuts it.
+const windowCorner: BevyStyle = { right: 24, bottom: 24 };
+
+const controls: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 12,
 };

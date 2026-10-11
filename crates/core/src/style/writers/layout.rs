@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 use bevy::ui::LayoutConfig;
 
+use crate::fixed::PositionFixed;
 use crate::scrollbar::ScrollbarConfig;
 use crate::style::Style;
 use crate::style::props::*;
@@ -67,6 +68,23 @@ pub static LAYOUT_WRITER: Writer = Writer {
 fn apply_layout(_ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
     ec.queue(set_if_neq_or_insert(node_from(Some(s))));
 }
+
+/// `positionType: "fixed"` stamps the request for bevy's `FixedNode`
+/// (`crate::fixed::sync_fixed_nodes` grants it). A detached element
+/// (`<root>`, `<surface>`, `<anchor>`) is already out of its parent's layout
+/// and owns its placement: `"fixed"` is plain `"absolute"` there.
+pub static POSITION_FIXED_WRITER: Writer = Writer {
+    reads: &[&POSITION_TYPE],
+    attrs: &[],
+    writes: &[owns::<PositionFixed>],
+    apply: |ctx, s, ec| {
+        if !ctx.flags.detached && s.get(&POSITION_TYPE) == Some(&PositionMode::Fixed) {
+            ec.insert(PositionFixed);
+        } else {
+            remove_unless_fresh::<PositionFixed>(ec, ctx.fresh);
+        }
+    },
+};
 
 /// `ZIndex` — `Node`-required: never removed; absent writes the default.
 pub static Z_INDEX_WRITER: Writer = Writer {

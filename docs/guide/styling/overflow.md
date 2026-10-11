@@ -48,6 +48,9 @@ Each axis takes one of four values:
 - Clipping cuts at the padding box (inside the border) on that axis only:
   `overflowX: "clip"` lets content spill vertically.
 - Clipped content is neither drawn nor hit by the pointer.
+- A [`positionType: "fixed"`](../layout/positioning.md#fixed) descendant is
+  neither clipped nor scrolled, and does not count towards the scroll
+  range.
 - The clip follows the node's [`transform`](transforms.md): a rotated or
   scaled clipping node cuts its children along its transformed padding box.
 - `"clip"` and `"hidden"` cut the same pixels; they differ in layout. As a

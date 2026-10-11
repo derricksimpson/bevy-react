@@ -6,7 +6,7 @@ use crate::protocol::props::{Props, props_from_json as props};
 use crate::protocol::units::Rect;
 use crate::style::props::{
     BACKDROP_FILTER, BORDER_RADIUS, CACHE, FILTER, GROUP_ALPHA, IMAGE_RENDERING, LAYOUT_ROUNDING,
-    LayerCache, MORPH_FILTER, OPACITY,
+    LayerCache, MORPH_FILTER, OPACITY, POSITION_TYPE, PositionMode,
 };
 use crate::style::test_support::{promotes, runs};
 use crate::style::writers::*;
@@ -324,4 +324,43 @@ fn morph_filter_delta_reruns_its_writers_and_promotes() {
             .expect("a bad morphFilter must not abort the style");
     assert!(s.get(&MORPH_FILTER).is_none());
     assert_eq!(s.get(&OPACITY).static_val(), Some(0.5));
+}
+
+/// `positionType` takes `"fixed"` — a value of ours, not a bevy
+/// `PositionType` — which is absolute in the `Node`; the request for bevy's
+/// `FixedNode` is its own writer's. No promotion: a fixed flip changes layer
+/// membership, which the geometry gate sees.
+#[test]
+fn position_type_decodes_fixed() {
+    let s: Style = serde_json::from_str(r#"{ "positionType": "fixed" }"#).expect("decodes");
+    assert_eq!(s.get(&POSITION_TYPE), Some(&PositionMode::Fixed));
+    assert_eq!(
+        crate::ui_map::node_from(Some(&s)).position_type,
+        bevy::ui::PositionType::Absolute
+    );
+    let mut cached = Props::default();
+    let (dirty, _) = cached.merge_delta_node(
+        props(serde_json::json!({ "style": { "positionType": "fixed" } })),
+        &[],
+        &[],
+    );
+    assert!(runs(&dirty.style, &POSITION_FIXED_WRITER));
+    assert!(runs(&dirty.style, &LAYOUT_WRITER));
+    assert!(!promotes(&dirty.style));
+}
+
+/// CSS's other keywords are not ours: `"sticky"` warns and is relative.
+#[cfg(all(feature = "devtools", debug_assertions))]
+#[test]
+fn unknown_position_type_warns_and_is_relative() {
+    crate::diag::decode_batch_start();
+    let s: Style = serde_json::from_str(r#"{ "positionType": "sticky" }"#).expect("decodes");
+    assert_eq!(s.get(&POSITION_TYPE), Some(&PositionMode::Relative));
+    let warnings = crate::diag::take_decode_warnings();
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.kind == "positionType" && w.value == "sticky"),
+        "{warnings:?}"
+    );
 }

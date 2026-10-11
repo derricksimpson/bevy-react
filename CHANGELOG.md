@@ -62,6 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   like a window: the subtree lays out in `size / scale_factor` logical px and
   rasterizes at the texture's full resolution, so a UI designed at a fixed
   size stays crisp on a large mesh. In-world picking maps hits to logical px.
+- **`positionType: "fixed"`.** Places a node against the viewport of its UI
+  camera (the window, or a `<surface>`'s texture) instead of its parent: it
+  takes no space, and its ancestors' scrolling, clipping and transforms
+  don't reach it, while it keeps its place in the tree for paint order,
+  events and lifetime. Built on Bevy 0.20's `FixedNode`. Unlike in CSS, a
+  transformed or filtered ancestor does not become its containing block,
+  and it is not part of an ancestor's composited layer (an ancestor's
+  `opacity`, `filter`, `morphFilter` or `transform3d` doesn't apply to it);
+  pair it with `globalZIndex` to float it above everything.
 
 ### Changed
 
@@ -144,6 +153,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Length` gained `Em` and `Rem` variants, `FontSize` gained `Em`**
   (`bevy_react::protocol::units`; breaking for Rust code that matches them
   exhaustively, such as a hand-written filter `pack`).
+- **`positionType`'s value is `style::props::PositionMode`** (breaking for
+  a Rust writer that reads `POSITION_TYPE`). It was Bevy's `PositionType`,
+  which has no `Fixed`; `Node::position_type` is `Absolute` for a fixed
+  node. `FixedNode` on a React entity is written by bevy-react.
 - **`add_react_handler` and `add_react_request_handler` take one generic
   parameter less** (breaking). Bevy's observers dropped their `Bundle`
   parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.
