@@ -24,7 +24,10 @@ image cursor your app registered on the Rust side.
   Nodes without one are transparent to this: a child inherits its nearest
   cursor-bearing ancestor, and an overlay without a `cursor` shows the
   cursor of whatever is beneath it.
-- `focusPolicy` and event handlers play no part; any node can set a cursor.
+- Event handlers play no part; any node can set a cursor.
+- Only nodes the pointer can reach count, as for hover and clicks: not one
+  scrolled out of its container or hidden, and not one beneath a node with
+  [`focusPolicy: "block"`](focus-policy.md).
 - With no cursor-bearing node under the pointer, the window shows the
   `"default"` cursor.
 - State styles work: `cursor: "grab"` in `style` with `cursor: "grabbing"`
@@ -34,7 +37,8 @@ image cursor your app registered on the Rust side.
   what is drawn.
 
 To stop cursors under a modal or a panel from showing through, give the
-overlay its own `cursor: "default"`.
+overlay its own `cursor: "default"`, or `focusPolicy: "block"` if it should
+keep clicks from them too.
 
 ## System cursors
 

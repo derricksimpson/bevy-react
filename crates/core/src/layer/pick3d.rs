@@ -386,42 +386,6 @@ pub fn correct_transformed_interactions(
     }
 }
 
-/// The set of entities that belong to a visually-transformed layer this
-/// frame — the members the window cursor scan must skip (their layout rects
-/// are stale). Empty when no layer is transformed.
-pub fn visually_transformed_members(
-    membership: &LayerMembership,
-    matrices: &Query<&LayerTransform3dMatrix>,
-) -> bevy::platform::collections::HashSet<Entity> {
-    let mut transformed_roots: Vec<Entity> = Vec::new();
-    for (&root, _) in membership.enclosing.iter() {
-        if matrices.get(root).is_ok_and(|m| m.remaps_picking()) {
-            transformed_roots.push(root);
-        }
-    }
-    if transformed_roots.is_empty() {
-        return Default::default();
-    }
-    membership
-        .node_to_layer
-        .iter()
-        .filter(|(_, own_root)| {
-            // Walk the enclosing chain from the member's own root.
-            let mut root = **own_root;
-            loop {
-                if transformed_roots.contains(&root) {
-                    return true;
-                }
-                match membership.enclosing.get(&root) {
-                    Some(Some(outer)) => root = *outer,
-                    _ => return false,
-                }
-            }
-        })
-        .map(|(&node, _)| node)
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

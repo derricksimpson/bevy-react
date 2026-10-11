@@ -7,29 +7,32 @@
 //! [`drive_cursor_icon`] each frame picks the node under the pointer and writes the
 //! chosen cursor onto the primary window's [`CursorIcon`].
 //!
-//! Two pointer worlds feed the one window cursor, folded into a single decision so
-//! they never clobber each other:
-//! - **Main-window UI**: a geometric hit-test over the `UiStack`, topmost first, no
-//!   `Interaction` needed — so a plain `<node style={{ cursor }}>` works without
-//!   opting into the pointer machinery. Mirrors [`crate::scroll::collect_wheel_events`].
-//! - **Virtual-pointer UI** (a `<surface>`'s offscreen subtree): hit-tested
-//!   in the *texture's* space by a feature's virtual pointer, so the window
-//!   hit-test can't see it. Instead we read the picking [`HoverMap`] for each
-//!   registered [`VirtualPointers`](crate::ext::VirtualPointers) entry — the
-//!   same authoritative hover state its hover styling rides — take its topmost
-//!   node, and climb to the nearest cursor-bearing ancestor.
+//! The node under the pointer is read from the picking [`HoverMap`] — the
+//! same authoritative hover state hover styling and clicks ride — so the
+//! cursor follows what is actually hit: a node clipped away by a scroll
+//! container, hidden, or under a `focusPolicy: "block"` node sets nothing.
+//! Among the hovered nodes the topmost one that has a cursor, its own or its
+//! nearest cursor-bearing ancestor's (CSS-like inheritance), decides; nodes
+//! without one are transparent, so a pass-through overlay shows the cursor of
+//! what is beneath it.
 //!
-//! Virtual-pointer UI takes precedence: if a virtual pointer is over a cursor node,
-//! that wins; otherwise the main-window hit-test decides; otherwise the default
-//! arrow. Nodes without a `NodeCursor` are transparent to both scans, so a child
-//! inherits its nearest cursor-bearing ancestor (CSS-like).
+//! Three pointers feed the one window cursor, in this order, so they never
+//! clobber each other:
+//! - **Virtual pointers** (a `<surface>`'s offscreen subtree, hit-tested in
+//!   the *texture's* space): each registered
+//!   [`VirtualPointers`](crate::ext::VirtualPointers) entry.
+//! - **The transform3d pointer**: the window cursor remapped into a
+//!   3D-transformed layer, where the visual is (the mouse's own hits on those
+//!   members are suppressed — their layout rects are stale).
+//! - **The mouse**, over everything else in the window.
+//!
+//! With no cursor-bearing node under any of them: the default arrow.
 
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
 #[cfg(feature = "custom_cursor")]
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 #[cfg(feature = "custom_cursor")]
 use bevy::window::{CustomCursor, CustomCursorImage};
@@ -133,57 +136,35 @@ fn system_cursor_keyword(s: &str) -> Option<SystemCursorIcon> {
 ///
 /// Writes only on change, so a steady hover doesn't re-trigger `bevy_winit`'s
 /// `update_cursors` every frame. Runs after `apply_js_ops` so a freshly-stamped
-/// `NodeCursor` and this frame's `ComputedNode` are visible.
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+/// `NodeCursor` is visible; the hover map is this frame's (`PreUpdate`).
+#[allow(clippy::too_many_arguments)]
 pub fn drive_cursor_icon(
     mut commands: Commands,
-    windows: Query<(Entity, &Window, Option<&CursorIcon>), With<PrimaryWindow>>,
-    ui_stack: Res<UiStack>,
-    windowed: Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
+    windows: Query<(Entity, Option<&CursorIcon>), With<PrimaryWindow>>,
+    // `Option`: an app without picking has no hover, so the default cursor.
     hover_map: Option<Res<HoverMap>>,
     virtual_pointers: Option<Res<crate::ext::VirtualPointers>>,
     transform3d_pointer: Option<Res<crate::layer::pick3d::Transform3dPointer>>,
-    membership: Option<Res<crate::layer::LayerMembership>>,
-    matrices: Query<&crate::layer::transform3d::LayerTransform3dMatrix>,
     custom_cursors: Res<CustomCursors>,
     node_cursors: Query<&NodeCursor>,
     child_of: Query<&ChildOf>,
     rnodes: Query<&crate::bridge::ReactNode>,
 ) {
-    let Ok((window_entity, window, current)) = windows.single() else {
+    let Ok((window_entity, current)) = windows.single() else {
         return;
     };
 
-    // Members of visually-transformed layers render elsewhere than layout put
-    // them: the window scan must skip them (their rects are stale), and the
-    // transform3d virtual pointer's hover — which follows the visual — takes
-    // over, exactly like the surface pointer does for texture-space UI.
-    let transformed_members = membership
-        .as_deref()
-        .map(|membership| crate::layer::pick3d::visually_transformed_members(membership, &matrices))
-        .unwrap_or_default();
-
     // Virtual-pointer UI wins: a feature's virtual pointer (a `<surface>`'s
     // in-world ray-cast) is the only thing that knows the pointer is over an
-    // offscreen subtree (the window hit-test can't — its geometry is in
-    // texture space). Then the transform3d remap, then the main-window scan.
-    let named = virtual_pointers
-        .as_deref()
-        .zip(hover_map.as_deref())
-        .and_then(|(pointers, hover_map)| {
-            pointers
-                .iter()
-                .find_map(|id| surface_cursor_for(id, hover_map, &node_cursors, &child_of))
-        })
-        .or_else(|| {
-            transform3d_pointer
-                .as_deref()
-                .zip(hover_map.as_deref())
-                .and_then(|(pointer, hover_map)| {
-                    surface_cursor_for(pointer.id, hover_map, &node_cursors, &child_of)
-                })
-        })
-        .or_else(|| window_cursor(window, &ui_stack, &windowed, &transformed_members));
+    // offscreen subtree. Then the transform3d remap, then the mouse itself.
+    let named = hover_map.as_deref().and_then(|hover_map| {
+        virtual_pointers
+            .iter()
+            .flat_map(|pointers| pointers.iter())
+            .chain(transform3d_pointer.as_deref().map(|pointer| pointer.id))
+            .chain([PointerId::Mouse])
+            .find_map(|id| hovered_cursor(id, hover_map, &node_cursors, &child_of))
+    });
 
     // No cursor-bearing node under the pointer → the app default. Routing it through
     // `resolve_cursor("default", …)` (rather than a hardcoded arrow) lets a custom
@@ -205,49 +186,26 @@ pub fn drive_cursor_icon(
     }
 }
 
-/// The cursor of the topmost main-window `NodeCursor` node under the window pointer
-/// (name + the entity that carried it), or `None` if the pointer is over none (or
-/// its position is unknown).
-fn window_cursor(
-    window: &Window,
-    ui_stack: &UiStack,
-    windowed: &Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
-    skip: &bevy::platform::collections::HashSet<Entity>,
-) -> Option<(String, Entity)> {
-    // `ComputedNode`/`UiGlobalTransform` are physical; the window cursor is logical
-    // (see the note in `crate::scroll::apply_scroll`). Match them for the hit-test.
-    let cursor = window.cursor_position()? * window.scale_factor();
-    // `uinodes` is back-to-front, so reversed is topmost-first: the first
-    // cursor-bearing node whose rect contains the pointer wins. `skip` holds
-    // members of visually-transformed layers — their layout rects are stale
-    // (the transform3d virtual pointer's hover covers them instead).
-    ui_stack.uinodes.iter().rev().find_map(|&entity| {
-        if skip.contains(&entity) {
-            return None;
-        }
-        let (computed, transform, node_cursor) = windowed.get(entity).ok()?;
-        computed
-            .contains_point(*transform, cursor)
-            .then(|| (node_cursor.0.clone(), entity))
-    })
-}
-
-/// The cursor of the topmost node under a virtual pointer, climbing to the
-/// nearest cursor-bearing ancestor. `None` when the pointer is over no node,
-/// or that node (and its ancestors) declare no cursor.
-fn surface_cursor_for(
+/// The cursor a pointer's hover asks for (name + the entity that carried it):
+/// of the nodes it hovers, the topmost whose own or nearest ancestor's
+/// `NodeCursor` exists. `None` when it hovers nothing, or nothing with a
+/// cursor.
+fn hovered_cursor(
     pointer_id: PointerId,
     hover_map: &HoverMap,
     node_cursors: &Query<&NodeCursor>,
     child_of: &Query<&ChildOf>,
 ) -> Option<(String, Entity)> {
-    // Topmost hovered node = smallest picking depth (the UI backend assigns depth 0 to
-    // the front-most node, increasing downward through the stack).
-    let (&top, _) = hover_map
+    // Topmost = smallest picking depth (the UI backend assigns depth 0 to the
+    // front-most node, increasing downward through the stack).
+    let (_, owner) = hover_map
         .get(&pointer_id)?
         .iter()
-        .min_by(|a, b| a.1.depth.total_cmp(&b.1.depth))?;
-    let owner = crate::reconcile::climb(top, child_of, |e| node_cursors.contains(e))?;
+        .filter_map(|(&hovered, hit)| {
+            crate::reconcile::climb(hovered, child_of, |e| node_cursors.contains(e))
+                .map(|owner| (hit.depth, owner))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))?;
     node_cursors.get(owner).ok().map(|c| (c.0.clone(), owner))
 }
 
@@ -258,36 +216,27 @@ mod tests {
     use bevy::ecs::system::RunSystemOnce;
     use bevy::picking::backend::HitData;
 
-    /// Spawn `n` overlapping 200×100 cursor nodes centered at (300, 200), stacked
-    /// in the given order (last = topmost), run `drive_cursor_icon` for a pointer at
-    /// `cursor`, and return the window's resulting `CursorIcon` (if any was written).
-    fn run(cursor: Option<Vec2>, stack: &[&str]) -> Option<CursorIcon> {
+    /// Run `drive_cursor_icon` with the mouse hovering `stack` — topmost
+    /// first, `None` a node without a cursor — and return the window's
+    /// resulting `CursorIcon` (if any was written).
+    fn run(stack: &[Option<&str>]) -> Option<CursorIcon> {
         let mut world = World::new();
-
-        let mut window = Window::default();
-        window.set_physical_cursor_position(cursor.map(|c| c.as_dvec2()));
-        let window_entity = world.spawn((window, PrimaryWindow)).id();
-
-        let nodes: Vec<Entity> = stack
-            .iter()
-            .map(|&name| {
-                world
-                    .spawn((
-                        ComputedNode {
-                            size: Vec2::new(200.0, 100.0),
-                            inverse_scale_factor: 1.0,
-                            ..default()
-                        },
-                        UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
-                        NodeCursor(name.to_string()),
-                    ))
-                    .id()
-            })
-            .collect();
-        world.insert_resource(UiStack {
-            uinodes: nodes,
-            partition: Vec::new(),
-        });
+        let window_entity = world.spawn((Window::default(), PrimaryWindow)).id();
+        let mut hovered = EntityHashMap::default();
+        for (i, name) in stack.iter().enumerate() {
+            let mut node = world.spawn_empty();
+            if let Some(name) = name {
+                node.insert(NodeCursor(name.to_string()));
+            }
+            let depth = i as f32 * 0.00001;
+            hovered.insert(
+                node.id(),
+                HitData::new(Entity::PLACEHOLDER, depth, None, None),
+            );
+        }
+        let mut hover_map = HoverMap::default();
+        hover_map.insert(PointerId::Mouse, hovered);
+        world.insert_resource(hover_map);
         world.init_resource::<CustomCursors>();
 
         world.run_system_once(drive_cursor_icon).unwrap();
@@ -296,28 +245,57 @@ mod tests {
 
     #[test]
     fn topmost_node_under_pointer_wins() {
-        // Two overlapping nodes; the second (topmost) is `pointer` and claims the cursor.
-        let icon = run(Some(Vec2::new(300.0, 200.0)), &["grab", "pointer"]);
+        let icon = run(&[Some("pointer"), Some("grab")]);
         assert_eq!(icon, Some(CursorIcon::from(SystemCursorIcon::Pointer)));
     }
 
+    /// A node without a cursor is transparent: an overlay shows the cursor of
+    /// what is beneath it.
     #[test]
-    fn single_node_sets_its_cursor() {
-        let icon = run(Some(Vec2::new(300.0, 200.0)), &["text"]);
+    fn a_node_without_a_cursor_shows_the_one_beneath() {
+        let icon = run(&[None, Some("text")]);
         assert_eq!(icon, Some(CursorIcon::from(SystemCursorIcon::Text)));
     }
 
     #[test]
-    fn pointer_off_all_nodes_resets_to_default() {
-        // In-window but outside the node's rect (x:200..400, y:150..250) → default arrow.
-        let icon = run(Some(Vec2::new(50.0, 50.0)), &["pointer"]);
-        assert_eq!(icon, Some(CursorIcon::from(SystemCursorIcon::Default)));
+    fn hovering_no_cursor_node_resets_to_default() {
+        let stacks: [&[Option<&str>]; 2] = [&[], &[None]];
+        for stack in stacks {
+            let icon = run(stack);
+            assert_eq!(icon, Some(CursorIcon::from(SystemCursorIcon::Default)));
+        }
     }
 
+    /// A node clipped away by a scroll container sets no cursor from where it
+    /// is laid out: the hover map only holds what is really hit (real layout,
+    /// clipping, picking — the `clip_pick_tests` scene).
     #[test]
-    fn no_cursor_position_resets_to_default() {
-        let icon = run(None, &["pointer"]);
-        assert_eq!(icon, Some(CursorIcon::from(SystemCursorIcon::Default)));
+    fn a_clipped_away_node_does_not_set_the_cursor() {
+        use crate::reconcile::clip_pick_tests::{OVER_CLIPPED, OVER_SHOWN, clip_scene};
+        let icon = |pointer: Vec2| {
+            let mut scene = clip_scene(pointer);
+            scene.app.init_resource::<CustomCursors>();
+            scene.app.add_systems(Update, drive_cursor_icon);
+            let world = scene.app.world_mut();
+            world
+                .entity_mut(scene.shown)
+                .insert(NodeCursor("text".to_string()));
+            world
+                .entity_mut(scene.clipped)
+                .insert(NodeCursor("pointer".to_string()));
+            scene.app.update();
+            scene.app.update();
+            let window = scene.app.world().entity(scene.window);
+            window.get::<CursorIcon>().cloned()
+        };
+        assert_eq!(
+            icon(OVER_SHOWN),
+            Some(CursorIcon::from(SystemCursorIcon::Text))
+        );
+        assert_eq!(
+            icon(OVER_CLIPPED),
+            Some(CursorIcon::from(SystemCursorIcon::Default))
+        );
     }
 
     /// A custom cursor registered under `"default"` becomes the app-wide base cursor:
@@ -327,14 +305,8 @@ mod tests {
     #[test]
     fn registered_default_becomes_app_cursor() {
         let mut world = World::new();
-        let mut window = Window::default();
-        window.set_physical_cursor_position(Some(Vec2::new(10.0, 10.0).as_dvec2()));
-        let window_entity = world.spawn((window, PrimaryWindow)).id();
-        // No nodes → nothing supplies a cursor, so the app default is used.
-        world.insert_resource(UiStack {
-            uinodes: Vec::new(),
-            partition: Vec::new(),
-        });
+        // Nothing hovered → nothing supplies a cursor, so the app default is used.
+        let window_entity = world.spawn((Window::default(), PrimaryWindow)).id();
 
         let arrow = CustomCursorImage {
             handle: Handle::default(),
@@ -352,13 +324,13 @@ mod tests {
         );
     }
 
-    /// A surface leaf hovered by the virtual pointer inherits its ancestor's cursor
-    /// (climb), and the topmost (smallest-depth) hovered node wins.
+    /// A hovered leaf inherits its ancestor's cursor (climb), and the topmost
+    /// (smallest-depth) hovered node wins.
     #[test]
-    fn surface_pointer_uses_hovered_node_cursor() {
+    fn hovered_leaf_uses_its_ancestors_cursor() {
         let mut world = World::new();
         // A `<button>`-like parent with a cursor; a childless leaf (e.g. its `<text>`)
-        // with none. The virtual pointer hovers the leaf.
+        // with none. The pointer hovers the leaf.
         let parent = world.spawn(NodeCursor("pointer".to_string())).id();
         let leaf = world.spawn(ChildOf(parent)).id();
         // A second, deeper node with a different cursor that must lose on depth.
@@ -375,17 +347,17 @@ mod tests {
         let hit = world
             .run_system_once(
                 move |hm: Res<HoverMap>, ncs: Query<&NodeCursor>, co: Query<&ChildOf>| {
-                    surface_cursor_for(pointer_id, &hm, &ncs, &co)
+                    hovered_cursor(pointer_id, &hm, &ncs, &co)
                 },
             )
             .unwrap();
         assert_eq!(hit, Some(("pointer".to_string(), parent)));
     }
 
-    /// A hovered surface node with no cursor on itself or any ancestor contributes
-    /// nothing (so the main-window hit-test / default takes over).
+    /// A hovered node with no cursor on itself or any ancestor contributes
+    /// nothing (so the next pointer / the default takes over).
     #[test]
-    fn surface_pointer_without_cursor_yields_none() {
+    fn hover_without_a_cursor_yields_none() {
         let mut world = World::new();
         let bare = world.spawn_empty().id();
         let pointer_id = PointerId::Mouse;
@@ -398,7 +370,7 @@ mod tests {
         let hit = world
             .run_system_once(
                 move |hm: Res<HoverMap>, ncs: Query<&NodeCursor>, co: Query<&ChildOf>| {
-                    surface_cursor_for(pointer_id, &hm, &ncs, &co)
+                    hovered_cursor(pointer_id, &hm, &ncs, &co)
                 },
             )
             .unwrap();

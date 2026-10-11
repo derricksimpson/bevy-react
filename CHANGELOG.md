@@ -80,6 +80,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A hot-reloaded image kept its old smaller mip levels under
   `imageRendering: "trilinear"`: drawn small, it still showed the previous
   picture.
+- The `cursor` style could come from a node the pointer cannot reach: one
+  scrolled out of its container, a hidden one, or one beneath a
+  `focusPolicy: "block"` node. The cursor now follows the same hover as
+  `hoverStyle` and clicks.
 
 ## [0.7.0] - 2026-10-05
 
