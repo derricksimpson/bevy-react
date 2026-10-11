@@ -116,7 +116,7 @@ pub type GradientPosition = String;
 
 /// Color space the gradient interpolates in (`"oklab"` (default), `"oklch"`,
 /// `"oklchLong"`, `"srgb"`, `"linearRgb"`, `"hsl"`, `"hslLong"`, `"hsv"`,
-/// `"hsvLong"`).
+/// `"hsvLong"`, `"okhsl"`, `"okhslLong"`).
 pub type ColorSpace = String;
 
 /// The size/shape of a radial gradient. Externally tagged on the wire:

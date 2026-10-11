@@ -387,12 +387,20 @@ mod tests {
     #[test]
     fn color_space_mismatch_is_not_alignable() {
         let from = [linear(0.0, two_stops())];
-        let to = [Gradient::Linear(LinearGradient {
-            color_space: InterpolationColorSpace::Srgba,
-            angle: 0.0,
-            stops: two_stops(),
-        })];
+        let in_space = |color_space| {
+            [Gradient::Linear(LinearGradient {
+                color_space,
+                angle: 0.0,
+                stops: two_stops(),
+            })]
+        };
+        let to = in_space(InterpolationColorSpace::Srgba);
         assert!(!gradients_alignable(&from, &to));
+        // The hue path is part of the space: short and long are two.
+        let short = in_space(InterpolationColorSpace::Okhsla);
+        let long = in_space(InterpolationColorSpace::OkhslaLong);
+        assert!(!gradients_alignable(&short, &long));
+        assert!(gradients_alignable(&short, &short));
     }
 
     #[test]

@@ -68,10 +68,28 @@ const stops = [
 ## Color spaces
 
 `colorSpace` picks the space the stops blend in: `"oklab"` (the default),
-`"oklch"`, `"srgb"`, `"linearRgb"`, `"hsl"` or `"hsv"`. The hue-based
-spaces also come as `"oklchLong"`, `"hslLong"` and `"hsvLong"`, which travel
-the long way around the hue circle. An unknown value falls back to
-`"oklab"`.
+`"oklch"`, `"okhsl"`, `"srgb"`, `"linearRgb"`, `"hsl"` or `"hsv"`. The
+hue-based spaces also come as `"oklchLong"`, `"okhslLong"`, `"hslLong"` and
+`"hsvLong"`, which travel the long way around the hue circle. An unknown
+value falls back to `"oklab"`.
+
+```tsx
+<node
+  style={{
+    backgroundGradient: {
+      type: "linear",
+      angle: 90,
+      colorSpace: "okhsl",
+      stops: [{ color: "#ff3d6e" }, { color: "#2f6bff" }],
+    },
+  }}
+/>
+```
+
+`"oklab"` and `"srgb"` blend straight between the two colors, through a
+duller middle. The hue-based spaces turn the hue instead and keep the
+middle saturated; of those, `"oklch"` and `"okhsl"` are perceptual, so the
+brightness stays even along the way.
 
 ## Radial shapes
 

@@ -111,7 +111,9 @@ export type ColorSpace =
   | "hsl"
   | "hslLong"
   | "hsv"
-  | "hsvLong";
+  | "hsvLong"
+  | "okhsl"
+  | "okhslLong";
 
 /** Named center anchor for a radial/conic gradient (default `"center"`). */
 export type GradientPosition =

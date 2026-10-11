@@ -14,6 +14,8 @@ fn parse_color_space(s: Option<&str>) -> InterpolationColorSpace {
         Some("hslLong") => InterpolationColorSpace::HslaLong,
         Some("hsv") => InterpolationColorSpace::Hsva,
         Some("hsvLong") => InterpolationColorSpace::HsvaLong,
+        Some("okhsl") => InterpolationColorSpace::Okhsla,
+        Some("okhslLong") => InterpolationColorSpace::OkhslaLong,
         _ => InterpolationColorSpace::Oklaba,
     }
 }
@@ -192,4 +194,47 @@ pub fn fold_gradients(list: &[Gradient], opacity: Option<f32>) -> Vec<Gradient> 
             g
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every `colorSpace` token reaches its bevy variant — all eleven
+    /// `InterpolationColorSpace` has — on each gradient kind; unset or
+    /// unknown is bevy's default (`oklab`).
+    #[test]
+    fn color_space_tokens_map_to_bevy_variants() {
+        use InterpolationColorSpace::*;
+        let spaces = [
+            ("oklab", Oklaba),
+            ("oklch", Oklcha),
+            ("oklchLong", OklchaLong),
+            ("srgb", Srgba),
+            ("linearRgb", LinearRgba),
+            ("hsl", Hsla),
+            ("hslLong", HslaLong),
+            ("hsv", Hsva),
+            ("hsvLong", HsvaLong),
+            ("okhsl", Okhsla),
+            ("okhslLong", OkhslaLong),
+            ("bogus", Oklaba),
+        ];
+        for (token, space) in spaces {
+            for kind in ["linear", "radial", "conic"] {
+                let list: GradientList = serde_json::from_value(serde_json::json!({
+                    "type": kind,
+                    "colorSpace": token,
+                    "stops": [{ "color": "#ff0000" }, { "color": "#0000ff" }],
+                }))
+                .expect("gradient decodes");
+                let built = match &build_gradients(&list, None)[0] {
+                    Gradient::Linear(g) => g.color_space,
+                    Gradient::Radial(g) => g.color_space,
+                    Gradient::Conic(g) => g.color_space,
+                };
+                assert_eq!(built, space, "{kind} {token}");
+            }
+        }
+    }
 }

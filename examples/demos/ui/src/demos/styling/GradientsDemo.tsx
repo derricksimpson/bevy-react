@@ -48,6 +48,7 @@ export function GradientsDemo() {
       </DemoRow>
       <DemoRow>
         <LayeredGradientsDemo />
+        <ColorSpaceDemo />
       </DemoRow>
       <DemoRow>
         <GradientTransitionDemo />
@@ -245,6 +246,75 @@ const layered: BevyStyle["backgroundGradient"] = [
 const hovered: BevyStyle["backgroundGradient"] = {
   type: "conic",
   stops: [{ color: "#5ee6a8" }, { color: "#5cd9ff" }, { color: "#5ee6a8" }],
+};
+
+function ColorSpaceDemo() {
+  return (
+    <Example
+      title="Color spaces"
+      info={
+        <>
+          <Paragraph>
+            <InlineCode>colorSpace</InlineCode> picks the space the stops blend
+            in. The same two stops pass through a duller middle in{" "}
+            <InlineCode>"srgb"</InlineCode> and <InlineCode>"oklab"</InlineCode>{" "}
+            (the default), and turn the hue in the hue-based spaces —{" "}
+            <InlineCode>"okhsl"</InlineCode> keeps the brightness even, and its{" "}
+            <InlineCode>Long</InlineCode> twin goes the long way around the hue
+            circle.
+          </Paragraph>
+          <Code lang="tsx">{`backgroundGradient: {
+  type: "linear",
+  angle: 90,
+  colorSpace: "okhsl",
+  stops: [
+    { color: "#ff3d6e" },
+    { color: "#2f6bff" },
+  ],
+}`}</Code>
+        </>
+      }
+      demo={ColorSpaceCard}
+    />
+  );
+}
+
+const COLOR_SPACES = [
+  "srgb",
+  "oklab",
+  "hsl",
+  "oklch",
+  "okhsl",
+  "okhslLong",
+] as const;
+
+function ColorSpaceCard() {
+  return (
+    <node style={{ flexDirection: "column", gap: 8 }}>
+      {COLOR_SPACES.map((colorSpace) => (
+        <node key={colorSpace} style={{ alignItems: "center", gap: 10 }}>
+          <node
+            style={{
+              ...spaceBar,
+              backgroundGradient: {
+                type: "linear",
+                angle: 90,
+                colorSpace,
+                stops: [{ color: "#ff3d6e" }, { color: "#2f6bff" }],
+              },
+            }}
+          />
+          <InlineCode>{colorSpace}</InlineCode>
+        </node>
+      ))}
+    </node>
+  );
+}
+
+const spaceBar: BevyStyle = {
+  width: 170,
+  height: 22,
+  borderRadius: 6,
 };
 
 const TRANSITION_TSX = `<node

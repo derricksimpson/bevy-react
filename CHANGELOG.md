@@ -85,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `justifySelf`): aligned like the plain keyword while the content fits, at
   the start once it would overflow, so a centered row that outgrows its
   scroll container keeps its beginning reachable.
+- **Gradient `colorSpace: "okhsl"` and `"okhslLong"`.** Hue interpolation
+  with even perceived brightness, the short or the long way around the hue
+  circle (Bevy 0.20's `Okhsla`).
 
 ### Changed
 
