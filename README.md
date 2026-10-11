@@ -100,6 +100,16 @@ drawn by a shader.
 
 ![A node editor: a sphere of weathered bricks in the 3D preview, the base color tiled beside it, and below a graph of bricks, noise, warp, color ramp and mix nodes, each with a live thumbnail, wired into a material output.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/nodes-bricks.webp)
 
+[**Deadspace**](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace)
+is a homage to the diegetic interface of a sci-fi horror game: there is no
+HUD. The engineer's health runs down his spine, the ammo count floats over
+his gun, and the suit menu, the store, the upgrade bench and the hack panel
+are holograms in the room — every one a React `<surface>` you click and
+scroll in 3D, glitching when the suit takes a hit.
+[Play it in your browser](https://tulustul.github.io/bevy-react/deadspace/).
+
+![The suit menu projected into the room beside the engineer's armored shoulder: a grid of item icons, a glowing stasis pack turning in the preview, vitals, power cells and credits along the top, the locked bulkhead behind.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/deadspace-menu.webp)
+
 ## Getting started
 
 ```sh

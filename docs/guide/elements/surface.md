@@ -116,6 +116,8 @@ at the hit, and moves a virtual pointer to that pixel of the surface.
 
 - Children get `onClick`, the `onPointer*` handlers, `hoverStyle` and
   `pressStyle`, and the `cursor` style sets the OS cursor, as on screen.
+- The wheel scrolls the scroll container under the pointer and fires
+  `onWheel`; screen UI under the cursor takes it first.
 - The mesh needs UVs, with `(0, 0)` at the texture's top-left. If your
   material maps the surface to the second UV set (`base_color_channel:
 UvChannel::Uv1`), match it with
@@ -143,12 +145,10 @@ UvChannel::Uv1`), match it with
 
 ## Limits
 
-- Composited-layer styles have no effect inside a surface: `opacity` on a
-  node with children, `filter`, `backdropFilter`, `transform3d`,
-  `morphFilter` and `cache` render as if unset, with a `layerCamera` warning.
-  See [Layers](../styling/layers.md).
-- The mouse wheel doesn't reach surface UI: no wheel scrolling and no
-  `onWheel` inside a surface.
+- Pointer hits inside a surface ignore `transform3d`: they land where the
+  node would be without its transform. See [Layers](../styling/layers.md).
+- A `backdropFilter` inside a surface filters the surface's clear color, the
+  only thing behind its UI.
 - A live surface without a tagged mesh renders every frame, visible or not.
 - Textures are capped at 4096 pixels per side.
 

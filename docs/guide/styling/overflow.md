@@ -179,10 +179,8 @@ itself.
 
 ## Limits
 
-- The wheel only reaches UI on the window: scroll containers inside a
-  `<surface>` don't scroll with the wheel, and a UI camera with an offset
-  viewport is not accounted for. Drive them with `scrollTop` and
-  `scrollLeft`.
+- A UI camera with an offset viewport is not accounted for by the wheel.
+  Drive its scroll containers with `scrollTop` and `scrollLeft`.
 - No scroll chaining, overscroll, or scroll snapping.
 - The scrollbar is placed assuming the container's parent has no border; a
   border on the parent offsets the bar by its width.

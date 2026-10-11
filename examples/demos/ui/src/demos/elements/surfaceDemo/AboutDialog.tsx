@@ -15,8 +15,16 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <node style={{ ...scrim, transform: { scale: firstRender ? 0 : 1 } }}>
-      <node style={panel}>
+    <node style={{ ...scrim, transform: { scale: firstRender ? 0.9 : 1 } }}>
+      {/* Group opacity and a blur filter: composited layers render inside
+          a surface like anywhere else. */}
+      <node
+        style={{
+          ...panel,
+          opacity: firstRender ? 0 : 1,
+          filter: { name: "blur", params: { radius: firstRender ? 14 : 0 } },
+        }}
+      >
         <node style={titleBar}>
           <CardTitle>About</CardTitle>
           <CircularButton size={28} onClick={onClose}>
@@ -59,6 +67,10 @@ const panel: BevyStyle = {
   border: 1,
   backgroundColor: Colors.card,
   boxShadow: { yOffset: 24, blurRadius: 64, color: "#000000c0" },
+  transition: {
+    opacity: { duration: 240, easing: "easeOut" },
+    filter: { duration: 240, easing: "easeOut" },
+  },
 };
 
 const titleBar: BevyStyle = {

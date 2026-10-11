@@ -18,6 +18,7 @@ members = [
     "examples/civilization",
     "examples/cyberpunk",
     "examples/nodes",
+    "examples/deadspace",
 ]
 
 [workspace.package]

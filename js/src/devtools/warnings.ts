@@ -160,10 +160,6 @@ const KIND_FIELDS: Record<string, KindSpec> = {
   // A startup warn (`ReactUiPlugin::precompile_filters` names): no node, no
   // candidate fields.
   precompileFilters: {},
-  // A promoted layer under a non-stock UI camera (a `<surface>` camera, a
-  // second UI camera) is skipped — v1 composites layers on one camera. Once
-  // per camera, no node attribution.
-  layerCamera: {},
 };
 
 /** Map each keyword property's kind to its row (the registry's answer to

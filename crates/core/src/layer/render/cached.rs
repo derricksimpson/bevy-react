@@ -6,7 +6,7 @@
 //! [`InheritedVisibility`]: it spawns a `TemporaryRenderEntity` per drawable,
 //! `queue_uinodes` specializes and queues each item, and
 //! [`redistribute_ui_layers`](super::redistribute_ui_layers) steals every
-//! promoted member out of the camera phase — only to DROP the items of a
+//! promoted member out of its camera's phase — only to DROP the items of a
 //! cached layer (its persistent texture already holds their pixels). With a
 //! page of cached layers that is the whole per-node extract + queue + steal +
 //! temporary-despawn cost spent on nothing, every frame.
@@ -27,9 +27,8 @@
 //! (the net effect within a frame is identity). Only VISIBLE members are
 //! flipped and stashed; a member the app hid stays as it is. Only members of
 //! layers that were actually **extracted** are candidates: `membership` is
-//! derived from the extracted layer set, so a layer skipped for being under
-//! a non-stock camera ([`super::stock_camera`]) keeps its members visible to
-//! stock extraction — that is how its subtree renders at all.
+//! derived from the extracted layer set, so a layer skipped for an inactive
+//! camera keeps its members visible to stock extraction.
 //!
 //! The layer root is a member of its own layer, so its own drawable (its
 //! background/border) is skipped too — it is part of the capture. With no

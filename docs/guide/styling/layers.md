@@ -155,10 +155,8 @@ every frame.
 
 - Content outside the node's border box (plus filter reach) is cut off
   while the node is a layer, unlike CSS opacity.
-- Layers are drawn by the main UI camera only. Inside a `<surface>`, or
-  under a second UI camera, a promoted node renders as ordinary UI without
-  its filters, morphs, 3D transform or group opacity, and a `layerCamera`
-  warning is reported.
+- Inside a `<surface>`, pointer hits ignore `transform3d` and land where the
+  node would be without its transform; on the window they follow it.
 - Pixels written behind bevy-react's back freeze in a cached layer until
   something else re-renders it; use `cache: "never"`.
 - A filter's shader may need to compile before its first use, and the

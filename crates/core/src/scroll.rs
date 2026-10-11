@@ -6,9 +6,12 @@
 //! that handler: each frame it reads the accumulated wheel delta, finds the
 //! scroll container under the cursor, and moves its `ScrollPosition`.
 
+use bevy::camera::{NormalizedRenderTarget, RenderTarget};
+use bevy::ecs::system::SystemParam;
 use bevy::input::mouse::{AccumulatedMouseScroll, MouseScrollUnit};
+use bevy::picking::pointer::{PointerId, PointerLocation};
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform, UiStack};
+use bevy::ui::{ComputedNode, ComputedUiTargetCamera, ScrollPosition, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
 
 use crate::bridge::{JsBridge, ReactNode, ScrollStep, WheelListener};
@@ -20,6 +23,87 @@ use crate::transition::ScrollTransitionState;
 /// trackpads report `Pixel`). A middling value that feels close to a typical
 /// desktop. A node's `scrollStep` prop ([`ScrollStep`]) overrides it per container.
 const LINE_HEIGHT: f32 = 20.0;
+
+/// Where the wheel points, per UI camera: UI on a window camera is hit-tested
+/// against the window cursor; UI on an image-target camera (a `<surface>`)
+/// against the [`VirtualPointers`](crate::ext::VirtualPointers) pointer sitting
+/// on that image, and is out of reach while none does — its geometry is in
+/// texture px, which the window cursor must never be tested against.
+#[derive(SystemParam)]
+pub struct WheelCursors<'w, 's> {
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    cameras: Query<'w, 's, &'static RenderTarget, With<Camera>>,
+    pointers: Query<'w, 's, (&'static PointerId, &'static PointerLocation)>,
+    virtual_pointers: Option<Res<'w, crate::ext::VirtualPointers>>,
+    target_cameras: Query<'w, 's, &'static ComputedUiTargetCamera>,
+}
+
+/// A wheel cursor in physical px (node geometry's space) and logical px (the
+/// event's `clientX`/`clientY`).
+#[derive(Clone, Copy)]
+struct WheelCursor {
+    physical: Vec2,
+    logical: Vec2,
+}
+
+impl WheelCursors<'_, '_> {
+    /// The UI nodes the wheel may hit with the cursor each is tested against,
+    /// topmost first: window UI before image-target UI (screen UI draws over
+    /// the world), each in `UiStack` order.
+    fn candidates(&self, ui_stack: &UiStack) -> Vec<(Entity, WheelCursor)> {
+        let window = self.windows.single().ok().and_then(|w| {
+            let logical = w.cursor_position()?;
+            Some(WheelCursor {
+                physical: logical * w.scale_factor(),
+                logical,
+            })
+        });
+        let on_images: Vec<(AssetId<Image>, WheelCursor)> = self
+            .pointers
+            .iter()
+            .filter(|(id, _)| {
+                self.virtual_pointers
+                    .as_ref()
+                    .is_some_and(|v| v.contains(**id))
+            })
+            .filter_map(|(_, location)| {
+                let location = location.location()?;
+                let NormalizedRenderTarget::Image(image) = &location.target else {
+                    return None;
+                };
+                Some((
+                    image.handle.id(),
+                    WheelCursor {
+                        physical: location.position * image.scale_factor,
+                        logical: location.position,
+                    },
+                ))
+            })
+            .collect();
+        // `Some(is_image, cursor)`: the node's cursor, `None` = out of reach.
+        let cursor_of = |entity: Entity| -> Option<(bool, WheelCursor)> {
+            let camera = self.target_cameras.get(entity).ok().and_then(|c| c.get());
+            match camera.and_then(|c| self.cameras.get(c).ok()) {
+                Some(RenderTarget::Image(image)) => on_images
+                    .iter()
+                    .find(|(id, _)| *id == image.handle.id())
+                    .map(|(_, cursor)| (true, *cursor)),
+                _ => window.map(|cursor| (false, cursor)),
+            }
+        };
+        let mut window_nodes = Vec::new();
+        let mut image_nodes = Vec::new();
+        for &entity in ui_stack.uinodes.iter().rev() {
+            match cursor_of(entity) {
+                Some((false, cursor)) => window_nodes.push((entity, cursor)),
+                Some((true, cursor)) => image_nodes.push((entity, cursor)),
+                None => {}
+            }
+        }
+        window_nodes.extend(image_nodes);
+        window_nodes
+    }
+}
 
 /// Whether a node opts into scrolling on either axis.
 pub(crate) fn is_scroll_container(node: &Node) -> bool {
@@ -80,8 +164,9 @@ pub(crate) fn write_scroll(
 /// Target selection is by **geometry, topmost-first**. Every `Node` carries a
 /// `ScrollPosition` (it's a required component), so "has a `ScrollPosition`" is
 /// meaningless — we must check `Node.overflow`. We walk the `UiStack` top to bottom
-/// and hit-test the cursor against each node's rectangle with
-/// [`ComputedNode::contains_point`]:
+/// and hit-test each node's rectangle with [`ComputedNode::contains_point`] against
+/// its camera's cursor ([`WheelCursors`]: the window cursor, or the in-world
+/// pointer on a `<surface>`):
 /// - The topmost node under the cursor that declared `onWheel` (a [`WheelListener`])
 ///   **claims** the wheel: it emits via [`collect_wheel_events`], and here we stop
 ///   without scrolling anything beneath it. That is what lets an `onWheel` node
@@ -96,7 +181,7 @@ pub(crate) fn write_scroll(
 #[allow(clippy::type_complexity)]
 pub fn apply_scroll(
     accumulated: Res<AccumulatedMouseScroll>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    cursors: WheelCursors,
     ui_stack: Res<UiStack>,
     mut scrollables: Query<(
         &ComputedNode,
@@ -112,28 +197,17 @@ pub fn apply_scroll(
     if accumulated.delta == Vec2::ZERO {
         return;
     }
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let Some(cursor) = window.cursor_position() else {
-        return;
-    };
-    // `ComputedNode`/`UiGlobalTransform` are in physical pixels; the window cursor is
-    // logical with a top-left origin. Scaling matches them for a window-filling camera
-    // (the host app's UI camera); a camera with a custom viewport offset is not handled
-    // here.
-    let cursor = cursor * window.scale_factor();
-
-    // `uinodes` is ordered back-to-front, so reversed is topmost-first: the first
-    // node under the cursor that claims the wheel wins. This also resolves nested
-    // scroll areas correctly (an inner one sits later in the stack, so it's hit first).
-    for &entity in ui_stack.uinodes.iter().rev() {
+    // Topmost-first: the first node under the cursor that claims the wheel wins.
+    // This also resolves nested scroll areas correctly (an inner one sits later in
+    // the stack, so it's hit first). Geometry is physical px; a camera with a custom
+    // viewport offset is not handled here.
+    for (entity, cursor) in cursors.candidates(&ui_stack) {
         let Ok((computed, transform, node, mut pos, step, scroll_state)) =
             scrollables.get_mut(entity)
         else {
             continue;
         };
-        if !computed.contains_point(*transform, cursor) {
+        if !computed.contains_point(*transform, cursor.physical) {
             continue; // cursor not over this node — transparent, keep scanning
         }
         // An `onWheel` node on top claims the wheel: stop before scrolling anything
@@ -236,7 +310,7 @@ pub fn settle_controlled_scroll(
 /// (a zoom camera) ignore a wheel a node just handled.
 pub fn collect_wheel_events(
     accumulated: Res<AccumulatedMouseScroll>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    cursors: WheelCursors,
     ui_stack: Res<UiStack>,
     bridge: Res<JsBridge>,
     listeners: Query<(&ComputedNode, &UiGlobalTransform, &ReactNode), With<WheelListener>>,
@@ -247,28 +321,17 @@ pub fn collect_wheel_events(
     if accumulated.delta == Vec2::ZERO {
         return;
     }
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let Some(cursor_logical) = window.cursor_position() else {
-        return;
-    };
-    // `ComputedNode`/`UiGlobalTransform` are physical; the window cursor is logical
-    // (see the note in `apply_scroll`). Match them for the hit-test.
-    let cursor = cursor_logical * window.scale_factor();
-
     let delta_mode = match accumulated.unit {
         MouseScrollUnit::Line => "line",
         MouseScrollUnit::Pixel => "pixel",
     };
 
-    // `uinodes` is back-to-front, so reversed is topmost-first: the first `onWheel`
-    // node whose rect contains the cursor wins.
-    for &entity in ui_stack.uinodes.iter().rev() {
+    // Topmost-first: the first `onWheel` node whose rect contains its cursor wins.
+    for (entity, cursor) in cursors.candidates(&ui_stack) {
         let Ok((computed, transform, rnode)) = listeners.get(entity) else {
             continue;
         };
-        if !computed.contains_point(*transform, cursor) {
+        if !computed.contains_point(*transform, cursor.physical) {
             continue;
         }
         // Normalized 0..1 position within the node (top-left origin), matching the
@@ -276,14 +339,14 @@ pub fn collect_wheel_events(
         // size, so the divide is safe.
         let size = computed.size;
         let min = transform.translation - size * 0.5;
-        let norm = ((cursor - min) / size).clamp(Vec2::ZERO, Vec2::ONE);
+        let norm = ((cursor.physical - min) / size).clamp(Vec2::ZERO, Vec2::ONE);
         let mut event = UiEvent {
             id: rnode.0,
             kind: "wheel".to_string(),
             x: Some(norm.x),
             y: Some(norm.y),
-            client_x: Some(cursor_logical.x),
-            client_y: Some(cursor_logical.y),
+            client_x: Some(cursor.logical.x),
+            client_y: Some(cursor.logical.y),
             delta_x: Some(accumulated.delta.x),
             delta_y: Some(accumulated.delta.y),
             delta_mode: Some(delta_mode.to_string()),
@@ -502,6 +565,83 @@ mod tests {
             Vec2::new(0.0, 1.0),
         );
         assert_eq!(pos, Vec2::new(0.0, 0.0));
+    }
+
+    /// `<surface>` UI (on an image-target camera) is wheeled by the virtual
+    /// pointer sitting on that image, never by the window cursor — whose
+    /// window px would otherwise hit texture-px geometry at the same numbers.
+    #[test]
+    fn surface_ui_scrolls_under_its_virtual_pointer_only() {
+        use bevy::camera::ImageRenderTarget;
+        use bevy::picking::pointer::Location;
+        use bevy::reflect::{FromReflect, structs::DynamicStruct};
+
+        let run = |pointer_at: Option<Vec2>| {
+            let mut world = World::new();
+            let mut window = Window::default();
+            window.set_physical_cursor_position(Some(Vec2::new(300.0, 200.0).as_dvec2()));
+            world.spawn((window, PrimaryWindow));
+            let image = ImageRenderTarget {
+                handle: Handle::<Image>::default(),
+                scale_factor: 1.0,
+            };
+            let camera = world
+                .spawn((Camera::default(), RenderTarget::Image(image.clone())))
+                .id();
+            let mut target = DynamicStruct::default();
+            target.insert("camera", camera);
+            let container = world
+                .spawn((
+                    Node {
+                        overflow: Overflow::scroll_y(),
+                        ..default()
+                    },
+                    ComputedNode {
+                        size: Vec2::new(200.0, 100.0),
+                        content_size: Vec2::new(200.0, 300.0),
+                        inverse_scale_factor: 1.0,
+                        ..default()
+                    },
+                    UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
+                    ScrollPosition::default(),
+                    ComputedUiTargetCamera::from_reflect(&target).unwrap(),
+                ))
+                .id();
+            if let Some(position) = pointer_at {
+                let id = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(7));
+                let mut pointers = crate::ext::VirtualPointers::default();
+                pointers.register(id);
+                world.insert_resource(pointers);
+                world.spawn((
+                    id,
+                    PointerLocation::new(Location {
+                        target: NormalizedRenderTarget::Image(image),
+                        position,
+                    }),
+                ));
+            }
+            world.insert_resource(UiStack {
+                uinodes: vec![container],
+                partition: Vec::new(),
+            });
+            world.insert_resource(AccumulatedMouseScroll {
+                unit: MouseScrollUnit::Line,
+                delta: Vec2::new(0.0, -1.0),
+            });
+            world.insert_resource(PointerCapture::default());
+            world.run_system_once(apply_scroll).unwrap();
+            world.entity(container).get::<ScrollPosition>().unwrap().0
+        };
+        assert_eq!(run(None), Vec2::ZERO, "the window cursor must not reach it");
+        assert_eq!(
+            run(Some(Vec2::new(250.0, 180.0))),
+            Vec2::new(0.0, LINE_HEIGHT)
+        );
+        assert_eq!(
+            run(Some(Vec2::splat(-1.0))),
+            Vec2::ZERO,
+            "parked off-bounds"
+        );
     }
 
     #[test]

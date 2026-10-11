@@ -177,9 +177,9 @@ function Glass() {
 - Inside another composited layer (an ancestor with a `filter`, a
   `transform3d`, `opacity` on a node with children, or `cache`), every
   enclosing layer re-captures each frame, which defeats its caching.
-- Only the main UI camera is supported. Inside a `<surface>` or under a
-  second UI camera, the node renders without its backdrop filter and a
-  `layerCamera` warning is reported.
+- The backdrop is what the node's own camera rendered: under a second UI
+  camera that camera's frame, inside a `<surface>` the surface's clear
+  color.
 
 ![Four backdrop-filtered cards over a live 3D scene: a frosted-glass blur, a hue rotation, a filter combined with a backdrop filter, and a custom backdrop filter, each re-filtering the moving cubes behind it.](../../../screenshots/backdrop-filter.webp)
 

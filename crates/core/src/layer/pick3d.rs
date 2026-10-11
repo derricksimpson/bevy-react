@@ -131,7 +131,7 @@ fn transformed_root_of(
     })?;
     let mut root = *membership.node_to_layer.get(&member)?;
     loop {
-        if matrices.get(root).is_ok_and(|m| !m.identity) {
+        if matrices.get(root).is_ok_and(|m| m.remaps_picking()) {
             return Some(root);
         }
         root = (*membership.enclosing.get(&root)?)?;
@@ -206,7 +206,7 @@ pub fn drive_transform3d_pointer(
         // transformed layers whose inverted cursor lands in their border box.
         let mut best: Option<(usize, Entity, Vec2)> = None;
         for (root, computed, transform, matrix) in &layers {
-            if matrix.identity {
+            if !matrix.remaps_picking() {
                 continue;
             }
             let size = computed.size();
@@ -338,7 +338,7 @@ pub fn correct_transformed_interactions(
         return;
     };
     // Fast path: no visually-transformed layer this frame → nothing to fix.
-    if !matrices.iter().any(|m| !m.identity) {
+    if !matrices.iter().any(|m| m.remaps_picking()) {
         return;
     }
     let hovered = hover_map.as_ref().and_then(|map| map.get(&state.id));
@@ -395,7 +395,7 @@ pub fn visually_transformed_members(
 ) -> bevy::platform::collections::HashSet<Entity> {
     let mut transformed_roots: Vec<Entity> = Vec::new();
     for (&root, _) in membership.enclosing.iter() {
-        if matrices.get(root).is_ok_and(|m| !m.identity) {
+        if matrices.get(root).is_ok_and(|m| m.remaps_picking()) {
             transformed_roots.push(root);
         }
     }
@@ -526,6 +526,7 @@ mod tests {
             .spawn(LayerTransform3dMatrix {
                 model: Mat4::from_rotation_y(0.5),
                 identity: false,
+                windowed: true,
             })
             .id();
         let member = world.spawn(ChildOf(transformed_root)).id();
@@ -601,6 +602,7 @@ mod tests {
             .spawn(LayerTransform3dMatrix {
                 model: Mat4::from_rotation_y(0.5),
                 identity: false,
+                windowed: true,
             })
             .id();
         let member = world.spawn((ChildOf(root), Interaction::None)).id();

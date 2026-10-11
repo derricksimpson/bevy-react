@@ -291,3 +291,8 @@ elements, styles or filters should depend on `bevy-react` with
   nodes and wires, `editableText` number fields, an Add menu with search,
   live per-node thumbnails, and wires drawn by a custom element.
   [Try it in the browser](https://tulustul.github.io/bevy-react/nodes/).
+- [`examples/deadspace`](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace):
+  a sci-fi horror game's diegetic interface — thirteen `<surface>`
+  holograms in a 3D room, clicked and scrolled in-world, with filters and
+  morphs inside them, `<portal>` previews, `<canvas>` and `<svg>`.
+  [Play it in the browser](https://tulustul.github.io/bevy-react/deadspace/).

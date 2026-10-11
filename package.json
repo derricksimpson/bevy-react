@@ -12,6 +12,7 @@
     "examples/civilization/ui",
     "examples/cyberpunk/ui",
     "examples/nodes/ui",
+    "examples/deadspace/ui",
     "docs"
   ],
   "scripts": {
@@ -26,11 +27,12 @@
     "generate": "npm run style:generate && npm run elements:generate && npm run reference:generate",
     "docs": "tsx docs/src/build.ts",
     "screenshots": "node screenshots/capture.mjs",
-    "deploy:docs": "tsx docs/src/build.ts && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages --remove '{*,!(demo|cyberpunk|civilization|nodes)/**}'",
+    "deploy:docs": "tsx docs/src/build.ts && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages --remove '{*,!(demo|cyberpunk|civilization|nodes|deadspace)/**}'",
     "deploy:demos": "npm run build:web:prod -w demos -- --build-only && gh-pages -d examples/demos/ui/dist -e demo --no-history -b gh-pages",
     "deploy:cyberpunk": "npm run build:web:prod -w cyberpunk -- --build-only && gh-pages -d examples/cyberpunk/ui/dist -e cyberpunk --no-history -b gh-pages",
     "deploy:civilization": "npm run build:web:prod -w civilization -- --build-only && gh-pages -d examples/civilization/ui/dist -e civilization --no-history -b gh-pages",
-    "deploy:nodes": "npm run build:web:prod -w nodes -- --build-only && gh-pages -d examples/nodes/ui/dist -e nodes --no-history -b gh-pages"
+    "deploy:nodes": "npm run build:web:prod -w nodes -- --build-only && gh-pages -d examples/nodes/ui/dist -e nodes --no-history -b gh-pages",
+    "deploy:deadspace": "npm run build:web:prod -w deadspace -- --build-only && gh-pages -d examples/deadspace/ui/dist -e deadspace --no-history -b gh-pages"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

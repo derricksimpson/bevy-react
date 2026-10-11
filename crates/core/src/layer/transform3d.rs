@@ -50,6 +50,18 @@ pub struct LayerTransform3dMatrix {
     /// (identity layers behave exactly like untransformed ones; promotion
     /// itself is value-blind).
     pub identity: bool,
+    /// Whether the layer's UI camera draws to a window. Only then does
+    /// picking follow the visual (`layer::pick3d` remaps the window cursor);
+    /// inside a `<surface>` hits land on the untransformed layout.
+    pub windowed: bool,
+}
+
+impl LayerTransform3dMatrix {
+    /// Whether picking must be remapped through this layer: it is visibly
+    /// transformed and on a window.
+    pub fn remaps_picking(&self) -> bool {
+        !self.identity && self.windowed
+    }
 }
 
 /// Resolve one `origin` axis against the border-box extent (physical px).
@@ -150,12 +162,14 @@ pub fn sync_transform3d_matrices(
             &LayerTransform3d,
             Option<&LayerTransform3dMatrix>,
             &crate::bridge::ReactNode,
+            Option<&bevy::ui::ComputedUiTargetCamera>,
         ),
         With<PromotedLayer>,
     >,
+    targets: Query<&bevy::camera::RenderTarget>,
     mut dirt: ResMut<LayerContentDirt>,
 ) {
-    for (entity, computed, transform, params, existing, rnode) in &roots {
+    for (entity, computed, transform, params, existing, rnode, camera) in &roots {
         let size = computed.size();
         if size.x <= 0.5 || size.y <= 0.5 {
             continue; // Not laid out yet / empty: no quad to transform.
@@ -174,6 +188,13 @@ pub fn sync_transform3d_matrices(
         let next = LayerTransform3dMatrix {
             model: build_transform3d_matrix(&params.0, min, size, scale_factor),
             identity: params.0.is_identity(),
+            // No camera (headless) counts as the window, as everywhere.
+            windowed: !matches!(
+                camera
+                    .and_then(|c| c.get())
+                    .and_then(|c| targets.get(c).ok()),
+                Some(bevy::camera::RenderTarget::Image(_))
+            ),
         };
         if existing != Some(&next) {
             commands.entity(entity).insert(next);
@@ -309,6 +330,55 @@ mod tests {
         assert!(p.xy().abs_diff_eq(Vec2::new(20.0, 0.0), 1e-4));
     }
 
+    /// A layer under an image-target camera (a `<surface>`) still renders
+    /// transformed, but picking isn't remapped through it: the window
+    /// cursor can't reach it.
+    #[test]
+    fn surface_layers_are_not_remapped() {
+        use bevy::camera::{ImageRenderTarget, RenderTarget};
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::reflect::{FromReflect, structs::DynamicStruct};
+        use bevy::ui::ComputedUiTargetCamera;
+
+        let mut world = World::new();
+        world.init_resource::<LayerContentDirt>();
+        let camera = world
+            .spawn(RenderTarget::Image(ImageRenderTarget {
+                handle: Handle::default(),
+                scale_factor: 1.0,
+            }))
+            .id();
+        let mut target = DynamicStruct::default();
+        target.insert("camera", camera);
+        let root = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(100.0, 50.0),
+                    ..Default::default()
+                },
+                UiGlobalTransform::default(),
+                LayerTransform3d(Transform3d {
+                    rotate_y: deg(30.0),
+                    ..Default::default()
+                }),
+                PromotedLayer {
+                    reasons: super::super::PromotionReasons(
+                        super::super::PromotionReasons::TRANSFORM3D,
+                    ),
+                },
+                crate::bridge::ReactNode(7),
+                ComputedUiTargetCamera::from_reflect(&target).unwrap(),
+            ))
+            .id();
+        world.run_system_once(sync_transform3d_matrices).unwrap();
+        let matrix = world.get::<LayerTransform3dMatrix>(root).unwrap();
+        assert!(!matrix.identity, "it still renders transformed");
+        assert!(
+            !matrix.remaps_picking(),
+            "but the window cursor can't reach it"
+        );
+    }
+
     /// A params change on a promoted root rebuilds the matrix and pushes
     /// composite-only dirt (never content dirt); a settled value pushes
     /// nothing on re-run.
@@ -345,6 +415,7 @@ mod tests {
         assert!(dirt.nodes.is_empty(), "never content dirt");
         let matrix = world.get::<LayerTransform3dMatrix>(root).expect("derived");
         assert!(!matrix.identity);
+        assert!(matrix.remaps_picking(), "no camera counts as the window");
 
         // Settled: same params + geometry → no new dirt, component untouched.
         world

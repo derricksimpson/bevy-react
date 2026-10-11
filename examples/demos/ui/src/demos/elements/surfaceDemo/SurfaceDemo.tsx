@@ -46,6 +46,11 @@ commands.entity(screen).insert(SurfacePointer::new("monitor"));`}
         bar, taskbar, code viewer, dialogs and a reboot power-cycle, all plain
         React. Click the screen in the 3D scene to use it.
       </Paragraph>
+      <Paragraph>
+        Everything works in there: the process list scrolls under the wheel, and
+        the About dialog fades in through a blur, since group opacity, filters
+        and morphs composite on the surface's own camera.
+      </Paragraph>
     </>
   ),
 };

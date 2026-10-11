@@ -255,23 +255,6 @@ pub fn prepare_layer_backdrops(
     let (Some(filter_pipeline), Some(blit_pipeline)) = (filter_pipeline, blit_pipeline) else {
         return;
     };
-    // The snapshot rect maps into the main texture through the camera's
-    // physical viewport: layer coordinates are viewport-relative, the main
-    // texture covers the whole target.
-    let Some(camera) = extracted
-        .camera_render_entity
-        .and_then(|e| cameras.get(e).ok())
-    else {
-        return;
-    };
-    let Some(target_size) = camera.physical_target_size else {
-        return;
-    };
-    let viewport_offset = camera
-        .viewport
-        .as_ref()
-        .map_or(Vec2::ZERO, |v| v.physical_position.as_vec2());
-    let target_size = target_size.as_vec2().max(Vec2::ONE);
 
     // Phase 1: stage uniforms + specialize pipelines.
     struct StagedBackdrop {
@@ -284,6 +267,20 @@ pub fn prepare_layer_backdrops(
         let Some(chain) = &layer.backdrop_chain else {
             continue;
         };
+        // The snapshot rect maps into the main texture through the layer's
+        // camera's physical viewport: layer coordinates are viewport-relative,
+        // the main texture covers the whole target.
+        let Some(camera) = cameras.get(layer.camera_render).ok() else {
+            continue;
+        };
+        let Some(target_size) = camera.physical_target_size else {
+            continue;
+        };
+        let viewport_offset = camera
+            .viewport
+            .as_ref()
+            .map_or(Vec2::ZERO, |v| v.physical_position.as_vec2());
+        let target_size = target_size.as_vec2().max(Vec2::ONE);
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
@@ -506,8 +503,8 @@ pub fn run_backdrop_passes(
 
 /// Fetch the camera's current main-texture view for [`run_backdrop_passes`].
 /// `None` (no `ViewTarget` on the camera) skips every backdrop this frame.
-pub fn camera_main_texture(world: &World, camera: Option<Entity>) -> Option<TextureView> {
-    let target = world.get::<ViewTarget>(camera?)?;
+pub fn camera_main_texture(world: &World, camera: Entity) -> Option<TextureView> {
+    let target = world.get::<ViewTarget>(camera)?;
     Some(target.main_texture_view().clone())
 }
 

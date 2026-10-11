@@ -60,7 +60,6 @@ fn js_warning_kind_table_covers_known_kinds() {
         "lineHeight",
         "letterSpacing",
         "precompileFilters",
-        "layerCamera",
         "featureMissing",
         "unknownProp",
         "propIgnored",

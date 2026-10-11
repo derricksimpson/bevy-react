@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Modifier keys on pointer and wheel events.** `PointerEventData` and
   `WheelEventData` carry `shiftKey`, `ctrlKey`, `altKey` and `metaKey`, for
   Shift-click selection, Ctrl+wheel zoom and the like.
+- **Layers inside `<surface>`.** Group `opacity`, `filter`,
+  `backdropFilter`, `morphFilter`, `transform3d` and `cache` work under any
+  UI camera, a surface's included: each layer composites on its own camera.
+  The `layerCamera` warning is gone.
+- **The wheel reaches `<surface>` UI.** Scroll containers and `onWheel`
+  inside a surface follow the in-world pointer.
 - **`SurfaceSpec::scale_factor`.** A `<surface>` can render at a DPI scale
   like a window: the subtree lays out in `size / scale_factor` logical px and
   rasterizes at the texture's full resolution, so a UI designed at a fixed
@@ -28,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A click on screen-space UI also clicked the `<surface>` mesh behind it.
   Interactive on-screen UI under the cursor now covers in-world surfaces; a
   press already held on a surface keeps its target.
+- The wheel could scroll or fire `onWheel` on `<surface>` UI whose
+  texture position happened to lie under the window cursor.
 - `<editableText value="…">` mounted empty: an element's spawn hook now sees
   the create's act-now attributes, as documented.
 

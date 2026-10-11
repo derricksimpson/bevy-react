@@ -57,7 +57,6 @@ pub mod cached;
 pub mod clip;
 pub mod mips;
 pub mod morph;
-pub mod stock_camera;
 pub mod store;
 pub mod transform3d;
 pub mod warm;
@@ -282,6 +281,14 @@ pub struct ExtractedLayer {
     pub view_entity: Entity,
     /// The synthetic view's phase key.
     pub retained: RetainedViewEntity,
+    /// The layer's UI camera's own phase key (stock `UI_CAMERA_SUBVIEW` on
+    /// the camera's main entity): where its members' items are stolen from
+    /// and, for a top-level layer, where its composite quad lands.
+    pub camera_view: RetainedViewEntity,
+    /// The UI camera's render-world entity: [`ui_layer_capture_pass`] runs
+    /// the layer in this camera's schedule, and the backdrop samples this
+    /// camera's frame.
+    pub camera_render: Entity,
     /// Render-world entity of the composite quad ([`LayerEntities::quad`],
     /// persistent; its [`LayerCompositeBatch`] is rewritten by prepare).
     pub quad_entity: Entity,
@@ -415,22 +422,13 @@ pub struct ExtractedUiLayers {
     /// moved (`membership_rebuilds` / `roots`), kept otherwise.
     pub membership: HashMap<MainEntity, usize>,
     /// layer index → index of its enclosing layer (quad routing); `None` =
-    /// composite into the stock camera phase. Rebuilt with `membership`.
+    /// composite into its camera's phase. Rebuilt with `membership`.
     pub enclosing: Vec<Option<usize>>,
     /// The `LayerMembership::rebuilds` the two maps above were derived from.
     pub membership_rebuilds: u64,
     /// The layer roots in `layers` order the two maps were derived from — a
     /// changed order re-indexes them.
     pub roots: Vec<Entity>,
-    /// The stock UI view's phase key for the target camera.
-    pub stock_view: Option<RetainedViewEntity>,
-    /// The camera's render-world entity ([`ui_layer_capture_pass`] gates on
-    /// the current view being this camera).
-    pub camera_render_entity: Option<Entity>,
-    /// Non-stock cameras already warned about ([`stock_camera`]): layers
-    /// under them are skipped every frame; the warn (and its formatting)
-    /// happens once per camera.
-    pub warned_cameras: HashSet<Entity>,
     /// Layer indices in capture order: deepest (innermost) first, so an outer
     /// capture's pass samples already-rendered inner captures.
     pub capture_order: Vec<usize>,
@@ -466,17 +464,7 @@ pub fn extract_ui_layers(
     membership: Extract<Res<LayerMembership>>,
     repaints: Extract<Res<super::LayerRepaintState>>,
     clips: Extract<Res<crate::layer::clip::LayerClips>>,
-    cameras: Extract<
-        Query<
-            (
-                RenderEntity,
-                &Camera,
-                Option<&bevy::camera::RenderTarget>,
-                Has<bevy::ui::IsDefaultUiCamera>,
-            ),
-            Or<(With<Camera2d>, With<Camera3d>)>,
-        >,
-    >,
+    cameras: Extract<Query<(RenderEntity, &Camera), Or<(With<Camera2d>, With<Camera3d>)>>>,
     main_pass_formats: Res<CameraMainPassTextureFormats>,
     mut store: ResMut<LayerTextureStore>,
 ) {
@@ -485,8 +473,6 @@ pub fn extract_ui_layers(
     let store = &mut *store;
     extracted.layers.clear();
     extracted.capture_order.clear();
-    extracted.stock_view = None;
-    extracted.camera_render_entity = None;
 
     if layers.is_empty() {
         extracted.membership.clear();
@@ -499,34 +485,19 @@ pub fn extract_ui_layers(
         return;
     }
 
-    // v1: all layers composite on ONE camera — the stock camera picked among
-    // the cameras that have layers this frame (default UI camera > window
-    // target > first seen, see [`stock_camera`]); a layer under any other
-    // camera is skipped below, so it never injects a quad specialized on a
-    // foreign target format into the stock phase.
+    // Every layer composites on its own UI camera: the window camera, a
+    // `<surface>`'s image camera, any other — its items are stolen from that
+    // camera's phase and its quad lands there, specialized on that camera's
+    // target format.
     let camera_of = |target_camera: &ComputedUiTargetCamera| {
         let camera_main = target_camera.get()?;
-        let (camera_render, camera, target, is_default_ui) = cameras.get(camera_main).ok()?;
+        let (camera_render, camera) = cameras.get(camera_main).ok()?;
         if !camera.is_active {
             return None;
         }
         let target_format = main_pass_formats.get(&camera_render).copied()?;
-        let window_target = matches!(target, Some(bevy::camera::RenderTarget::Window(_)));
-        Some((
-            stock_camera::CameraCandidate {
-                entity: camera_main,
-                is_default_ui,
-                window_target,
-            },
-            camera_render,
-            target_format,
-        ))
+        Some((camera_main, camera_render, target_format))
     };
-    let stock_camera = stock_camera::pick_stock_camera(
-        layers
-            .iter()
-            .filter_map(|l| camera_of(l.3).map(|(candidate, _, _)| candidate)),
-    );
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
     for (
         root,
@@ -544,34 +515,18 @@ pub fn extract_ui_layers(
         root_visibility,
     ) in layers.iter()
     {
-        let Some((candidate, camera_render, target_format)) = camera_of(target_camera) else {
+        let Some((camera_main, camera_render, target_format)) = camera_of(target_camera) else {
             continue;
         };
-        let camera_main = candidate.entity;
-        if Some(camera_main) != stock_camera {
-            // Non-stock camera: skipped, not extracted (no persistent
-            // entities, no membership → its members are neither stolen nor
-            // hidden by the cached-member skip; the subtree renders
-            // unpromoted in its own camera's phase).
-            let stock = stock_camera.expect("a candidate exists, so a stock camera was picked");
-            if extracted.warned_cameras.insert(camera_main) {
-                stock_camera::warn_skipped(camera_main, stock);
-            }
-            continue;
-        }
-        if extracted.stock_view.is_none() {
-            extracted.stock_view = Some(RetainedViewEntity::new(
-                camera_main.into(),
-                None,
-                // Stock `UI_CAMERA_SUBVIEW`.
-                1,
-            ));
-            extracted.camera_render_entity = Some(camera_render);
-        }
-
         let (min, size) = (rect.min, rect.size);
         let retained =
             RetainedViewEntity::new(MainEntity::from(root), None, UI_LAYER_CAPTURE_SUBVIEW);
+        // A layer (re-)entering extraction — its camera was off for a few
+        // frames, a `<surface>` whose mesh was hidden — may have missed the
+        // main-world dirt of those frames (dirt lives one frame, and only
+        // extracted layers see it), so its surviving texture can't be
+        // trusted.
+        let returning = !store.entities.contains_key(&MainEntity::from(root));
         // The layer's persistent entities: spawned on first sight, kept until
         // the layer stops being extracted (evicted below). The view gets its
         // `ExtractedView` in the sync pass at the end — `needs_capture` is
@@ -607,7 +562,7 @@ pub fn extract_ui_layers(
                     && slot.size == size
                     && !slot.needs_realloc(size, target_format, wants_mips, bucketable)
             });
-        let needs_capture = !cached_ok || repaints.dirty.contains(&root);
+        let needs_capture = returning || !cached_ok || repaints.dirty.contains(&root);
 
         let chain = extract_chain(filter_chain);
         let backdrop_chain = extract_chain(backdrop.map(|b| &b.0));
@@ -658,6 +613,9 @@ pub fn extract_ui_layers(
             main_entity: MainEntity::from(root),
             view_entity,
             retained,
+            // Stock `UI_CAMERA_SUBVIEW`.
+            camera_view: RetainedViewEntity::new(camera_main.into(), None, 1),
+            camera_render,
             quad_entity,
             min,
             size,
@@ -871,9 +829,9 @@ fn despawn_layer_entities(commands: &mut Commands, entities: &LayerEntities) {
     }
 }
 
-/// Moves promoted subtrees' phase items from the camera's UI phase into their
-/// layer's synthetic phase, then injects one composite quad per layer. Runs
-/// after queueing, before the stock sort (which then sorts every phase,
+/// Moves promoted subtrees' phase items from their camera's UI phase into
+/// their layer's synthetic phase, then injects one composite quad per layer.
+/// Runs after queueing, before the stock sort (which then sorts every phase,
 /// stolen items keeping their global stack-index sort keys).
 pub fn redistribute_ui_layers(
     extracted: Res<ExtractedUiLayers>,
@@ -886,29 +844,33 @@ pub fn redistribute_ui_layers(
     if extracted.layers.is_empty() {
         return;
     }
-    let Some(stock_view) = extracted.stock_view else {
-        return;
-    };
     let Some(composite_pipeline) = composite_pipeline else {
         return;
     };
 
-    // Steal: drain matching items out of the stock phase in one pass…
+    // Steal: drain matching items out of each layered camera's phase in one
+    // pass per camera…
     let mut stolen: Vec<(usize, (Entity, MainEntity), TransparentUi)> = Vec::new();
     // …tracking each layer's first (lowest-sort-key) stolen item: the
     // composite quad draws exactly where the subtree would have started.
     let mut quad_sort_keys: Vec<Option<FloatOrd>> = vec![None; extracted.layers.len()];
-    {
-        let Some(stock_phase) = phases.get_mut(&stock_view) else {
-            return;
+    let mut camera_views: Vec<RetainedViewEntity> = Vec::new();
+    for layer in &extracted.layers {
+        if !camera_views.contains(&layer.camera_view) {
+            camera_views.push(layer.camera_view);
+        }
+    }
+    for camera_view in camera_views {
+        let Some(camera_phase) = phases.get_mut(&camera_view) else {
+            continue;
         };
         // One O(n) partition pass (order-preserving): a `shift_remove` per
         // stolen key shifts the IndexMap tail each time — O(n²), ~14ms/frame
         // at 500 stress layers with most of the phase promoted.
-        let taken = std::mem::take(&mut stock_phase.items);
+        let taken = std::mem::take(&mut camera_phase.items);
         for (key, item) in taken {
             let Some(&idx) = extracted.membership.get(&item.main_entity()) else {
-                stock_phase.items.insert(key, item);
+                camera_phase.items.insert(key, item);
                 continue;
             };
             let best = &mut quad_sort_keys[idx];
@@ -945,7 +907,7 @@ pub fn redistribute_ui_layers(
 
     // Inject composite quads — inner layers' quads land in their enclosing
     // layer's phase (they are content of the outer capture); top-level quads
-    // land in the camera phase at the subtree's stacking position.
+    // land in their camera's phase at the subtree's stacking position.
     let draw_function = draw_functions.read().id::<DrawLayerComposite>();
     for (idx, layer) in extracted.layers.iter().enumerate() {
         let Some(sort_key) = quad_sort_keys[idx] else {
@@ -974,7 +936,7 @@ pub fn redistribute_ui_layers(
                 }
                 extracted.layers[outer].retained
             }
-            None => stock_view,
+            None => layer.camera_view,
         };
         if let Some(phase) = phases.get_mut(&target) {
             // The frosted backdrop draws one epsilon UNDER the whole subtree
@@ -2224,8 +2186,8 @@ pub fn prepare_layer_filters(
 
 /// Renders each layer's synthetic phase into its capture texture, then
 /// replays the layer's staged filter run (if any) capture → ping-pong
-/// textures. Runs in the camera's schedule right before the stock `ui_pass`
-/// consumes the composite quads.
+/// textures. Runs in each camera's schedule right before the stock `ui_pass`
+/// consumes the composite quads, for the layers under that camera.
 #[allow(clippy::too_many_arguments)]
 pub fn ui_layer_capture_pass(
     world: &World,
@@ -2241,14 +2203,15 @@ pub fn ui_layer_capture_pass(
     pipeline_cache: Res<PipelineCache>,
     mut ctx: RenderContext,
 ) {
-    if extracted.camera_render_entity != Some(view.into_inner()) {
+    let view = view.into_inner();
+    if !extracted.layers.iter().any(|l| l.camera_render == view) {
         return;
     }
     // The camera's CURRENT main texture — post-PostProcess, pre-`ui_pass`:
     // the tonemapped 3D frame with no UI on it, the v1 backdrop source.
     // Fetched here (not prepare) because the a/b buffer selection flips
     // during PostProcess.
-    let main_texture = backdrop::camera_main_texture(world, extracted.camera_render_entity);
+    let main_texture = backdrop::camera_main_texture(world, view);
     // Innermost first ([`ExtractedUiLayers::capture_order`]): a quad sampling
     // layer B's capture (or B's filtered output) must draw — inside some
     // outer capture or the screen — only after B's capture *and filter*
@@ -2256,6 +2219,9 @@ pub fn ui_layer_capture_pass(
     // in B's loop iteration, before any enclosing layer's capture.
     for &idx in &extracted.capture_order {
         let layer = &extracted.layers[idx];
+        if layer.camera_render != view {
+            continue;
+        }
         // Backdrop first: blit the frame region into the snapshot, then run
         // the backdrop chain. Independent of the content capture below (the
         // source is the pre-UI frame, static across this whole loop in v1).
