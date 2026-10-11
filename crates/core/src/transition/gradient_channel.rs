@@ -10,6 +10,7 @@
 //! angles lerp numerically (CSS long-way), `Val` positions lerp same-unit and
 //! per-leaf SNAP on unit/`Auto`/presence mismatch (the `Length::lerp` rule).
 
+use bevy::math::TryStableInterpolate;
 use bevy::ui::{ColorStop, Gradient, RadialGradientShape, Val};
 
 use crate::animations::Lerp;
@@ -212,20 +213,10 @@ fn shapes_alignable(a: RadialGradientShape, b: RadialGradientShape) -> bool {
     ) || a == b
 }
 
-/// Same-unit `Val` lerp; mixed units / `Auto` snap to the target (the
-/// `Length::lerp` rule lifted onto bevy's `Val`).
+/// Same-unit `Val` lerp; mixed units snap to the target (the `Length::lerp`
+/// rule, through bevy's own `Val` interpolation).
 fn lerp_val(a: Val, b: Val, t: f32) -> Val {
-    use Val::*;
-    let l = |x: f32, y: f32| x + (y - x) * t;
-    match (a, b) {
-        (Px(x), Px(y)) => Px(l(x, y)),
-        (Percent(x), Percent(y)) => Percent(l(x, y)),
-        (Vw(x), Vw(y)) => Vw(l(x, y)),
-        (Vh(x), Vh(y)) => Vh(l(x, y)),
-        (VMin(x), VMin(y)) => VMin(l(x, y)),
-        (VMax(x), VMax(y)) => VMax(l(x, y)),
-        _ => b,
-    }
+    a.try_interpolate_stable(&b, t).unwrap_or(b)
 }
 
 /// Stop colors lerp sRGB component-wise, straight alpha — exactly the

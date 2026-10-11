@@ -67,10 +67,11 @@ pub(crate) fn distance_scale(c: &AnchorScaling, dist: f32) -> f32 {
 
 /// Marker for the dedicated overlay container that every [`Anchored`] node is
 /// parented under. Spawned once at startup as its own zero-size UI root at the
-/// window origin, sorted below the app's tree (`GlobalZIndex(-1)` — bevy does
-/// not tiebreak equal root keys), so anchored overlays live in their own
-/// hierarchy and never contribute to an app container's flex layout or
-/// scrollable `content_size`. See [`position_anchored_nodes`].
+/// window origin, sorted below the app's tree (`GlobalZIndex(-1)` — bevy
+/// orders equal root keys by which was added or restacked last), so anchored
+/// overlays live in their own hierarchy and never contribute to an app
+/// container's flex layout or scrollable `content_size`. See
+/// [`position_anchored_nodes`].
 #[derive(Component, Debug, Clone, Copy)]
 pub struct AnchorLayer;
 
@@ -92,8 +93,9 @@ pub struct Anchored {
 /// Spawn the [`AnchorLayer`]: its own zero-size UI root at the window
 /// origin with default `Overflow::visible`, so it neither clips its children
 /// nor intercepts pointer input; anchored nodes position themselves relative
-/// to its (0,0) corner. `GlobalZIndex(-1)` sorts it below the app's tree
-/// deterministically (bevy does not tiebreak equal root keys).
+/// to its (0,0) corner. `GlobalZIndex(-1)` sorts it below the app's tree by
+/// rule: at the tree's own key the order would be whichever root bevy saw
+/// added or restacked last.
 pub(crate) fn spawn_anchor_layer(mut commands: Commands) {
     commands.spawn((
         Node {

@@ -1,7 +1,7 @@
 //! App-authored custom filters — the full `#[react_filter]` /
 //! `#[react_morph_filter]` pipeline exercised from an app crate: macro →
-//! registration → codegen (`bevy.ts` types the names + params) → app WGSL
-//! that `#import bevy_react::filter` for the binding contract.
+//! registration → codegen (`bevy.ts` types the names + params) → app WESL
+//! that imports `bevy_react::filter` for the binding contract.
 //!
 //! Two families (separate registries in the generated typing, enforced at
 //! resolve time — a morph name in a `filter` chain warns and is skipped,

@@ -75,8 +75,9 @@ main window tree differs: it centers top-level elements and spaces them
   for UI on a texture or a 3D mesh, use `<surface>`.
 - **Stacking.** Roots and the main tree (`globalZIndex` 0) are ordered by
   `globalZIndex`, so the default `1` floats above the app. Two roots with
-  the same value have no defined order: give overlays that can be open
-  together distinct values. See [Z-index](../styling/z-index.md).
+  the same value stack by history, not by rule (the one mounted or
+  restacked last is on top): give overlays that can be open together
+  distinct values. See [Z-index](../styling/z-index.md).
 - **Click-through.** The root itself is never hit by the pointer, background
   included: clicks and hover on its empty area reach the app and the 3D
   scene beneath. Its children are ordinary pickable elements.

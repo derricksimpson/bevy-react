@@ -42,7 +42,8 @@
 // `cylinderAngle` — per-fragment, progress-derived) thread through the
 // helpers as a `Curl` value; GLSL `mod` becomes `glsl_mod` (WGSL `%`
 // truncates, GLSL flooring semantics matter for the hit-angle wrap);
-// digit-suffixed locals are renamed (naga_oil constraint). Sampling sits
+// digit-suffixed locals are renamed (a naga_oil-era constraint; WESL has
+// none). Sampling sits
 // behind deep data-dependent branches, hence the explicit-LOD morph helpers;
 // displaced from-samples are edge-clamped like the upstream sampler.
 //

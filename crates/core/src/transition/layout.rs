@@ -490,23 +490,30 @@ fn seed_in_parent_space(
 /// corner radii bevy resolved at the natural size would shrink with it (a
 /// 36px circle seed on a 72px thumb, shown as a 200px hero at 0.36, would
 /// read as 13px). Divide the resolved radii out by the scale for this one
-/// frame — bevy rewrites `ComputedNode.border_radius` from `Node` every
-/// frame, unconditionally, so nothing lingers. Anisotropic scales use the
-/// mean (a per-corner radius has one value); the clamp mirrors bevy's
-/// (half the shorter side).
+/// frame, each axis by its own component (a corner is an x and a y radius),
+/// so an anisotropic scale still shows a circular corner; the clamp is
+/// bevy's for an elliptical corner (half the box, per axis).
+///
+/// The write is tracked (compare, then assign), like bevy's own:
+/// bevy_ui_render keeps extracted nodes and re-extracts one only when a
+/// component it watches is `Changed` (`extract_uinode_changes`), so an
+/// unmarked write would show only by riding another component's mark.
+/// Bevy's layout puts the radius back next frame the same way — it compares
+/// against what it would resolve.
 fn compensate_seed_frame_radius(computed: &mut Mut<ComputedNode>, scale: Vec2) {
-    let s = 0.5 * (scale.x + scale.y);
-    if s <= f32::EPSILON || (s - 1.0).abs() < 1e-6 {
+    if scale.min_element() <= f32::EPSILON || scale.abs_diff_eq(Vec2::ONE, 1e-6) {
         return;
     }
-    let max = Vec2::splat(0.5 * computed.size.min_element());
-    let fix = |r: Vec2| (r / s).clamp(Vec2::ZERO, max);
-    // No change mark, as in bevy's own write.
-    let radius = &mut computed.bypass_change_detection().border_radius;
+    let max = 0.5 * computed.size;
+    let fix = |r: Vec2| (r / scale).clamp(Vec2::ZERO, max);
+    let mut radius = computed.border_radius;
     radius.top_left = fix(radius.top_left);
     radius.top_right = fix(radius.top_right);
     radius.bottom_right = fix(radius.bottom_right);
     radius.bottom_left = fix(radius.bottom_left);
+    if computed.border_radius != radius {
+        computed.border_radius = radius;
+    }
 }
 
 /// The per-node query of [`drive_layout_transitions`]: the transitioning

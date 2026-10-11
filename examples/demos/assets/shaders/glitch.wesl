@@ -9,7 +9,7 @@
 //
 // PREMULTIPLY: like every UV-distortion filter this resamples the source at
 // shifted positions, so it samples the premultiplied capture DIRECTLY (see
-// `filter_prelude.wgsl` — premultiplied color is the linear-resampling-safe
+// `filter_prelude.wesl` — premultiplied color is the linear-resampling-safe
 // form). The channel split recombines r/g/b from three premultiplied samples;
 // taking alpha as the max of the three keeps the result valid premultiplied
 // color: each channel satisfies c <= its own sample's alpha <= the max.

@@ -11,7 +11,7 @@
 // PREMULTIPLY: a UV-distortion filter only *resamples* the source at shifted
 // positions. Linear filtering of straight-alpha color would bleed the hidden
 // rgb of transparent texels at coverage edges, so per the contract in
-// `filter_prelude.wgsl` we sample the premultiplied capture DIRECTLY and
+// `filter_prelude.wesl` we sample the premultiplied capture DIRECTLY and
 // output the sample as-is — no unpremultiply/premultiply round trip.
 
 import bevy_react::filter::{FullscreenVertexOutput, source_sampler, source_texture, uniforms};

@@ -313,9 +313,10 @@ fn shared_seed_stays_anchored_when_the_parent_reflows_around_the_size_flight() {
 
 /// On the seed frame the node is shown through the FLIP scale, so a corner
 /// radius resolved at the natural size would shrink with the box: a 36px
-/// (circle) seed on a 72×72 thumb, shown as a 200×200 hero at scale 0.36,
-/// must still READ as 36px on screen — `ComputedNode.border_radius` is
-/// compensated for that one frame (bevy rewrites it from `Node` next frame).
+/// seed radius on a 144×72 pill, shown as a 200×200 hero at scale
+/// (0.72, 0.36), must still READ as 36px on screen on BOTH axes —
+/// `ComputedNode.border_radius` is compensated per axis for that one frame
+/// (bevy rewrites it from `Node` next frame).
 #[test]
 fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
     use crate::protocol::units::Rect;
@@ -349,29 +350,22 @@ fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
                 state: Box::new(seed_state),
                 rect: SharedRect {
                     center: Vec2::new(300.0, 50.0),
-                    size: Vec2::new(72.0, 72.0),
+                    size: Vec2::new(144.0, 72.0),
                 },
             },
         ))
         .id();
     step(&mut app, 0.0);
     let g = global(&app, hero);
-    let scale = g.matrix2.x_axis.x;
+    let scale = Vec2::new(g.matrix2.x_axis.x, g.matrix2.y_axis.y);
     assert!(
-        (scale - 0.36).abs() < 1e-3,
+        scale.abs_diff_eq(Vec2::new(0.72, 0.36), 1e-3),
         "seed frame FLIP scale, got {scale}"
     );
-    let shown = app
-        .world()
-        .entity(hero)
-        .get::<ComputedNode>()
-        .unwrap()
-        .border_radius
-        .top_left
-        .x
-        * scale;
+    let node = app.world().entity(hero).get::<ComputedNode>().unwrap();
+    let shown = node.border_radius.top_left * scale;
     assert!(
-        (shown - 36.0).abs() < 1.0,
+        shown.abs_diff_eq(Vec2::splat(36.0), 1.0),
         "seed frame: the seed radius as shown through the FLIP scale, got {shown}px"
     );
 }

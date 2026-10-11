@@ -11,7 +11,8 @@
 //
 // FAITHFUL-PORT NOTES: the GLSL `rand` overloads split into `rand_f`/
 // `rand_v`, its `texture()` helper is renamed `blend_sample` (reserved-ish),
-// `pow3` → `pow_rgb`, `uv2` → `uv_blur` (no trailing-digit identifiers). The
+// `pow3` → `pow_rgb`, `uv2` → `uv_blur` (naga_oil refused trailing-digit
+// identifiers; WESL doesn't). The
 // quirky `degrees((i/repeats)*360.)` is KEPT — it wraps the blur ring ~57
 // times and the look depends on it. The 50-iteration blur loop samples both
 // images each step (~100 samples/px per in-flight frame — the accepted cost,

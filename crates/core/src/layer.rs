@@ -39,6 +39,7 @@
 //! composite parameters the render pass forwards without interpreting.
 //! Promotion is `!reasons.is_empty()`; demotion is the flags emptying.
 
+use bevy::asset::asset_changed::AssetChanged;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
@@ -1085,36 +1086,17 @@ pub fn fold_member_geometry(
 }
 
 /// `<image>` textures arrive asynchronously — no op, no bevy-react write site
-/// — so watch the asset events and dirty the owning layer of any node using a
-/// touched image. (One frame late for loads, which are async anyway; canvas
-/// uploads are also `Modified` here, double-covering their direct tap.)
+/// — so dirty the owning layer of any node whose image asset changed: loaded,
+/// reloaded, or modified in place (a canvas upload too, double-covering its
+/// direct tap). `AssetChanged` is the filter bevy_ui_render's own "re-extract
+/// this image node" mark rides; it is current once `AssetEventSystems` ran,
+/// so scheduled after them the layer re-captures on the frame the new pixels
+/// are first drawn.
 pub fn watch_layer_image_assets(
-    mut events: MessageReader<AssetEvent<Image>>,
-    images: Query<(Entity, &bevy::ui::widget::ImageNode)>,
-    registry: Res<LayersRegistry>,
+    images: Query<Entity, AssetChanged<bevy::ui::widget::ImageNode>>,
     mut dirt: ResMut<LayerContentDirt>,
 ) {
-    if registry.layers.is_empty() {
-        events.clear();
-        return;
-    }
-    let mut touched: Vec<AssetId<Image>> = Vec::new();
-    for event in events.read() {
-        match event {
-            AssetEvent::LoadedWithDependencies { id } | AssetEvent::Modified { id } => {
-                touched.push(*id);
-            }
-            _ => {}
-        }
-    }
-    if touched.is_empty() {
-        return;
-    }
-    for (entity, image) in &images {
-        if touched.contains(&image.image.id()) {
-            dirt.nodes.push(entity);
-        }
-    }
+    dirt.nodes.extend(&images);
 }
 
 /// Turn this frame's dirt into per-layer repaint decisions. Runs in
@@ -1922,6 +1904,54 @@ mod tests {
         *world.get_mut::<InheritedVisibility>(member).unwrap() = InheritedVisibility::VISIBLE;
         assert!(run(&mut world).contains(&root), "revealed → re-captured");
         assert!(run(&mut world).is_empty(), "then cached again");
+    }
+
+    /// An image asset changing under an `ImageNode` — an async load landing,
+    /// a hot reload, an in-place write — repaints the node's layer on that
+    /// frame, with no write to the node itself; an idle asset leaves it
+    /// cached.
+    #[test]
+    fn image_asset_change_repaints_the_nodes_layer() {
+        use bevy::ui::widget::ImageNode;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
+        app.init_asset::<Image>();
+        app.init_resource::<LayerContentDirt>();
+        app.init_resource::<LayerRepaintState>();
+        app.init_resource::<LayersRegistry>();
+        app.add_systems(
+            PostUpdate,
+            (
+                watch_layer_image_assets.after(bevy::asset::AssetEventSystems),
+                resolve_layer_repaints,
+            )
+                .chain(),
+        );
+        let handle = app
+            .world_mut()
+            .resource_mut::<Assets<Image>>()
+            .add(Image::default());
+        let root = app.world_mut().spawn_empty().id();
+        let node = app.world_mut().spawn(ImageNode::new(handle.clone())).id();
+        let mut membership = LayerMembership::default();
+        membership.node_to_layer.insert(root, root);
+        membership.node_to_layer.insert(node, root);
+        membership.enclosing.insert(root, None);
+        app.insert_resource(membership);
+        let run = |app: &mut App| {
+            app.update();
+            app.world().resource::<LayerRepaintState>().dirty.clone()
+        };
+        assert!(run(&mut app).contains(&root), "the asset arrived");
+        assert!(run(&mut app).is_empty(), "idle asset → cached");
+
+        // `insert` over the existing asset queues `AssetEvent::Modified`.
+        app.world_mut()
+            .resource_mut::<Assets<Image>>()
+            .insert(handle.id(), Image::default())
+            .unwrap();
+        assert!(run(&mut app).contains(&root), "modified → re-captured");
+        assert!(run(&mut app).is_empty(), "then cached again");
     }
 
     /// A `cache: "never"` layer is dirty every frame with no other dirt —

@@ -96,12 +96,15 @@ pub static ROOT: Element = Element {
 
 /// The default style of a `<root>`: a window-filling overlay just above the
 /// window tree. `globalZIndex: 1` (not a magic max) because bevy_ui sorts
-/// root nodes by `(GlobalZIndex, ZIndex)` with NO tiebreak: equal keys fall
-/// back to query iteration order, which is unspecified — a bare `<root>` at
-/// the window tree's implicit 0 could land above OR below it. `1` is
-/// deterministically above, while leaving the whole range open for the
-/// user's own layering (`style.globalZIndex` overrides in either direction;
-/// the devtools panel claims `i32::MAX` explicitly).
+/// root nodes by `(GlobalZIndex, ZIndex)` and breaks a tie by history: a
+/// root that is new this frame, or whose z-index component was just written,
+/// goes above its equals, the others keep last frame's order, and two that
+/// arrive on the same frame fall back to query iteration order (unspecified).
+/// So a bare `<root>` at the window tree's implicit 0 would usually land
+/// above it — by mount timing, not by rule. `1` is above by rule, while
+/// leaving the whole range open for the user's own layering
+/// (`style.globalZIndex` overrides in either direction; the devtools panel
+/// claims `i32::MAX` explicitly).
 ///
 /// It defaults to a column, like the main UI root: bevy's own default is
 /// `row`, but a row container mis-measures a single content-sized child that

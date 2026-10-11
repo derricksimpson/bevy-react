@@ -878,9 +878,6 @@ impl Plugin for ReactUiPlugin {
                     .after(apply_js_ops)
                     .before(apply_interaction_styles)
                     .before(AnimationSet::Apply),
-                // Async `<image>` texture arrivals have no other write site the
-                // layer cache could tap.
-                crate::layer::watch_layer_image_assets,
                 // Override `ui_focus_system`'s geometric (stale-rect) verdict
                 // for members of visually-transformed layers with the virtual
                 // pointer's, before styling/enter-leave/drag-position readers.
@@ -990,6 +987,12 @@ impl Plugin for ReactUiPlugin {
                 crate::layer::resolve_layer_repaints
                     .after(crate::layer::sync_layer_geometry)
                     .after(bevy::ui::UiSystems::PostLayout),
+                // Async `<image>` texture arrivals have no other write site the
+                // layer cache could tap: once this frame's asset events are
+                // in (`AssetChanged` reads them), before the resolver drains.
+                crate::layer::watch_layer_image_assets
+                    .after(bevy::asset::AssetEventSystems)
+                    .before(crate::layer::resolve_layer_repaints),
                 // Derives each transformed layer's composite matrix from this
                 // frame's layout; pushes composite-only dirt the resolver
                 // drains, so it slots between geometry sync and the resolver.
