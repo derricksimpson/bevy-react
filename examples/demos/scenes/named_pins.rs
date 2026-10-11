@@ -70,12 +70,16 @@ impl Plugin for NamedPinsScenePlugin {
             .add_systems(
                 PostUpdate,
                 // Rigid attachment: read the card's `UiGlobalTransform` AFTER
-                // bevy_ui laid out this frame (`UiSystems::Layout` writes it,
-                // `PostLayout` the clip), and write the pin transforms BEFORE
-                // transform propagation — so a dragged card and its tube move
-                // in the same frame, never a frame apart.
+                // bevy_ui laid out this frame (`UiSystems::Layout` writes it),
+                // and write the pin transforms BEFORE transform propagation —
+                // so a dragged card and its tube move in the same frame, never
+                // a frame apart. Not after `PostLayout` (which computes the
+                // clip): bevy orders its menu-focus systems after visibility
+                // propagation (itself after transform propagation) and before
+                // `PostLayout`, so that edge would close a cycle. The clip
+                // that hides a scrolled-away card's pin is a frame old.
                 place_pins
-                    .after(UiSystems::PostLayout)
+                    .after(UiSystems::Layout)
                     .before(TransformSystems::Propagate)
                     .run_if(in_state(Scene::NamedNodes)),
             );
@@ -253,7 +257,7 @@ fn place_pins(
         // wants logical viewport px.
         let center_physical = ui_tf.translation;
         let center = center_physical * computed.inverse_scale_factor();
-        let clipped = clip.is_some_and(|c| !c.clip.contains(center_physical));
+        let clipped = clip.is_some_and(|c| !c.contains_point(center_physical));
         let ground = |screen: Vec2| {
             cam.viewport_to_world(cam_tf, screen).ok().and_then(|ray| {
                 ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::new(Vec3::Y))

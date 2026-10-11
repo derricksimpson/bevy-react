@@ -32,7 +32,7 @@ use bevy::input::mouse::MouseButton;
 use bevy::picking::backend::PointerHits;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::{
-    Location, PointerAction, PointerId, PointerInput, PointerLocation, PointerPress,
+    Location, PointerAction, PointerId, PointerInput, PointerLocation, PointerPressState,
 };
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
@@ -70,7 +70,7 @@ pub struct Transform3dPointer {
 /// Spawn the virtual pointer at startup and publish its id.
 pub fn init_transform3d_pointer(mut commands: Commands) {
     let id = PointerId::Custom(TRANSFORM3D_POINTER_UUID);
-    // Spawning a `PointerId` auto-adds `PointerLocation`/`PointerPress`/….
+    // Spawning a `PointerId` auto-adds `PointerLocation`/`PointerPressState`/….
     commands.spawn(id);
     commands.insert_resource(Transform3dPointer {
         id,
@@ -321,7 +321,7 @@ pub fn suppress_transformed_layer_hits(
 pub fn correct_transformed_interactions(
     state: Option<Res<Transform3dPointer>>,
     hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPress, &PointerLocation)>,
+    pointers: Query<(&PointerId, &PointerPressState, &PointerLocation)>,
     windows: Query<&Window, With<PrimaryWindow>>,
     membership: Res<LayerMembership>,
     matrices: Query<&LayerTransform3dMatrix>,
@@ -597,6 +597,7 @@ mod tests {
         use bevy::picking::backend::HitData;
 
         let mut world = World::new();
+        world.init_resource::<bevy::picking::pointer::PointerMap>();
         let camera = world.spawn_empty().id();
         let root = world
             .spawn(LayerTransform3dMatrix {
@@ -615,7 +616,7 @@ mod tests {
         world.insert_resource(membership);
 
         let virtual_id = PointerId::Custom(TRANSFORM3D_POINTER_UUID);
-        world.spawn((virtual_id, PointerPress::default()));
+        world.spawn((virtual_id, PointerPressState::default()));
         world.insert_resource(Transform3dPointer {
             id: virtual_id,
             over_layer: Some(root),

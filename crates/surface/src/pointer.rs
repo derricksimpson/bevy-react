@@ -87,7 +87,7 @@ pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<Virtual
     let id = PointerId::Custom(SURFACE_POINTER_UUID);
     // The core turns its picking events into the common UI events.
     pointers.register(id);
-    // `PointerId` requires `PointerLocation`/`PointerPress`/`PointerInteraction`,
+    // `PointerId` requires `PointerLocation`/`PointerPressState`/`PointerInteraction`,
     // which are added automatically.
     commands.spawn(id);
     commands.insert_resource(SurfaceVirtualPointer {

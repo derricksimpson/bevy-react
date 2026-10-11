@@ -1,5 +1,5 @@
 //! `<node>` (the plain styled container), `<button>` (a node that captures
-//! the pointer by default and carries bevy's `Button`), and `<root>` (a
+//! the pointer by default and carries bevy's widget `Button`), and `<root>` (a
 //! detached, window-filling overlay root).
 
 use bevy::prelude::*;
@@ -15,13 +15,16 @@ use crate::style::props::{FLEX_DIRECTION, FOCUS_POLICY, GLOBAL_Z_INDEX, HEIGHT, 
 /// `<node>`: a plain styled container.
 pub static NODE: Element = Element::new("node");
 
-/// `<button>`: a node carrying bevy's `Button` (which requires
-/// `Interaction`) that captures the pointer by default — bevy_ui's native
-/// `Button` blocks, so a button doesn't leak its click to a sibling, an
-/// ancestor, or the 3D scene behind it.
+/// `<button>`: a node carrying bevy's headless `ui_widgets::Button` (plus the
+/// `Interaction` the hover/press styling rides) that captures the pointer by
+/// default — like bevy_ui's native buttons, so a button doesn't leak its click
+/// to a sibling, an ancestor, or the 3D scene behind it.
 pub static BUTTON: Element = Element {
     default_style: Some(button_style),
-    spawn: Some(|ctx| ctx.spawn(Button)),
+    // The headless widget button (`Role::Button` for accessibility). bevy_ui's
+    // old `Button` (0.20-deprecated, now private) also required `Interaction`,
+    // which the hover/press styling still rides — so it is inserted here.
+    spawn: Some(|ctx| ctx.spawn((bevy::ui_widgets::Button, Interaction::default()))),
     ..Element::new("button")
 };
 
@@ -61,10 +64,15 @@ pub static ROOT: Element = Element {
 /// has `maxWidth` + wrapping text (sized at max-content during the row's
 /// main-axis pass, then clamped and wrapped — its height committed one line
 /// short).
+///
+/// It fills its camera's viewport in viewport units (`100vw` × `100vh`), not
+/// `100%`: bevy_ui lays a root out as an item of an implicit grid whose auto
+/// row grows to the root's content, so a `100%` root would outgrow the window
+/// as soon as its content is taller.
 fn root_style() -> Style {
     let mut style = Style::default();
-    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
-    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
+    style.set(&WIDTH, Animatable::Static(Length::Vw(100.0)));
+    style.set(&HEIGHT, Animatable::Static(Length::Vh(100.0)));
     style.set(&FLEX_DIRECTION, FlexDirection::Column);
     style.set(&GLOBAL_Z_INDEX, 1);
     style

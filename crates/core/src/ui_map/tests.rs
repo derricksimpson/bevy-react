@@ -361,10 +361,10 @@ fn rect_axis_pair_maps_to_val() {
     assert_eq!(pad.bottom, Val::Percent(50.0));
 
     let radius = rect_to_border_radius(s.get(&BORDER_RADIUS).static_val().unwrap());
-    assert_eq!(radius.top_right, Val::Px(4.0));
-    assert_eq!(radius.bottom_left, Val::Px(4.0));
-    assert_eq!(radius.top_left, Val::Px(0.0));
-    assert_eq!(radius.bottom_right, Val::Px(0.0));
+    assert_eq!(radius.top_right, CornerRadius::circular(Val::Px(4.0)));
+    assert_eq!(radius.bottom_left, CornerRadius::circular(Val::Px(4.0)));
+    assert_eq!(radius.top_left, CornerRadius::circular(Val::Px(0.0)));
+    assert_eq!(radius.bottom_right, CornerRadius::circular(Val::Px(0.0)));
 }
 
 #[test]

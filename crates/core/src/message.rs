@@ -195,12 +195,11 @@ pub trait ReactAppExt {
     ///     desired.0 = count.event().0;
     /// });
     /// ```
-    fn add_react_handler<E, B, M, S>(&mut self, observer: S) -> &mut Self
+    fn add_react_handler<E, M, S>(&mut self, observer: S) -> &mut Self
     where
         E: ReactPayload,
         for<'a> <E as Event>::Trigger<'a>: Default,
-        B: Bundle,
-        S: IntoObserverSystem<E, B, M>;
+        S: IntoObserverSystem<E, M>;
 
     /// Register a typed React request without attaching an observer. Prefer
     /// [`add_react_request_handler`](Self::add_react_request_handler).
@@ -218,12 +217,11 @@ pub trait ReactAppExt {
     ///     req.respond(board.clone());
     /// });
     /// ```
-    fn add_react_request_handler<E, B, M, S>(&mut self, observer: S) -> &mut Self
+    fn add_react_request_handler<E, M, S>(&mut self, observer: S) -> &mut Self
     where
         E: Event + RequestEvent,
         for<'a> <E as Event>::Trigger<'a>: Default,
-        B: Bundle,
-        S: IntoObserverSystem<E, B, M>;
+        S: IntoObserverSystem<E, M>;
 
     /// Register a Bevy → React event type so it appears in the generated
     /// `ReactEvents` map and `bevy.on` typing. Sending an event with
@@ -375,12 +373,11 @@ impl ReactAppExt for App {
         self
     }
 
-    fn add_react_handler<E, B, M, S>(&mut self, observer: S) -> &mut Self
+    fn add_react_handler<E, M, S>(&mut self, observer: S) -> &mut Self
     where
         E: ReactPayload,
         for<'a> <E as Event>::Trigger<'a>: Default,
-        B: Bundle,
-        S: IntoObserverSystem<E, B, M>,
+        S: IntoObserverSystem<E, M>,
     {
         self.add_react_message::<E>();
         self.add_observer(observer);
@@ -397,12 +394,11 @@ impl ReactAppExt for App {
         self
     }
 
-    fn add_react_request_handler<E, B, M, S>(&mut self, observer: S) -> &mut Self
+    fn add_react_request_handler<E, M, S>(&mut self, observer: S) -> &mut Self
     where
         E: Event + RequestEvent,
         for<'a> <E as Event>::Trigger<'a>: Default,
-        B: Bundle,
-        S: IntoObserverSystem<E, B, M>,
+        S: IntoObserverSystem<E, M>,
     {
         // `E` is `Request<T>`; register the underlying request type `T`.
         self.add_react_request::<E::Req>();

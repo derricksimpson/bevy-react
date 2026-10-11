@@ -349,7 +349,7 @@ mod tests {
             }))
             .id();
         let mut target = DynamicStruct::default();
-        target.insert("camera", camera);
+        target.insert("camera", Some(camera));
         let root = world
             .spawn((
                 ComputedNode {

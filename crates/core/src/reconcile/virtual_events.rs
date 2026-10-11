@@ -8,7 +8,10 @@
 //! sharing their code: each side's attribution quirks are documented on its
 //! own systems.
 
-use bevy::picking::events::{Click, Drag, Enter, Leave, Move, Pointer, Press, Release};
+use bevy::picking::events::{
+    PointerClick, PointerDrag, PointerEnter, PointerLeave, PointerMove, PointerPress,
+    PointerRelease,
+};
 use bevy::picking::pointer::PointerButton;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
@@ -24,14 +27,14 @@ use crate::ui_map::{apply_style, overlay_style};
 /// [`collect_ui_events`](crate::reconcile::collect_ui_events) for UI a
 /// registered virtual pointer drives (a `<surface>`'s in-world picking path
 /// moves one over the offscreen subtree, so a click there arrives as a
-/// `Pointer<Click>` for that pointer; the nodes never get a legacy
+/// `PointerClick` for that pointer; the nodes never get a legacy
 /// `Interaction` press, since they don't render to a window).
 /// Primary-button-only like it, and scoped to the registered
 /// [`VirtualPointers`] so it never double-fires for main-window UI.
 pub fn collect_virtual_clicks(
     bridge: Res<JsBridge>,
     pointers: Res<VirtualPointers>,
-    mut clicks: MessageReader<Pointer<Click>>,
+    mut clicks: MessageReader<PointerClick>,
     // Click ownership (see [`ClickOwners`](super::events::ClickOwners)) —
     // matching `collect_ui_events`' attribution exactly (NOT `Interaction`:
     // hover/press styling must never steal a click from an ancestor with a
@@ -50,7 +53,7 @@ pub fn collect_virtual_clicks(
     for ev in clicks.read() {
         // Like DOM `click` (and `collect_ui_events`), only the primary button
         // clicks; right/middle ride the `onPointer*` events.
-        if !pointers.contains(ev.pointer_id) || ev.button != PointerButton::Primary {
+        if !pointers.contains(ev.pointer.id) || ev.button != PointerButton::Primary {
             continue;
         }
         // Resolve the picked leaf to the nearest interactive ancestor (the button),
@@ -80,9 +83,9 @@ pub fn collect_virtual_clicks(
 pub fn collect_virtual_pointer_events(
     bridge: Res<JsBridge>,
     pointers: Res<VirtualPointers>,
-    mut presses: MessageReader<Pointer<Press>>,
-    mut releases: MessageReader<Pointer<Release>>,
-    mut drags: MessageReader<Pointer<Drag>>,
+    mut presses: MessageReader<PointerPress>,
+    mut releases: MessageReader<PointerRelease>,
+    mut drags: MessageReader<PointerDrag>,
     nodes: Query<(
         &ReactNode,
         &PointerHandlers,
@@ -127,12 +130,12 @@ pub fn collect_virtual_pointer_events(
         }
     };
     for ev in presses.read() {
-        if pointers.contains(ev.pointer_id) {
+        if pointers.contains(ev.pointer.id) {
             emit(
                 ev.entity,
                 |h| h.down,
                 "pointerDown",
-                ev.pointer_location.position,
+                ev.pointer.position,
                 ev.button,
                 &mut seen,
             );
@@ -140,12 +143,12 @@ pub fn collect_virtual_pointer_events(
     }
     seen.clear();
     for ev in drags.read() {
-        if pointers.contains(ev.pointer_id) {
+        if pointers.contains(ev.pointer.id) {
             emit(
                 ev.entity,
                 |h| h.moved,
                 "pointerMove",
-                ev.pointer_location.position,
+                ev.pointer.position,
                 ev.button,
                 &mut seen,
             );
@@ -153,12 +156,12 @@ pub fn collect_virtual_pointer_events(
     }
     seen.clear();
     for ev in releases.read() {
-        if pointers.contains(ev.pointer_id) {
+        if pointers.contains(ev.pointer.id) {
             emit(
                 ev.entity,
                 |h| h.up,
                 "pointerUp",
-                ev.pointer_location.position,
+                ev.pointer.position,
                 ev.button,
                 &mut seen,
             );
@@ -168,23 +171,23 @@ pub fn collect_virtual_pointer_events(
 
 /// Report `pointerEnter` / `pointerLeave` for virtual-pointer UI, mirroring
 /// [`collect_virtual_pointer_events`] for the hover boundary. Such nodes get no
-/// legacy `Interaction`, so this reads the virtual pointer's `Pointer<Enter>` /
-/// `Pointer<Leave>` picking events. Those already implement DOM
+/// legacy `Interaction`, so this reads the virtual pointer's `PointerEnter` /
+/// `PointerLeave` picking events. Those already implement DOM
 /// `mouseenter`/`mouseleave` semantics — they fire for the hovered entity *and*
 /// its ancestors, only on true boundary crossings — so no climb (and no dedupe)
 /// is needed, and crossing between a button's label and its padding never
 /// re-fires the button's boundary. Hover events carry no button.
 ///
-/// `pointerHover` rides `Pointer<Move>`, which bevy_picking also sends to
+/// `pointerHover` rides `PointerMove`, which bevy_picking also sends to
 /// every hovered entity (ancestors included), so it needs no climb either —
 /// only a per-entity dedupe, in case two virtual pointers move over one node.
 #[allow(clippy::too_many_arguments)]
 pub fn collect_virtual_hover_events(
     bridge: Res<JsBridge>,
     pointers: Res<VirtualPointers>,
-    mut enters: MessageReader<Pointer<Enter>>,
-    mut leaves: MessageReader<Pointer<Leave>>,
-    mut moves: MessageReader<Pointer<Move>>,
+    mut enters: MessageReader<PointerEnter>,
+    mut leaves: MessageReader<PointerLeave>,
+    mut moves: MessageReader<PointerMove>,
     nodes: Query<(
         &ReactNode,
         &PointerHandlers,
@@ -214,34 +217,19 @@ pub fn collect_virtual_hover_events(
         }
     };
     for ev in enters.read() {
-        if pointers.contains(ev.pointer_id) {
-            emit(
-                ev.entity,
-                |h| h.enter,
-                "pointerEnter",
-                ev.pointer_location.position,
-            );
+        if pointers.contains(ev.pointer.id) {
+            emit(ev.entity, |h| h.enter, "pointerEnter", ev.pointer.position);
         }
     }
     for ev in leaves.read() {
-        if pointers.contains(ev.pointer_id) {
-            emit(
-                ev.entity,
-                |h| h.leave,
-                "pointerLeave",
-                ev.pointer_location.position,
-            );
+        if pointers.contains(ev.pointer.id) {
+            emit(ev.entity, |h| h.leave, "pointerLeave", ev.pointer.position);
         }
     }
     let mut seen: HashSet<Entity> = HashSet::new();
     for ev in moves.read() {
-        if pointers.contains(ev.pointer_id) && seen.insert(ev.entity) {
-            emit(
-                ev.entity,
-                |h| h.hover,
-                "pointerHover",
-                ev.pointer_location.position,
-            );
+        if pointers.contains(ev.pointer.id) && seen.insert(ev.entity) {
+            emit(ev.entity, |h| h.hover, "pointerHover", ev.pointer.position);
         }
     }
 }
@@ -252,7 +240,7 @@ pub fn collect_virtual_hover_events(
 /// can't help here because such nodes never receive a legacy `Interaction`
 /// (their offscreen camera makes `ui_focus_system` skip them). Enter →
 /// base+hover, press → base+hover+press, leave/release → base/hover. The hover
-/// axis rides `Pointer<Enter>`/`Pointer<Leave>` (boundary-only, ancestor-aware —
+/// axis rides `PointerEnter`/`PointerLeave` (boundary-only, ancestor-aware —
 /// see [`collect_virtual_hover_events`]); the press axis keeps `Press`/`Release`
 /// with the climb, filtered to the primary button so a right/middle press
 /// doesn't trigger `pressStyle` (DOM `:active` parity with the main window's
@@ -261,10 +249,10 @@ pub fn collect_virtual_hover_events(
 pub fn apply_virtual_interaction_styles(
     mut commands: Commands,
     pointers: Res<VirtualPointers>,
-    mut enters: MessageReader<Pointer<Enter>>,
-    mut leaves: MessageReader<Pointer<Leave>>,
-    mut presses: MessageReader<Pointer<Press>>,
-    mut releases: MessageReader<Pointer<Release>>,
+    mut enters: MessageReader<PointerEnter>,
+    mut leaves: MessageReader<PointerLeave>,
+    mut presses: MessageReader<PointerPress>,
+    mut releases: MessageReader<PointerRelease>,
     variants: Query<&StyleVariants>,
     child_of: Query<&ChildOf>,
     rnodes: Query<&ReactNode>,
@@ -321,21 +309,21 @@ pub fn apply_virtual_interaction_styles(
     // button), so its label text highlights the button rather than nothing.
     let target = |entity: Entity| climb(entity, &child_of, |e| variants.contains(e));
     for ev in leaves.read() {
-        if pointers.contains(ev.pointer_id)
+        if pointers.contains(ev.pointer.id)
             && let Ok(v) = variants.get(ev.entity)
         {
             restyle(ev.entity, v.base.as_ref().cloned());
         }
     }
     for ev in enters.read() {
-        if pointers.contains(ev.pointer_id)
+        if pointers.contains(ev.pointer.id)
             && let Ok(v) = variants.get(ev.entity)
         {
             restyle(ev.entity, overlay_style(v.base.as_ref(), v.hover.as_ref()));
         }
     }
     for ev in releases.read() {
-        if pointers.contains(ev.pointer_id)
+        if pointers.contains(ev.pointer.id)
             && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
@@ -344,7 +332,7 @@ pub fn apply_virtual_interaction_styles(
         }
     }
     for ev in presses.read() {
-        if pointers.contains(ev.pointer_id)
+        if pointers.contains(ev.pointer.id)
             && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)

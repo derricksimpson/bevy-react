@@ -98,10 +98,10 @@ fn surface_fills_its_texture_by_default() {
             .cloned()
             .unwrap()
     };
-    assert_eq!(node(1).width, Val::Percent(100.0));
-    assert_eq!(node(1).height, Val::Percent(100.0));
+    assert_eq!(node(1).width, Val::Vw(100.0));
+    assert_eq!(node(1).height, Val::Vh(100.0));
     assert_eq!(node(2).width, Val::Px(50.0), "the user's style overlays");
-    assert_eq!(node(2).height, Val::Percent(100.0));
+    assert_eq!(node(2).height, Val::Vh(100.0));
 }
 
 /// `backgroundImage` on a `<surface>` is ignored (the element opts out of the

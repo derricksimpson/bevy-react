@@ -499,8 +499,8 @@ fn compensate_seed_frame_radius(computed: &mut Mut<ComputedNode>, scale: Vec2) {
     if s <= f32::EPSILON || (s - 1.0).abs() < 1e-6 {
         return;
     }
-    let max = 0.5 * computed.size.min_element();
-    let fix = |r: f32| (r / s).clamp(0.0, max);
+    let max = Vec2::splat(0.5 * computed.size.min_element());
+    let fix = |r: Vec2| (r / s).clamp(Vec2::ZERO, max);
     // No change mark, as in bevy's own write.
     let radius = &mut computed.bypass_change_detection().border_radius;
     radius.top_left = fix(radius.top_left);

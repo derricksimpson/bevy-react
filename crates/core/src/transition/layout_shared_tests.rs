@@ -368,6 +368,7 @@ fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
         .unwrap()
         .border_radius
         .top_left
+        .x
         * scale;
     assert!(
         (shown - 36.0).abs() < 1.0,

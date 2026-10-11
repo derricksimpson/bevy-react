@@ -321,14 +321,16 @@ fn spawn_cubes(
 
         // A flat square on the 2D minimap, on its own render layer so only the
         // minimap's 2D camera sees it. `sync_minimap_markers` keeps it on top of
-        // the cube each frame.
+        // the cube each frame. Each marker gets its own depth: sprites draw
+        // through the 2D mesh pipeline, which leaves the order of same-depth
+        // sprites open, so overlapping markers would otherwise flicker.
         commands.spawn((
             Sprite {
                 color: assets.colors[i % assets.colors.len()],
                 custom_size: Some(Vec2::splat(CUBE_SIZE * 1.4 * scale)),
                 ..default()
             },
-            Transform::from_xyz(x, -z, 0.0),
+            Transform::from_xyz(x, -z, i as f32 * 1e-3),
             RenderLayers::layer(MINIMAP_LAYER),
             MinimapMarker(entity),
             DespawnOnExit(Scene::CrowdedCubes),

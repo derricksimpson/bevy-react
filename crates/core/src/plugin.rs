@@ -1202,8 +1202,12 @@ fn setup(
     let root = commands
         .spawn((
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
+                // Viewport units, not `100%`: bevy_ui lays a root out as an
+                // item of an implicit grid whose auto row grows to the root's
+                // content, so a `100%` root with taller content would outgrow the
+                // window (and nothing inside would ever scroll).
+                width: Val::Vw(100.0),
+                height: Val::Vh(100.0),
                 flex_direction: FlexDirection::Column,
                 justify_content: JustifyContent::FlexStart,
                 align_items: AlignItems::Center,

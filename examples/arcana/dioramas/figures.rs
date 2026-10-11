@@ -3,7 +3,6 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
-use bevy::math::primitives::Tetrahedron;
 use bevy::mesh::{ConeAnchor, ConeMeshBuilder};
 use bevy::prelude::*;
 

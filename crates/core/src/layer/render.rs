@@ -627,7 +627,9 @@ pub fn extract_ui_layers(
             backdrop_chain,
             backdrop_quad_entity,
             outset: rect.outset,
-            corner_radius: computed.map_or([0.0; 4], |c| c.border_radius.into()),
+            // Horizontal radii only: the frost mask is circular (exact for
+            // the circular corners `borderRadius` resolves to).
+            corner_radius: computed.map_or([0.0; 4], |c| <[[f32; 4]; 2]>::from(c.border_radius)[0]),
             // Identity matrices stay `None`: the quad renders exactly like an
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
@@ -950,7 +952,6 @@ pub fn redistribute_ui_layers(
                     draw_function,
                     batch_range: 0..0,
                     extra_index: PhaseItemExtraIndex::None,
-                    index: idx,
                     indexed: false,
                 });
             }
@@ -961,7 +962,6 @@ pub fn redistribute_ui_layers(
                 draw_function,
                 batch_range: 0..0,
                 extra_index: PhaseItemExtraIndex::None,
-                index: idx,
                 indexed: false,
             });
         }

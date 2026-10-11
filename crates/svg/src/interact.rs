@@ -6,7 +6,7 @@
 //! never sees them. [`sync_shape_interactions`] re-derives both from the
 //! picking pipeline instead — the [`HoverMap`] (which contains a shape only
 //! because [`super::pick::refine_svg_pointer_hits`] emitted a refined
-//! `PointerHits` for it) plus the pointer's [`PointerPress`] — mirroring
+//! `PointerHits` for it) plus the pointer's [`PointerPressState`] — mirroring
 //! [`bevy_react_core::layer::pick3d::correct_transformed_interactions`]. The refined
 //! hit's user-space cursor lands in [`EventLocalPos`], which the event
 //! collectors (the core's pointer/hover systems) read to report
@@ -20,7 +20,7 @@
 //! `ChildOf` climb.
 
 use bevy::picking::hover::HoverMap;
-use bevy::picking::pointer::{PointerId, PointerPress};
+use bevy::picking::pointer::{PointerId, PointerPressState};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, RelativeCursorPosition};
 
@@ -45,7 +45,7 @@ use bevy_react_core::ext::EventLocalPos;
 #[allow(clippy::type_complexity)]
 pub(crate) fn sync_shape_interactions(
     hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPress)>,
+    pointers: Query<(&PointerId, &PointerPressState)>,
     shape_hits: Res<SvgPointerShapeHits>,
     roots: Query<(&SvgJsxSurface, &ComputedNode)>,
     mut shapes: Query<
@@ -148,6 +148,7 @@ mod tests {
     /// synthesis component set. Returns `(world, root, shape)`.
     fn shape_world() -> (World, Entity, Entity) {
         let mut world = World::new();
+        world.init_resource::<bevy::picking::pointer::PointerMap>();
         world.init_resource::<SvgPointerShapeHits>();
         let root = world
             .spawn((
@@ -203,14 +204,14 @@ mod tests {
         );
     }
 
-    /// A `PointerPress` with the primary button held. The real writer is
+    /// A `PointerPressState` with the primary button held. The real writer is
     /// bevy_picking's `PointerInput::receive` (fields are private), so the
     /// test drives the reflected field directly.
-    fn primary_pressed() -> PointerPress {
-        let mut press = PointerPress::default();
+    fn primary_pressed() -> PointerPressState {
+        let mut press = PointerPressState::default();
         *press
             .field_mut("primary")
-            .expect("PointerPress has a `primary` field")
+            .expect("PointerPressState has a `primary` field")
             .try_downcast_mut::<bool>()
             .expect("primary is a bool") = true;
         press
@@ -223,7 +224,7 @@ mod tests {
     #[test]
     fn hovered_shape_synthesizes_full_state() {
         let (mut world, root, shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPress::default()));
+        world.spawn((PointerId::Mouse, PointerPressState::default()));
         hover(&mut world, PointerId::Mouse, shape);
         set_hit(
             &mut world,
@@ -272,7 +273,7 @@ mod tests {
     #[test]
     fn pointer_leave_clears_everything() {
         let (mut world, root, shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPress::default()));
+        world.spawn((PointerId::Mouse, PointerPressState::default()));
         hover(&mut world, PointerId::Mouse, shape);
         set_hit(&mut world, PointerId::Mouse, root, shape, Vec2::splat(50.0));
         world.run_system_once(sync_shape_interactions).unwrap();
@@ -303,7 +304,7 @@ mod tests {
     #[test]
     fn handlerless_shapes_and_non_shapes_untouched() {
         let (mut world, root, _shape) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPress::default()));
+        world.spawn((PointerId::Mouse, PointerPressState::default()));
         let bare = world
             .spawn((
                 SvgShape {
@@ -334,7 +335,7 @@ mod tests {
     #[test]
     fn click_only_shape_drives_interaction_alone() {
         let (mut world, root, _full) = shape_world();
-        world.spawn((PointerId::Mouse, PointerPress::default()));
+        world.spawn((PointerId::Mouse, PointerPressState::default()));
         let click_only = world
             .spawn((
                 SvgShape {

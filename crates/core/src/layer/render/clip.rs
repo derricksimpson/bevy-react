@@ -16,12 +16,12 @@
 //!
 //! Swap mechanics: values are overwritten in place (never inserted/removed —
 //! a member whose interior clip is `Some` provably carries a real
-//! `CalculatedClip`, so there is no archetype churn), "unclipped" is an
-//! all-infinite rect (idiomatic — `bevy_ui` itself uses ±∞ clip axes for
-//! `Visible` overflow), and both directions bypass change detection (the net
-//! effect within a frame is identity; `update_clipping`'s own `!=` guard must
-//! not see churn). Known gap: a `UiMaterial` extractor is generic and
-//! unordered relative to the swap window — unused in this repo.
+//! `CalculatedClip`, so there is no archetype churn), "unclipped" is an empty
+//! clip-rect list (`CalculatedClip::default()`, bevy_ui's own "no inherited
+//! clip" value), and both directions bypass change detection (the net effect
+//! within a frame is identity; `update_clipping`'s own `!=` guard must not see
+//! churn). Known gap: a `UiMaterial` extractor is generic and unordered
+//! relative to the swap window — unused in this repo.
 //!
 //! **The quad clamp.** With captures unclipped, the composite quad applies
 //! the ancestor clipping instead: [`clip_quad`] clamps the quad's corners to
@@ -36,17 +36,10 @@ use bevy::ui::CalculatedClip;
 
 use crate::layer::clip::LayerClips;
 
-/// "No clip" as a value: bevy_ui expresses visible-overflow axes as ±∞, and
-/// the prepare-stage clip math is a no-op against it.
-pub const UNCLIPPED: Rect = Rect {
-    min: Vec2::splat(f32::NEG_INFINITY),
-    max: Vec2::splat(f32::INFINITY),
-};
-
 /// The originals stashed by [`swap_interior_clips_in`], restored by
 /// [`swap_interior_clips_out`]. Render-world resource; drained every frame.
 #[derive(Resource, Default)]
-pub struct SwappedClips(pub Vec<(Entity, Rect)>);
+pub struct SwappedClips(pub Vec<(Entity, CalculatedClip)>);
 
 /// `ExtractSchedule`, before all stock UI extraction sets: overwrite each
 /// promoted-subtree member's [`CalculatedClip`] with its interior clip.
@@ -67,7 +60,7 @@ pub fn swap_interior_clips_out(mut main_world: ResMut<MainWorld>, mut stash: Res
 /// the loop — a UI without clipping ancestors (nothing carries the component)
 /// costs nothing per member, a UI whose clipped nodes vastly outnumber the
 /// layer members walks the map as before.
-pub fn swap_in(world: &mut World, stash: &mut Vec<(Entity, Rect)>) {
+pub fn swap_in(world: &mut World, stash: &mut Vec<(Entity, CalculatedClip)>) {
     stash.clear();
     if world.get_resource::<LayerClips>().is_none() {
         return; // Main app without the plugin's resources: nothing to swap.
@@ -80,16 +73,16 @@ pub fn swap_in(world: &mut World, stash: &mut Vec<(Entity, Rect)>) {
         if clipped.iter(world).len() < clips.interior.len() {
             for (entity, mut clip) in clipped.iter_mut(world) {
                 // Not a member: its clip is real and stays.
-                let Some(&interior) = clips.interior.get(&entity) else {
+                let Some(interior) = clips.interior.get(&entity) else {
                     continue;
                 };
-                let clip = clip.bypass_change_detection();
-                stash.push((entity, clip.clip));
-                clip.clip = interior.unwrap_or(UNCLIPPED);
+                let interior = interior.clone().unwrap_or_default();
+                let original = std::mem::replace(clip.bypass_change_detection(), interior);
+                stash.push((entity, original));
             }
             return;
         }
-        for (&entity, &interior) in clips.interior.iter() {
+        for (&entity, interior) in clips.interior.iter() {
             // A member without the component needs no swap: its interior clip
             // is provably `None` too (interior clip sources are a subset of
             // the real cascade's). A despawned entity is a stale map row.
@@ -99,20 +92,20 @@ pub fn swap_in(world: &mut World, stash: &mut Vec<(Entity, Rect)>) {
             let Some(mut clip) = e.get_mut::<CalculatedClip>() else {
                 continue;
             };
-            let clip = clip.bypass_change_detection();
-            stash.push((entity, clip.clip));
-            clip.clip = interior.unwrap_or(UNCLIPPED);
+            let interior = interior.clone().unwrap_or_default();
+            let original = std::mem::replace(clip.bypass_change_detection(), interior);
+            stash.push((entity, original));
         }
     });
 }
 
 /// Core of [`swap_interior_clips_out`]: restore every stashed original.
-pub fn swap_out(world: &mut World, stash: &mut Vec<(Entity, Rect)>) {
+pub fn swap_out(world: &mut World, stash: &mut Vec<(Entity, CalculatedClip)>) {
     for (entity, original) in stash.drain(..) {
         if let Ok(mut e) = world.get_entity_mut(entity)
             && let Some(mut clip) = e.get_mut::<CalculatedClip>()
         {
-            clip.bypass_change_detection().clip = original;
+            *clip.bypass_change_detection() = original;
         }
     }
 }
@@ -211,44 +204,46 @@ mod tests {
     }
 
     /// The swap overwrites members' `CalculatedClip` with interior values
-    /// (infinite rect for "unclipped inside the capture"), stashes originals,
-    /// skips entities without the component, and restores exactly.
+    /// (an empty rect list for "unclipped inside the capture"), stashes
+    /// originals, skips entities without the component, and restores exactly.
     #[test]
     fn swap_roundtrip() {
+        use crate::layer::clip::screen_clip;
         let mut world = World::new();
-        let real = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let inner = Rect::new(10.0, 10.0, 50.0, 50.0);
+        let real = screen_clip(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let inner = screen_clip(Rect::new(10.0, 10.0, 50.0, 50.0));
+        let unclipped = CalculatedClip::default();
 
         // Member with a real clip and an interior Some: swapped to interior.
-        let a = world.spawn(CalculatedClip { clip: real }).id();
-        // Member with a real clip but interior None: swapped to UNCLIPPED.
-        let b = world.spawn(CalculatedClip { clip: real }).id();
+        let a = world.spawn(real.clone()).id();
+        // Member with a real clip but interior None: swapped to unclipped.
+        let b = world.spawn(real.clone()).id();
         // Member with no CalculatedClip (interior necessarily None): skipped.
         let c = world.spawn_empty().id();
         // Non-member with a real clip: untouched.
-        let outside = world.spawn(CalculatedClip { clip: real }).id();
+        let outside = world.spawn(real.clone()).id();
         // A stale map entry for a despawned entity: skipped gracefully.
         let dead = world.spawn_empty().id();
         world.despawn(dead);
 
         let mut clips = LayerClips::default();
-        clips.interior.insert(a, Some(inner));
+        clips.interior.insert(a, Some(inner.clone()));
         clips.interior.insert(b, None);
         clips.interior.insert(c, None);
-        clips.interior.insert(dead, Some(inner));
+        clips.interior.insert(dead, Some(inner.clone()));
         world.insert_resource(clips);
 
         let mut stash = Vec::new();
         swap_in(&mut world, &mut stash);
-        assert_eq!(world.get::<CalculatedClip>(a).unwrap().clip, inner);
-        assert_eq!(world.get::<CalculatedClip>(b).unwrap().clip, UNCLIPPED);
+        assert_eq!(world.get::<CalculatedClip>(a).unwrap(), &inner);
+        assert_eq!(world.get::<CalculatedClip>(b).unwrap(), &unclipped);
         assert!(world.get::<CalculatedClip>(c).is_none());
-        assert_eq!(world.get::<CalculatedClip>(outside).unwrap().clip, real);
+        assert_eq!(world.get::<CalculatedClip>(outside).unwrap(), &real);
         assert_eq!(stash.len(), 2, "only really-swapped members are stashed");
 
         swap_out(&mut world, &mut stash);
-        assert_eq!(world.get::<CalculatedClip>(a).unwrap().clip, real);
-        assert_eq!(world.get::<CalculatedClip>(b).unwrap().clip, real);
+        assert_eq!(world.get::<CalculatedClip>(a).unwrap(), &real);
+        assert_eq!(world.get::<CalculatedClip>(b).unwrap(), &real);
         assert!(stash.is_empty(), "stash drains on restore");
     }
 
@@ -258,7 +253,7 @@ mod tests {
     fn swap_in_clears_previous_stash() {
         let mut world = World::new();
         world.insert_resource(LayerClips::default());
-        let mut stash = vec![(Entity::PLACEHOLDER, UNCLIPPED)];
+        let mut stash = vec![(Entity::PLACEHOLDER, CalculatedClip::default())];
         swap_in(&mut world, &mut stash);
         assert!(stash.is_empty());
     }

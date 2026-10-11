@@ -171,6 +171,7 @@ const POINTER: PointerId = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(
 /// == physical), one bare camera, and the refinement's resources.
 fn world_with_pointer(position: Vec2) -> (World, Entity) {
     let mut world = World::new();
+    world.init_resource::<bevy::picking::pointer::PointerMap>();
     world.init_resource::<Messages<PointerHits>>();
     world.init_resource::<SvgPointerShapeHits>();
     let camera = world.spawn(Camera::default()).id();

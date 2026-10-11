@@ -19,7 +19,7 @@ use bevy::picking::backend::{HitData, PointerHits};
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::{
     Location, PointerAction, PointerButton, PointerId, PointerInput, PointerInteraction,
-    PointerLocation, PointerPress,
+    PointerLocation, PointerPressState,
 };
 use bevy::picking::{InteractionPlugin, PickingPlugin, PickingSystems};
 use bevy::prelude::*;
@@ -133,7 +133,7 @@ fn real_app() -> (
     app.world_mut().spawn((
         POINTER,
         PointerLocation::new(location()),
-        PointerPress::default(),
+        PointerPressState::default(),
         PointerInteraction::default(),
     ));
     app.insert_resource(NodeStack {

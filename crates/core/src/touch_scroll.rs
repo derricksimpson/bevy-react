@@ -105,7 +105,7 @@ struct TouchClaim {
 /// dropped — a horizontal slider inside a vertical list keeps working.
 ///
 /// A claimed gesture that moves past [`TOUCH_SLOP`] also consumes its tap:
-/// `collect_ui_events` drops that touch's `Pointer<Click>` (web semantics —
+/// `collect_ui_events` drops that touch's `PointerClick` (web semantics —
 /// scrolling cancels the click; `pointerUp` still fires). While a gesture
 /// lives it re-claims `PointerCapture::dragging` each frame so world input
 /// (e.g. a touch-pan camera ordered after `PointerCaptureSet`) ignores the
@@ -134,7 +134,7 @@ pub fn apply_touch_scroll(
     // release/cancel frame, dropping the frame after (when the `just_*` maps
     // clear). Load-bearing invariant: `collect_ui_events` is unordered
     // relative to this system, and bevy_picking delivers the tap's
-    // `Pointer<Click>` on the release frame — the claim (and its slop flag)
+    // `PointerClick` on the release frame — the claim (and its slop flag)
     // must still be readable then, in either Update order.
     state.claims.retain(|c| {
         touches.get_pressed(c.id).is_some()
@@ -272,7 +272,7 @@ pub fn apply_touch_scroll(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::picking::events::{Click, Pointer};
+    use bevy::picking::events::{Pointer, PointerClick};
     use bevy::picking::pointer::{PointerButton, PointerId};
 
     /// A multi-frame app driving [`apply_touch_scroll`] against the same
@@ -746,7 +746,7 @@ mod tests {
         std::mem::forget(_ops_tx); // Keep the ops channel open for the app's lifetime.
         let root = app.world_mut().spawn_empty().id();
         app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
-        app.add_message::<Pointer<Click>>();
+        app.add_message::<PointerClick>();
         app.add_systems(
             Update,
             crate::reconcile::collect_ui_events.before(apply_touch_scroll),
@@ -757,25 +757,25 @@ mod tests {
         (app, container, out_rx)
     }
 
-    /// A synthetic picking `Pointer<Click>` targeting `entity`, as bevy_picking
+    /// A synthetic picking `PointerClick` targeting `entity`, as bevy_picking
     /// would emit on the release frame (release over the press node).
-    fn synth_click(pointer_id: PointerId, entity: Entity) -> Pointer<Click> {
-        Pointer::new(
-            pointer_id,
-            bevy::picking::pointer::Location {
-                target: bevy::camera::NormalizedRenderTarget::Image(
-                    Handle::<Image>::default().into(),
-                ),
-                position: Vec2::ZERO,
-            },
-            Click {
-                button: PointerButton::Primary,
-                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                duration: std::time::Duration::ZERO,
-                count: 1,
-            },
+    fn synth_click(pointer_id: PointerId, entity: Entity) -> PointerClick {
+        PointerClick {
             entity,
-        )
+            pointer: Pointer::new(
+                pointer_id,
+                bevy::picking::pointer::Location {
+                    target: bevy::camera::NormalizedRenderTarget::Image(
+                        Handle::<Image>::default().into(),
+                    ),
+                    position: Vec2::ZERO,
+                },
+            ),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
+        }
     }
 
     fn drain_clicks(
@@ -842,7 +842,7 @@ mod tests {
     }
 
     /// The suppression flag must survive the release frame (the frame the
-    /// `Pointer<Click>` arrives on) and drop the frame after — the retain
+    /// `PointerClick` arrives on) and drop the frame after — the retain
     /// rule `collect_ui_events`' order-independence rests on.
     #[test]
     fn suppression_survives_the_release_frame() {

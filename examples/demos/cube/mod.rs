@@ -26,7 +26,7 @@
 use bevy::picking::Pickable;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::mesh_picking::{MeshPickingPlugin, MeshPickingSettings};
-use bevy::picking::pointer::{PointerId, PointerPress};
+use bevy::picking::pointer::{PointerId, PointerPressState};
 use bevy::prelude::*;
 use bevy_react::animations::protocol::Binding;
 use bevy_react::animations::{AnimatedNode, AnimationSet};
@@ -357,7 +357,7 @@ fn sync_cube_pickable(
 /// hovering pointer's press state — the enter/leave collectors read it.
 fn sync_cube_interactions(
     hover_map: Option<Res<HoverMap>>,
-    pointers: Query<(&PointerId, &PointerPress)>,
+    pointers: Query<(&PointerId, &PointerPressState)>,
     mut cubes: Query<(Entity, &mut Interaction), With<Cube>>,
 ) {
     for (entity, mut interaction) in &mut cubes {

@@ -35,7 +35,7 @@ accesskit = "0.24"
 # their code needs (each crate's own manifest) — a library that leaves bevy's
 # defaults on forces audio/gltf/pbr/winit/… onto every app. The examples are
 # apps: they switch the defaults back on (`features = ["default"]`).
-bevy = { version = "0.19", default-features = false }
+bevy = { version = "0.20", default-features = false }
 bytemuck = { version = "1", features = ["derive"] }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"

@@ -352,13 +352,13 @@ pub fn collect_pointer_events(
 
 #[cfg(test)]
 mod tests {
-    use bevy::picking::events::{Click, Pointer};
+    use bevy::picking::events::PointerClick;
 
     use super::*;
     use crate::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 
     /// A minimal app wired for the picking-based click collectors: a `JsBridge`
-    /// (with its outbound receiver kept alive) + `Pointer<Click>` messages.
+    /// (with its outbound receiver kept alive) + `PointerClick` messages.
     fn click_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
@@ -367,7 +367,7 @@ mod tests {
         std::mem::forget(_ops_tx); // Keep the ops channel open for the app's lifetime.
         let root = app.world_mut().spawn_empty().id();
         app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
-        app.add_message::<Pointer<Click>>();
+        app.add_message::<PointerClick>();
         (app, out_rx)
     }
 

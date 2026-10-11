@@ -322,6 +322,7 @@ pub(super) fn layout_app() -> App {
     app.init_resource::<UiSurface>();
     app.init_resource::<bevy::text::TextPipeline>();
     app.init_resource::<bevy::text::FontCx>();
+    app.init_resource::<bevy::text::RemSize>();
     app.init_resource::<bevy::text::ScaleCx>();
     app.init_resource::<bevy::transform::StaticTransformOptimizations>();
     app.insert_resource(Time::<()>::default());
@@ -331,6 +332,7 @@ pub(super) fn layout_app() -> App {
         (
             ApplyDeferred,
             bevy::ui::update::propagate_ui_target_cameras,
+            bevy::ui::sync_font_size_to_em_size,
             bevy::ui::ui_layout_system,
             drive_layout_transitions,
             |q: Query<Entity, Changed<UiGlobalTransform>>, mut w: ResMut<Written>| {
@@ -399,8 +401,8 @@ pub(super) fn square(px: f32) -> Node {
 
 pub(super) fn root_row() -> Node {
     Node {
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
+        width: Val::Vw(100.0),
+        height: Val::Vh(100.0),
         flex_direction: FlexDirection::Row,
         ..Default::default()
     }

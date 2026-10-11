@@ -91,8 +91,7 @@ pub fn filter_clipped_pointer_hits(
             };
             // Pointer position in physical viewport coordinates — the same
             // space `CalculatedClip` rects live in.
-            clip.clip
-                .contains(pointer_physical_position(&location, camera))
+            clip.contains_point(pointer_physical_position(&location, camera))
         });
     }
 }
@@ -111,6 +110,7 @@ mod tests {
     /// logical == physical) and one bare camera; returns the camera entity.
     fn world_with_pointer(position: Vec2) -> (World, Entity) {
         let mut world = World::new();
+        world.init_resource::<bevy::picking::pointer::PointerMap>();
         world.init_resource::<Messages<PointerHits>>();
         let camera = world.spawn(Camera::default()).id();
         world.spawn((
@@ -158,9 +158,7 @@ mod tests {
             let node = world
                 .spawn((
                     ComputedNode::default(),
-                    CalculatedClip {
-                        clip: Rect::new(0.0, 0.0, 100.0, 100.0),
-                    },
+                    crate::layer::clip::screen_clip(Rect::new(0.0, 0.0, 100.0, 100.0)),
                 ))
                 .id();
             send_hits(&mut world, camera, &[node]);
@@ -182,9 +180,7 @@ mod tests {
         let node = world
             .spawn((
                 ComputedNode::default(),
-                CalculatedClip {
-                    clip: Rect::new(0.0, 0.0, 100.0, 100.0),
-                },
+                crate::layer::clip::screen_clip(Rect::new(0.0, 0.0, 100.0, 100.0)),
             ))
             .id();
         let span = world.spawn(ChildOf(node)).id();

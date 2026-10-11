@@ -89,10 +89,10 @@ pub fn rect_to_uirect(rect: Rect) -> UiRect {
 /// `border-radius` shorthand order).
 pub fn rect_to_border_radius(rect: Rect) -> BorderRadius {
     BorderRadius {
-        top_left: length_to_val(rect.top),
-        top_right: length_to_val(rect.right),
-        bottom_right: length_to_val(rect.bottom),
-        bottom_left: length_to_val(rect.left),
+        top_left: length_to_val(rect.top).into(),
+        top_right: length_to_val(rect.right).into(),
+        bottom_right: length_to_val(rect.bottom).into(),
+        bottom_left: length_to_val(rect.left).into(),
     }
 }
 

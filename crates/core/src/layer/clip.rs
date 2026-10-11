@@ -8,9 +8,10 @@
 //! and ancestor overflow clips the *result* at composite time.
 //!
 //! [`sync_layer_clips`] therefore re-runs `bevy_ui`'s clip cascade
-//! (`update_clipping` semantics: a node's inherited clip is its ancestors'
-//! overflow intersection; its **own** overflow only clips its children) —
-//! but restarted at each layer root with **no inherited clip**. The result
+//! (`update_clipping` semantics: a node's inherited clip is the list of its
+//! ancestors' overflow clip rects, each in its clipper's local space; its
+//! **own** overflow only clips its children) — but restarted at each layer
+//! root with **no inherited clip**. The result
 //! is two per-frame maps in [`LayerClips`]:
 //!
 //! - `interior`: per subtree member, the clip its extracted items should use
@@ -26,9 +27,11 @@
 //!   (`TextScroll` content boxes) recompose automatically in the stock text
 //!   extractors from the swapped value.
 //! - `quads`: per layer root, the screen-space rect its **composite quad**
-//!   clamps to instead — a top-level root's inherited [`CalculatedClip`], or,
-//!   for a nested root, the enclosing layer's interior cascade value at the
-//!   root (its quad draws inside the enclosing capture).
+//!   clamps to instead — the bounds ([`clip_aabb`]) of a top-level root's
+//!   inherited [`CalculatedClip`], or, for a nested root, of the enclosing
+//!   layer's interior cascade value at the root (its quad draws inside the
+//!   enclosing capture). A clipper that only translates/scales clips the quad
+//!   exactly; a rotated clipper contributes its bounding box.
 //!
 //! Outside the extract window the real `CalculatedClip` values are always in
 //! place: picking (`crate::pick_clip`) and `bevy_ui`'s own consumers keep
@@ -48,7 +51,7 @@
 use bevy::math::Rect;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::ui::{CalculatedClip, ComputedNode, OverrideClip, UiGlobalTransform};
+use bevy::ui::{CalculatedClip, ComputedNode, FixedNode, OverrideClip, UiGlobalTransform};
 
 use super::{LayerMembership, PromotedLayer};
 
@@ -65,12 +68,52 @@ pub struct LayerClips {
     /// interior clip is `Some` always does (its interior clip sources are a
     /// subset of the real cascade's), so no component insert/remove is ever
     /// needed.
-    pub interior: HashMap<Entity, Option<Rect>>,
+    pub interior: HashMap<Entity, Option<CalculatedClip>>,
     /// Promoted root → the screen-space rect its composite quad clamps to.
     /// Top-level roots: their inherited [`CalculatedClip`]. Nested roots: the
     /// enclosing layer's interior cascade value at the root. `None` inside
     /// the option = unclipped.
     pub quads: HashMap<Entity, Option<Rect>>,
+}
+
+/// The screen-space (physical px) bounds of an inherited [`CalculatedClip`]:
+/// the intersection of every clip rect's world-space bounding box. `None` =
+/// unclipped (no clip rects); a fully clipped node yields an empty rect. Exact
+/// for clippers that only translate/scale; a rotated clipper contributes its
+/// bounding box (the over-approximation errs on drawing, never on hiding), and
+/// a rotated clipper with an infinite (`Visible`) axis — whose box is not a
+/// number — constrains nothing.
+pub fn clip_aabb(clip: &CalculatedClip) -> Option<Rect> {
+    let Some(rects) = clip.rects() else {
+        return Some(Rect::default());
+    };
+    rects.iter().fold(None, |bounds: Option<Rect>, c| {
+        let to_world = c.world_to_clip_local.inverse();
+        let r = c.rect;
+        let world = [
+            r.min,
+            Vec2::new(r.max.x, r.min.y),
+            Vec2::new(r.min.x, r.max.y),
+            r.max,
+        ]
+        .into_iter()
+        .fold(Rect::EMPTY, |acc, p| {
+            acc.union_point(to_world.transform_point2(p))
+        });
+        if world.min.is_nan() || world.max.is_nan() {
+            return bounds;
+        }
+        Some(bounds.map_or(world, |b| b.intersect(world)))
+    })
+}
+
+/// A [`CalculatedClip`] of one screen-space rect (an identity
+/// `world_to_clip_local`) — how tests spell a plain clip rect.
+#[cfg(test)]
+pub(crate) fn screen_clip(rect: Rect) -> CalculatedClip {
+    let mut clip = CalculatedClip::default();
+    clip.push_rect(rect, bevy::math::Affine2::IDENTITY);
+    clip
 }
 
 /// What [`sync_layer_clips`] last consumed from [`LayerMembership`]'s
@@ -102,7 +145,13 @@ pub fn sync_layer_clips(
     roots: Query<(Entity, Option<&CalculatedClip>), With<PromotedLayer>>,
     root_markers: Query<(), With<PromotedLayer>>,
     children: Query<&Children>,
-    nodes: Query<(&Node, &ComputedNode, &UiGlobalTransform, Has<OverrideClip>)>,
+    nodes: Query<(
+        &Node,
+        &ComputedNode,
+        &UiGlobalTransform,
+        Has<OverrideClip>,
+        Has<FixedNode>,
+    )>,
     changed_nodes: Query<
         Entity,
         (
@@ -134,7 +183,9 @@ pub fn sync_layer_clips(
             // to the root's real inherited clip. (Nested roots' quad clips were
             // recorded by their enclosing root's cascade at the prune point.)
             if membership.enclosing.get(&root) == Some(&None) {
-                clips.quads.insert(root, calculated_clip.map(|c| c.clip));
+                clips
+                    .quads
+                    .insert(root, calculated_clip.and_then(clip_aabb));
             }
         };
     if memory.rebuilds != membership.rebuilds {
@@ -182,43 +233,52 @@ pub fn sync_layer_clips(
 }
 
 /// One step of the interior clip cascade — mirrors `bevy_ui`'s
-/// `update_clipping` recursion (`bevy_ui-0.19.0/src/update.rs`): OverrideClip
-/// resets the inherited clip, `Display::None` forces an empty one, the node
-/// records its *inherited* value, and its own overflow only affects its
-/// children via [`children_clip`]. A nested promoted root is pruned: the
-/// cascade value at the prune point is its composite quad's clip (its quad
-/// draws inside this capture), and its interior belongs to its own cascade.
+/// `update_clipping` recursion (`bevy_ui-0.20.0/src/layout/clipping.rs`):
+/// `OverrideClip`/`FixedNode` reset the inherited clip, `Display::None` fully
+/// clips, the node records its *inherited* value, and its own overflow only
+/// affects its children via [`children_clip`]. A nested promoted root is
+/// pruned: the cascade value at the prune point is its composite quad's clip
+/// (its quad draws inside this capture), and its interior belongs to its own
+/// cascade.
 #[allow(clippy::type_complexity)]
 fn cascade(
     node: Entity,
     dfs_root: Entity,
-    mut inherited: Option<Rect>,
+    mut inherited: Option<CalculatedClip>,
     children: &Query<&Children>,
     root_markers: &Query<(), With<PromotedLayer>>,
-    nodes: &Query<(&Node, &ComputedNode, &UiGlobalTransform, Has<OverrideClip>)>,
+    nodes: &Query<(
+        &Node,
+        &ComputedNode,
+        &UiGlobalTransform,
+        Has<OverrideClip>,
+        Has<FixedNode>,
+    )>,
     clips: &mut LayerClips,
 ) {
-    let Ok((ui_node, computed, transform, has_override)) = nodes.get(node) else {
+    let Ok((ui_node, computed, transform, has_override, has_fixed)) = nodes.get(node) else {
         return; // Non-UI entity: nothing to clip, nothing extracted below it.
     };
-    if has_override {
+    if has_override || has_fixed {
         inherited = None;
     }
     if ui_node.display == bevy::ui::Display::None {
-        inherited = Some(Rect::default());
+        inherited = Some(CalculatedClip::FullyClipped);
     }
     if node != dfs_root && root_markers.contains(node) {
-        clips.quads.insert(node, inherited);
+        clips
+            .quads
+            .insert(node, inherited.as_ref().and_then(clip_aabb));
         return; // The nested root's own cascade owns its interior.
     }
+    let child_clip = children_clip(ui_node, computed, transform, &inherited);
     clips.interior.insert(node, inherited);
-    let child_clip = children_clip(ui_node, computed, transform, inherited);
     if let Ok(kids) = children.get(node) {
         for &kid in kids {
             cascade(
                 kid,
                 dfs_root,
-                child_clip,
+                child_clip.clone(),
                 children,
                 root_markers,
                 nodes,
@@ -229,22 +289,32 @@ fn cascade(
 }
 
 /// The clip a node passes to its children — stock semantics: `Visible`
-/// overflow passes the inherited clip through; otherwise the node's
-/// [`ComputedNode::resolve_clip_rect`] (object-centered, physical px) is
-/// translated into screen space and intersected with the inherited clip.
+/// overflow (or a fully clipped node) passes the inherited clip through;
+/// otherwise the node's [`ComputedNode::resolve_clip_rect`] (object-centered,
+/// physical px) is appended in the node's local space, and a node without an
+/// invertible transform fully clips its children.
 fn children_clip(
     node: &Node,
     computed: &ComputedNode,
     transform: &UiGlobalTransform,
-    inherited: Option<Rect>,
-) -> Option<Rect> {
-    if node.overflow.is_visible() {
-        return inherited;
+    inherited: &Option<CalculatedClip>,
+) -> Option<CalculatedClip> {
+    if inherited
+        .as_ref()
+        .is_some_and(CalculatedClip::is_fully_clipped)
+        || node.overflow.is_visible()
+    {
+        return inherited.clone();
     }
-    let mut clip_rect = computed.resolve_clip_rect(node.overflow, node.overflow_clip_margin);
-    clip_rect.min += transform.translation;
-    clip_rect.max += transform.translation;
-    Some(inherited.map_or(clip_rect, |c| c.intersect(clip_rect)))
+    let Some(clip_from_world) = transform.try_inverse() else {
+        return Some(CalculatedClip::FullyClipped);
+    };
+    let mut clip = inherited.clone().unwrap_or_default();
+    clip.push_rect(
+        computed.resolve_clip_rect(node.overflow, node.overflow_clip_margin),
+        clip_from_world,
+    );
+    Some(clip)
 }
 
 #[cfg(test)]
@@ -318,12 +388,15 @@ mod tests {
         e
     }
 
+    /// A member's interior clip as screen-space bounds (`None` = unclipped).
     fn interior(world: &World, e: Entity) -> Option<Rect> {
-        *world
+        world
             .resource::<LayerClips>()
             .interior
             .get(&e)
             .unwrap_or_else(|| panic!("no interior clip entry for {e:?}"))
+            .as_ref()
+            .and_then(clip_aabb)
     }
 
     fn quad(world: &World, e: Entity) -> Option<Rect> {
@@ -356,8 +429,8 @@ mod tests {
             Overflow::visible(),
         );
         world.entity_mut(child).insert(ChildOf(root));
-        world.entity_mut(root).insert(CalculatedClip { clip });
-        world.entity_mut(child).insert(CalculatedClip { clip });
+        world.entity_mut(root).insert(screen_clip(clip));
+        world.entity_mut(child).insert(screen_clip(clip));
         let unclipped = spawn_root(
             &mut world,
             2,
@@ -569,8 +642,8 @@ mod tests {
             Overflow::visible(),
         );
         world.entity_mut(child).insert(ChildOf(root));
-        world.entity_mut(root).insert(CalculatedClip { clip });
-        world.entity_mut(child).insert(CalculatedClip { clip });
+        world.entity_mut(root).insert(screen_clip(clip));
+        world.entity_mut(child).insert(screen_clip(clip));
         schedule.run(&mut world);
         schedule.run(&mut world); // settle: steady state is clean
         assert!(world.resource::<LayerRepaintState>().dirty.is_empty());
@@ -592,7 +665,7 @@ mod tests {
 
         // The scrollport itself changes: quad clip follows, still no dirt.
         let grown = Rect::new(0.0, 0.0, 200.0, 150.0);
-        world.get_mut::<CalculatedClip>(root).unwrap().clip = grown;
+        *world.get_mut::<CalculatedClip>(root).unwrap() = screen_clip(grown);
         schedule.run(&mut world);
         assert!(
             world.resource::<LayerRepaintState>().dirty.is_empty(),

@@ -45,11 +45,13 @@ fn spawn_surface(ctx: &mut SpawnCtx) -> Entity {
 
 /// The default style of a `<surface>`: it fills the offscreen texture (the
 /// camera's logical viewport), so the subtree has a definite box to lay out
-/// in. The user's `style` overlays it.
+/// in. The user's `style` overlays it. Viewport units, not `100%`: a UI root
+/// is an item of bevy_ui's implicit grid, whose auto row would grow a `100%`
+/// root to its content.
 fn surface_style() -> Style {
     let mut style = Style::default();
-    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
-    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
+    style.set(&WIDTH, Animatable::Static(Length::Vw(100.0)));
+    style.set(&HEIGHT, Animatable::Static(Length::Vh(100.0)));
     style
 }
 

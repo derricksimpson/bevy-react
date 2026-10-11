@@ -2,7 +2,7 @@
 //! resizes — plus the small shared utilities every event collector leans on
 //! ([`send_ui_event`], [`climb`], coordinate normalization).
 
-use bevy::picking::events::{Click, Pointer};
+use bevy::picking::events::PointerClick;
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -19,10 +19,14 @@ use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 /// `Interaction` — hover/press styling inserts one too, and a style-only
 /// interactive leaf (a hover-styled `<text>` label) must never steal the
 /// click from the ancestor that declared the handler.
-pub(super) type ClickOwners = Or<(With<ClickOwner>, With<Button>, With<EditableText>)>;
+pub(super) type ClickOwners = Or<(
+    With<ClickOwner>,
+    With<bevy::ui_widgets::Button>,
+    With<EditableText>,
+)>;
 
 /// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
-/// `Pointer<Click>`, which fires on *release over the same node the press landed
+/// `PointerClick`, which fires on *release over the same node the press landed
 /// on* — DOM click semantics, so press → drag off → release never clicks. Like
 /// DOM `click`, only the primary (left) button clicks; right/middle interactions
 /// are the `onPointer*` events' job (which carry the button). Virtual
@@ -38,7 +42,7 @@ pub fn collect_ui_events(
     // `Option` so the many headless tests that never touch scrolling don't
     // have to init it; production always has it (`ReactUiPlugin`).
     touch_scroll: Option<Res<crate::touch_scroll::TouchScrollState>>,
-    mut clicks: MessageReader<Pointer<Click>>,
+    mut clicks: MessageReader<PointerClick>,
     // Click ownership (see [`ClickOwners`]) — same attribution rule as
     // `collect_virtual_clicks`.
     targets: Query<&ReactNode, ClickOwners>,
@@ -58,7 +62,7 @@ pub fn collect_ui_events(
         }
         if virtual_pointers
             .as_ref()
-            .is_some_and(|p| p.contains(ev.pointer_id))
+            .is_some_and(|p| p.contains(ev.pointer.id))
         {
             continue;
         }
@@ -70,7 +74,7 @@ pub fn collect_ui_events(
         // claim survives the release frame (see `TouchScrollState`). A touch
         // bound to a handler drag (`ActiveDrag`) past slop still clicks —
         // pre-existing behavior, out of scope here.
-        if let PointerId::Touch(id) = ev.pointer_id
+        if let PointerId::Touch(id) = ev.pointer.id
             && touch_scroll.as_ref().is_some_and(|s| s.is_suppressed(id))
         {
             continue;
@@ -81,7 +85,7 @@ pub fn collect_ui_events(
         if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e)) {
             let candidate = (ev.hit.depth, target);
             topmost
-                .entry(ev.pointer_id)
+                .entry(ev.pointer.id)
                 .and_modify(|best| {
                     if candidate.0 < best.0 {
                         *best = candidate;
@@ -246,6 +250,7 @@ mod tests {
     use super::*;
     use crate::protocol::op::Op;
     use crate::reconcile::collect_virtual_clicks;
+    use bevy::picking::events::Pointer;
 
     /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
     /// whose offset diverges from the recorded one, ignores non-listener nodes, and
@@ -321,7 +326,7 @@ mod tests {
         );
     }
 
-    /// A synthetic picking `Pointer<Click>` location: the render target is
+    /// A synthetic picking `PointerClick` location: the render target is
     /// irrelevant to the collectors, so a default image handle stands in.
     /// Register a virtual pointer the way a feature does (the `<surface>`
     /// crate registers its in-world pointer), returning its id.
@@ -344,16 +349,17 @@ mod tests {
     }
 
     /// A minimal app wired for the picking-based click collectors: a `JsBridge`
-    /// (with its outbound receiver kept alive) + `Pointer<Click>` messages.
+    /// (with its outbound receiver kept alive) + `PointerClick` messages.
     fn click_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        app.init_resource::<bevy::picking::pointer::PointerMap>();
         app.add_plugins(MinimalPlugins);
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         std::mem::forget(_ops_tx); // Keep the ops channel open for the app's lifetime.
         let root = app.world_mut().spawn_empty().id();
         app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
-        app.add_message::<Pointer<Click>>();
+        app.add_message::<PointerClick>();
         (app, out_rx)
     }
 
@@ -366,7 +372,7 @@ mod tests {
             .collect()
     }
 
-    /// [`collect_ui_events`] rides `Pointer<Click>`: only the primary button
+    /// [`collect_ui_events`] rides `PointerClick`: only the primary button
     /// clicks (right/middle are the `onPointer*` events' job), a click on a
     /// node's leaf (label) climbs to the `Interaction`-bearing owner, and the
     /// multi-pick fan-out (leaf + owner both hovered) dedupes to ONE event.
@@ -378,18 +384,13 @@ mod tests {
         let owner = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let leaf = app.world_mut().spawn(ChildOf(owner)).id();
 
-        let click = |entity, button| {
-            Pointer::new(
-                PointerId::Mouse,
-                click_location(),
-                Click {
-                    button,
-                    hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                    duration: std::time::Duration::ZERO,
-                    count: 1,
-                },
-                entity,
-            )
+        let click = |entity, button| PointerClick {
+            entity,
+            pointer: Pointer::new(PointerId::Mouse, click_location()),
+            button,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
         };
         // A right click must be ignored entirely…
         app.world_mut()
@@ -432,23 +433,13 @@ mod tests {
             .id();
         let leaf = app.world_mut().spawn(ChildOf(inner)).id();
 
-        let click = |entity, depth| {
-            Pointer::new(
-                PointerId::Mouse,
-                click_location(),
-                Click {
-                    button: PointerButton::Primary,
-                    hit: bevy::picking::backend::HitData::new(
-                        Entity::PLACEHOLDER,
-                        depth,
-                        None,
-                        None,
-                    ),
-                    duration: std::time::Duration::ZERO,
-                    count: 1,
-                },
-                entity,
-            )
+        let click = |entity, depth| PointerClick {
+            entity,
+            pointer: Pointer::new(PointerId::Mouse, click_location()),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
         };
         // Adversarial order: the DEEPEST hit arrives first (the hover map is a
         // HashMap — message order carries no meaning). Depths mirror the
@@ -482,23 +473,13 @@ mod tests {
             .spawn((ReactNode(2), ClickOwner, ChildOf(outer)))
             .id();
 
-        let click = |entity, depth| {
-            Pointer::new(
-                surface_id,
-                click_location(),
-                Click {
-                    button: PointerButton::Primary,
-                    hit: bevy::picking::backend::HitData::new(
-                        Entity::PLACEHOLDER,
-                        depth,
-                        None,
-                        None,
-                    ),
-                    duration: std::time::Duration::ZERO,
-                    count: 1,
-                },
-                entity,
-            )
+        let click = |entity, depth| PointerClick {
+            entity,
+            pointer: Pointer::new(surface_id, click_location()),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
         };
         // Deepest-first again: selection must ride depth, not arrival order.
         app.world_mut().write_message(click(outer, 0.00001));
@@ -531,23 +512,13 @@ mod tests {
             .spawn((ReactNode(2), Interaction::None, ChildOf(owner)))
             .id();
 
-        let click = |entity, depth| {
-            Pointer::new(
-                PointerId::Mouse,
-                click_location(),
-                Click {
-                    button: PointerButton::Primary,
-                    hit: bevy::picking::backend::HitData::new(
-                        Entity::PLACEHOLDER,
-                        depth,
-                        None,
-                        None,
-                    ),
-                    duration: std::time::Duration::ZERO,
-                    count: 1,
-                },
-                entity,
-            )
+        let click = |entity, depth| PointerClick {
+            entity,
+            pointer: Pointer::new(PointerId::Mouse, click_location()),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
         };
         // The label is the topmost hit; the owner sits just beneath.
         app.world_mut().write_message(click(label, 0.0));
@@ -582,17 +553,14 @@ mod tests {
             ))
             .id();
 
-        app.world_mut().write_message(Pointer::new(
-            PointerId::Mouse,
-            click_location(),
-            Click {
-                button: PointerButton::Primary,
-                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                duration: std::time::Duration::ZERO,
-                count: 1,
-            },
-            shape,
-        ));
+        app.world_mut().write_message(PointerClick {
+            entity: shape,
+            pointer: Pointer::new(PointerId::Mouse, click_location()),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
+        });
         app.update();
 
         let events = drain_clicks(&mut out_rx);
@@ -614,17 +582,14 @@ mod tests {
         app.update(); // Run Startup so the pointer resource exists.
 
         let owner = app.world_mut().spawn((ReactNode(7), ClickOwner)).id();
-        app.world_mut().write_message(Pointer::new(
-            surface_id,
-            click_location(),
-            Click {
-                button: PointerButton::Primary,
-                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                duration: std::time::Duration::ZERO,
-                count: 1,
-            },
-            owner,
-        ));
+        app.world_mut().write_message(PointerClick {
+            entity: owner,
+            pointer: Pointer::new(surface_id, click_location()),
+            button: PointerButton::Primary,
+            hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: std::time::Duration::ZERO,
+            count: 1,
+        });
         app.update();
 
         let events = drain_clicks(&mut out_rx);

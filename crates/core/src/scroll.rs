@@ -578,6 +578,7 @@ mod tests {
 
         let run = |pointer_at: Option<Vec2>| {
             let mut world = World::new();
+            world.init_resource::<bevy::picking::pointer::PointerMap>();
             let mut window = Window::default();
             window.set_physical_cursor_position(Some(Vec2::new(300.0, 200.0).as_dvec2()));
             world.spawn((window, PrimaryWindow));
@@ -589,7 +590,7 @@ mod tests {
                 .spawn((Camera::default(), RenderTarget::Image(image.clone())))
                 .id();
             let mut target = DynamicStruct::default();
-            target.insert("camera", camera);
+            target.insert("camera", Some(camera));
             let container = world
                 .spawn((
                     Node {

@@ -942,7 +942,7 @@ fn system_eases_border_radius_and_dirties_content() {
     schedule.run(&mut world);
     let r = world.entity(e).get::<Node>().unwrap().border_radius;
     assert!(
-        matches!(r.top_left, Val::Px(v) if (v - 54.0).abs() < 1.0),
+        matches!(r.top_left.x, Val::Px(v) if (v - 54.0).abs() < 1.0),
         "mid expected ~54px, got {r:?}"
     );
     assert_eq!(r.bottom_right, r.top_left, "every corner eases");

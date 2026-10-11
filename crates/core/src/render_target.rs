@@ -353,8 +353,9 @@ pub fn drive_target_cameras(
     }
 }
 
-/// Whether the node's border box lies entirely outside its inherited clip rect —
-/// both in physical px, the space `CalculatedClip` and `UiGlobalTransform` share.
+/// Whether the node's border box lies entirely outside its inherited clip's
+/// screen-space bounds ([`clip_aabb`](crate::layer::clip::clip_aabb)) — both
+/// in physical px, the space `UiGlobalTransform` maps into.
 fn clipped_out(
     node: &ComputedNode,
     transform: &UiGlobalTransform,
@@ -373,7 +374,7 @@ fn clipped_out(
     let rect = corners.iter().fold(Rect::EMPTY, |rect, corner| {
         rect.union_point(transform.transform_point2(*corner))
     });
-    clip.clip.intersect(rect).is_empty()
+    crate::layer::clip::clip_aabb(clip).is_some_and(|c| c.intersect(rect).is_empty())
 }
 
 /// Round a laid-out physical size up to the next [`SIZE_STEP`] multiple, clamped
@@ -639,9 +640,7 @@ mod tests {
         // Node box spans (-32..32)²; a clip rect entirely to its right hides it.
         app.world_mut().entity_mut(portal).insert((
             shown,
-            CalculatedClip {
-                clip: Rect::new(100.0, -10.0, 200.0, 10.0),
-            },
+            crate::layer::clip::screen_clip(Rect::new(100.0, -10.0, 200.0, 10.0)),
         ));
         app.update();
         assert!(
@@ -649,9 +648,11 @@ mod tests {
             "a portal scrolled out of its clip keeps it off"
         );
 
-        app.world_mut().entity_mut(portal).insert(CalculatedClip {
-            clip: Rect::new(0.0, 0.0, 200.0, 200.0),
-        });
+        app.world_mut()
+            .entity_mut(portal)
+            .insert(crate::layer::clip::screen_clip(Rect::new(
+                0.0, 0.0, 200.0, 200.0,
+            )));
         app.update();
         assert!(active(&app), "a partly clipped portal turns it back on");
 

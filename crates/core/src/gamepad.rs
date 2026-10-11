@@ -90,7 +90,7 @@ pub enum GamepadButtonName {
     DPadLeft,
     DPadRight,
     /// Non-standard button (flight-stick extras and the like).
-    Other(u8),
+    Other(u32),
 }
 
 /// Wire name for a gamepad axis: Bevy's [`GamepadAxis`] variants, camelCased.
@@ -106,7 +106,7 @@ pub enum GamepadAxisName {
     RightStickY,
     RightZ,
     /// Non-standard axis (HOTAS sliders, potentiometers, …).
-    Other(u8),
+    Other(u32),
 }
 
 // Both matches are deliberately wildcard-free: a Bevy upgrade that grows the

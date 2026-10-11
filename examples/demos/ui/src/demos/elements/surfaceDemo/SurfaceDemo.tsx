@@ -25,7 +25,7 @@ const PAGE: ExplanationData = {
         the Rust side registered.
       </Paragraph>
       <CodeTabs
-        tsx={`<surface target="monitor" style={{ width: "100%", height: "100%" }}>
+        tsx={`<surface target="monitor">
   <MonitorApp />
 </surface>`}
         rust={`// Register the texture the React subtree renders into…
@@ -67,8 +67,6 @@ export function SurfaceDemo() {
 // Transparent so that when the power wrapper collapses, the surface's own near-black
 // clear color (see `monitor.rs`) shows through — a true CRT blackout.
 const screenRoot: BevyStyle = {
-  width: "100%",
-  height: "100%",
   flexDirection: "column",
   backgroundColor: Colors.transparent,
 };

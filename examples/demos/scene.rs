@@ -130,7 +130,7 @@ fn apply_select_scene(
     }
     // What shows once this frame's state transition runs.
     let showing = match &*next {
-        NextState::Pending(s) | NextState::PendingIfNeq(s) => *s,
+        NextState::Pending(s) | NextState::PendingIfDifferent(s) => *s,
         NextState::Unchanged => *state.get(),
     };
     match &on.event().transition {
