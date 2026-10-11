@@ -1064,6 +1064,8 @@ impl Plugin for ReactUiPlugin {
         // turns real changes into its `change` event and selection moves into
         // `select`. Two more observers bridge focus gain/loss to `focus`/`blur`.
         app.add_observer(on_text_edit_change);
+        // A `<button>`'s accessible label, from the text mounted under it.
+        app.add_systems(Update, crate::elements::label_buttons.after(ReactApplySet));
         app.add_observer(on_focus_gained);
         app.add_observer(on_focus_lost);
 

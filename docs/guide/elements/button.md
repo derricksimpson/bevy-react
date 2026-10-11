@@ -10,7 +10,7 @@ covers: [element.button]
 style and props as a `<node>` and has no built-in look; what it adds is
 pointer behavior: it blocks the pointer by default, always tracks hover and
 press, and owns every click that lands inside it. On the Bevy side it
-carries `bevy_ui`'s `Button` component.
+carries Bevy's widget `Button` component (`bevy::ui_widgets::Button`).
 
 ## Usage
 
@@ -89,7 +89,8 @@ flattens while pressed.
 - A `<button>` is not focusable and has no keyboard activation: Tab, Enter
   and Space don't reach it. `focusStyle` applies only if your Rust code
   gives the entity Bevy's `InputFocus`.
-- There is no `ariaLabel`. Bevy names the button for assistive tech from
-  its child text when it mounts, so an icon-only button has no name.
+- There is no `ariaLabel`. The button is named for assistive tech from the
+  text under it (nested wrappers included), refreshed when its direct
+  children change, so an icon-only button has no name.
 
 See [`<button>`](../reference/elements.md#button) in the element reference.

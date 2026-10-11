@@ -110,9 +110,8 @@ const [sel, setSel] = useState({ start: 0, end: 0 });
 ## Focus and keyboard
 
 - A field takes focus when clicked, when it mounts with `autofocus`, or when
-  your Rust code sets Bevy's `InputFocus` to it. Clicking elsewhere does not
-  blur it: focus moves only to another focusable element or when Rust
-  clears `InputFocus`.
+  your Rust code sets Bevy's `InputFocus` to it. Clicking anywhere else blurs
+  it, as on the web; so does Escape, and Rust clearing `InputFocus`.
 - `focusStyle` applies while the field is focused, with no React state.
   `hoverStyle` and `pressStyle` work as on a `<node>`.
 - Don't rely on the order of one field's `onBlur` and the next field's
@@ -121,7 +120,8 @@ const [sel, setSel] = useState({ start: 0, end: 0 });
   `onBlur={() => setFocused((f) => (f === "first" ? null : f))}`.
 - Editing keys are Bevy's: arrows, Home and End, word moves and deletes with
   Ctrl (Alt on macOS), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V with the system
-  clipboard (Cmd on macOS), and Escape to collapse the selection.
+  clipboard (Cmd on macOS), and Escape to collapse the selection and leave
+  the field.
   Double-click selects a word, triple-click selects everything.
 - The field consumes typed keys, but the global `keyDown` and `keyUp` events
   still fire. There is no submit event: handle Enter there while the field

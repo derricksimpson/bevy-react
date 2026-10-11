@@ -137,7 +137,12 @@ fn spawn_editable(ctx: &mut SpawnCtx) -> Entity {
             },
         ),
         (
-            // Focusable via click (the widget's picking observers) and Tab.
+            // The widget half: bevy's key, pointer and IME systems act on
+            // `TextInput` entities only (`EditableText` alone is just the
+            // editing state).
+            bevy::ui_widgets::TextInput,
+            // Focusable via click (bevy's pointer focus resolves a press to
+            // the `TabIndex` target) and Tab.
             TabIndex(0),
             // The input is a click owner BY TYPE — `collect_ui_events`
             // matches `EditableText` directly — so a press inside it resolves
@@ -302,13 +307,17 @@ pub fn on_text_edit_change(
 
 /// Send an input's `focus` event and set the node's [`FocusState`] so a
 /// `focusStyle` is applied by the interaction restyle. `FocusGained`
-/// bubbles, so this acts on the originally focused entity (`ev.entity`);
-/// `FocusState` is general (a no-op for nodes without it).
+/// bubbles, with `ev.entity` rewritten at every hop, so this acts on the
+/// originally focused entity only; `FocusState` is general (a no-op for
+/// nodes without it).
 pub fn on_focus_gained(
     ev: On<FocusGained>,
     events: ElementEvents,
     mut focus_states: Query<&mut FocusState>,
 ) {
+    if ev.entity != ev.original_event_target() {
+        return;
+    }
     set_focus_state(&mut focus_states, ev.entity, true);
     events.send(ev.entity, &FOCUS, &());
 }
@@ -319,6 +328,9 @@ pub fn on_focus_lost(
     events: ElementEvents,
     mut focus_states: Query<&mut FocusState>,
 ) {
+    if ev.entity != ev.original_event_target() {
+        return;
+    }
     set_focus_state(&mut focus_states, ev.entity, false);
     events.send(ev.entity, &BLUR, &());
 }

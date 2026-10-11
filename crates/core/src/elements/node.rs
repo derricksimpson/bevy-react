@@ -34,6 +34,50 @@ fn button_style() -> Style {
     style
 }
 
+/// Label each `<button>` for assistive technology with the text it shows:
+/// every text block in its subtree, in tree order, joined by spaces. (The
+/// headless `ui_widgets::Button` only sets the role; bevy_ui's old `Button`
+/// labelled itself from its child text.) Recomputed when the button mounts
+/// and when its direct children change — not on a text edit deeper down.
+#[allow(clippy::type_complexity)]
+pub fn label_buttons(
+    mut commands: Commands,
+    buttons: Query<
+        Entity,
+        (
+            With<bevy::ui_widgets::Button>,
+            With<crate::bridge::ReactNode>,
+            Or<(Added<bevy::ui_widgets::Button>, Changed<Children>)>,
+        ),
+    >,
+    children: Query<&Children>,
+    texts: Query<(), With<Text>>,
+    mut text_reader: bevy::ui::widget::TextUiReader,
+) {
+    for button in &buttons {
+        let label = children
+            .iter_descendants_depth_first(button)
+            .filter(|e| texts.contains(*e))
+            .flat_map(|block| {
+                text_reader
+                    .iter(block)
+                    .filter_map(|(_, _, item)| match item {
+                        bevy::text::TextElement::Text { text, .. } => Some(text.to_string()),
+                        bevy::text::TextElement::Box(_) => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|text| !text.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if label.is_empty() {
+            commands.entity(button).remove::<AccessibleLabel>();
+        } else {
+            commands.entity(button).insert(AccessibleLabel::new(label));
+        }
+    }
+}
+
 /// `<root>`: the screen-space twin of `<surface>` — a styled container that
 /// is a **detached UI root** on the default UI camera, for overlays that
 /// must float above and stay out of the app's own tree (the devtools panel).

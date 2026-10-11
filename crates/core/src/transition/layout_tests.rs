@@ -941,3 +941,48 @@ fn direction_flip_under_a_size_flight_eases_the_move_and_lands() {
     assert_eq!(g.translation, Vec2::new(55.0, 45.0), "column, settled");
     assert_eq!(g.matrix2, Mat2::IDENTITY);
 }
+
+/// [`scroll_range`](crate::scroll::scroll_range) is what bevy_ui clamps a
+/// scroll offset to (taffy's `scroll_height`, which measures the content
+/// inside the border): a bordered scrollport scrolled far past its end
+/// applies exactly that range. Pinned against the real layout system, since
+/// every scroll writer clamps with it.
+#[test]
+fn scroll_range_matches_the_offset_bevy_applies() {
+    use bevy::ui::{Overflow, ScrollPosition};
+    let mut app = layout_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let port = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(100.0),
+                border: UiRect::all(Val::Px(8.0)),
+                flex_direction: FlexDirection::Column,
+                overflow: Overflow::scroll_y(),
+                ..Default::default()
+            },
+            ScrollPosition(Vec2::new(0.0, 10_000.0)),
+            ChildOf(root),
+        ))
+        .id();
+    app.world_mut().spawn((
+        Node {
+            width: Val::Px(50.0),
+            height: Val::Px(300.0),
+            flex_shrink: 0.0,
+            ..Default::default()
+        },
+        ChildOf(port),
+    ));
+    step(&mut app, 0.0);
+    let computed = app.world().entity(port).get::<ComputedNode>().unwrap();
+    let range = crate::scroll::scroll_range(computed);
+    // 300 of content in an 84px padding box (100 less two 8px borders).
+    assert_eq!(range, Vec2::new(0.0, 216.0));
+    assert_eq!(
+        computed.scroll_position, range,
+        "bevy applied exactly the range (scale factor 1)"
+    );
+}

@@ -114,9 +114,16 @@ pub(crate) fn is_scroll_container(node: &Node) -> bool {
 /// the offset it *applies* for rendering but never writes that back to
 /// `ScrollPosition`, so every scroll writer clamps against this itself.
 /// `ComputedNode` sizes are physical; the component is logical — hence
-/// `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
+/// `inverse_scale_factor`.
+///
+/// Mirrors what `ui_layout_system` clamps to, taffy's `Layout::scroll_width`
+/// / `scroll_height`: `content_size` is the scrollable overflow extent
+/// (measured inside the border), so the range is that extent less the
+/// padding box (`size` minus both borders), plus the scrollbar's gutter.
 pub(crate) fn scroll_range(computed: &ComputedNode) -> Vec2 {
-    (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
+    let border = computed.border.min_inset + computed.border.max_inset;
+    (computed.content_size + computed.scrollbar_size.min(computed.size) - computed.size + border)
+        .max(Vec2::ZERO)
         * computed.inverse_scale_factor
 }
 

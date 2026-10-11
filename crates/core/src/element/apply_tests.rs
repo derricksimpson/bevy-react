@@ -212,3 +212,163 @@ fn editable_value_seeds_on_create() {
         .expect("an input");
     assert_eq!(editable.value().to_string(), "NYX");
 }
+
+/// An `<editableText>` is a working text input: it carries bevy's
+/// `TextInput` (its key/pointer/IME systems act on nothing else), announces
+/// as a text field rather than `TextInput`'s bare default, and blocks the
+/// picks beneath it even at the default pass-through `focusPolicy` — so a
+/// click is one press, and one focus request, on the input.
+#[test]
+fn editable_is_a_focusable_text_input() {
+    let (mut app, tx) = op_app();
+    tx.send(vec![
+        create(
+            1,
+            "editableText",
+            serde_json::json!({ "ariaLabel": "Name" }),
+        ),
+        create(2, "node", serde_json::json!({})),
+    ])
+    .unwrap();
+    app.update();
+    let (input, node) = (ent(&app, 1), ent(&app, 2));
+    let world = app.world();
+    assert!(world.get::<bevy::ui_widgets::TextInput>(input).is_some());
+    assert!(
+        world
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(input)
+            .is_some()
+    );
+    let a11y = world
+        .get::<bevy::a11y::AccessibilityNode>(input)
+        .expect("an accessibility node");
+    assert_eq!(a11y.label(), Some("Name"), "our node, not the default");
+    let pickable = |e| *world.get::<bevy::picking::Pickable>(e).unwrap();
+    assert!(pickable(input).should_block_lower);
+    assert!(
+        !pickable(node).should_block_lower,
+        "plain nodes pass through"
+    );
+}
+
+/// End to end with bevy's own input path: a key typed while the input holds
+/// the focus reaches its `EditableText`. (Bevy's key handler only acts on
+/// `TextInput` entities — an `EditableText` alone would ignore it.)
+#[test]
+fn typed_keys_reach_a_focused_editable() {
+    use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
+    use bevy::input::{ButtonState, InputPlugin};
+    use bevy::input_focus::{InputDispatchPlugin, InputFocus};
+    use bevy::text::TextEdit;
+    use bevy::window::{PrimaryWindow, Window};
+
+    let (mut app, tx) = op_app_with(|app| {
+        app.add_plugins((
+            InputPlugin,
+            InputDispatchPlugin,
+            bevy::ui_widgets::TextInputPlugin,
+        ));
+        // What the widget's IME/autoscroll systems read in a full app.
+        app.init_resource::<InputFocus>()
+            .init_resource::<Time<bevy::time::Real>>()
+            .init_resource::<bevy::picking::events::PointerState>()
+            .init_resource::<bevy::ui::UiScale>()
+            .add_message::<bevy::window::Ime>()
+            .add_message::<bevy::input::gamepad::GamepadButtonChangedEvent>()
+            .add_message::<bevy::input::mouse::MouseWheel>()
+            .add_message::<bevy::picking::events::PointerRelease>();
+    });
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    tx.send(vec![create(1, "editableText", serde_json::json!({}))])
+        .unwrap();
+    app.update();
+    let input = ent(&app, 1);
+    app.insert_resource(InputFocus::from_entity(input));
+    app.world_mut().write_message(KeyboardInput {
+        key_code: KeyCode::KeyA,
+        logical_key: Key::Character("a".into()),
+        state: ButtonState::Pressed,
+        text: Some("a".into()),
+        repeat: false,
+        window,
+    });
+    app.update();
+    let editable = app
+        .world()
+        .get::<bevy::text::EditableText>(input)
+        .expect("an input");
+    assert!(
+        editable
+            .pending_edits
+            .contains(&TextEdit::Insert("a".into()))
+            || editable.value() == "a",
+        "the typed key reached the input: pending {:?}, value {:?}",
+        editable.pending_edits,
+        editable.value().to_string()
+    );
+}
+
+/// A `<button>` announces as a button labelled with the text mounted under
+/// it — nested wrappers included, in tree order — and follows its children.
+#[test]
+fn button_is_labelled_from_its_text() {
+    let (mut app, tx) = op_app_with(|app| {
+        app.add_systems(
+            Update,
+            crate::elements::label_buttons.after(crate::reconcile::apply_js_ops),
+        );
+    });
+    let text = |id, s: &str| Op::Create {
+        id,
+        kind: "text".into(),
+        props: Box::default(),
+        text: Some(s.into()),
+    };
+    tx.send(vec![
+        create(1, "button", serde_json::json!({})),
+        create(2, "node", serde_json::json!({})),
+        text(3, "Save"),
+        text(4, "draft"),
+        Op::Append {
+            parent: 2,
+            child: 3,
+        },
+        Op::Append {
+            parent: 1,
+            child: 2,
+        },
+        Op::Append {
+            parent: 1,
+            child: 4,
+        },
+    ])
+    .unwrap();
+    app.update();
+    app.update();
+    let button = ent(&app, 1);
+    let label = |app: &App| {
+        app.world()
+            .get::<bevy::a11y::AccessibilityNode>(button)
+            .and_then(|n| n.label().map(str::to_owned))
+    };
+    assert_eq!(label(&app).as_deref(), Some("Save draft"));
+    assert_eq!(
+        app.world()
+            .get::<bevy::a11y::AccessibilityNode>(button)
+            .unwrap()
+            .role(),
+        accesskit::Role::Button
+    );
+
+    tx.send(vec![Op::Remove {
+        parent: 1,
+        child: 4,
+    }])
+    .unwrap();
+    app.update();
+    app.update();
+    assert_eq!(label(&app).as_deref(), Some("Save"));
+}

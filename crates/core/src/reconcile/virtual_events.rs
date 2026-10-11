@@ -239,7 +239,10 @@ pub fn collect_virtual_hover_events(
 /// [`apply_interaction_styles`](crate::reconcile::apply_interaction_styles), which
 /// can't help here because such nodes never receive a legacy `Interaction`
 /// (their offscreen camera makes `ui_focus_system` skip them). Enter →
-/// base+hover, press → base+hover+press, leave/release → base/hover. The hover
+/// base+hover, press → base+hover+press, leave/release → base/hover — each
+/// with the node's `focusStyle` overlaid last while it holds the focus, as in
+/// the main-window restyle (a press or hover edge on a focused input must not
+/// drop its focus overlay). The hover
 /// axis rides `PointerEnter`/`PointerLeave` (boundary-only, ancestor-aware —
 /// see [`collect_virtual_hover_events`]); the press axis keeps `Press`/`Release`
 /// with the climb, filtered to the primary button so a right/middle press
@@ -254,6 +257,7 @@ pub fn apply_virtual_interaction_styles(
     mut presses: MessageReader<PointerPress>,
     mut releases: MessageReader<PointerRelease>,
     variants: Query<&StyleVariants>,
+    focus: Query<&crate::bridge::FocusState>,
     child_of: Query<&ChildOf>,
     rnodes: Query<&ReactNode>,
     flags: Query<&crate::ext::ElementFlags>,
@@ -308,18 +312,30 @@ pub fn apply_virtual_interaction_styles(
     // Resolve a picked leaf to the nearest ancestor with hover/press variants (the
     // button), so its label text highlights the button rather than nothing.
     let target = |entity: Entity| climb(entity, &child_of, |e| variants.contains(e));
+    // `focusStyle` overlays last while the node holds the focus.
+    let with_focus = |entity: Entity, v: &StyleVariants, style: Option<Style>| {
+        if focus.get(entity).is_ok_and(|f| f.0) {
+            overlay_style(style.as_ref(), v.focus.as_ref())
+        } else {
+            style
+        }
+    };
     for ev in leaves.read() {
         if pointers.contains(ev.pointer.id)
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(ev.entity, v.base.as_ref().cloned());
+            restyle(
+                ev.entity,
+                with_focus(ev.entity, v, v.base.as_ref().cloned()),
+            );
         }
     }
     for ev in enters.read() {
         if pointers.contains(ev.pointer.id)
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(ev.entity, overlay_style(v.base.as_ref(), v.hover.as_ref()));
+            let hovered = overlay_style(v.base.as_ref(), v.hover.as_ref());
+            restyle(ev.entity, with_focus(ev.entity, v, hovered));
         }
     }
     for ev in releases.read() {
@@ -328,7 +344,8 @@ pub fn apply_virtual_interaction_styles(
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
-            restyle(t, overlay_style(v.base.as_ref(), v.hover.as_ref()));
+            let hovered = overlay_style(v.base.as_ref(), v.hover.as_ref());
+            restyle(t, with_focus(t, v, hovered));
         }
     }
     for ev in presses.read() {
@@ -341,7 +358,72 @@ pub fn apply_virtual_interaction_styles(
                 overlay_style(v.base.as_ref(), v.hover.as_ref()).as_ref(),
                 v.press.as_ref(),
             );
-            restyle(t, pressed);
+            restyle(t, with_focus(t, v, pressed));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bridge::FocusState;
+    use crate::reconcile::test_util::{create, ent, op_app};
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::Pointer;
+    use bevy::picking::pointer::{Location, PointerId, PointerMap};
+
+    /// A press or release edge on a FOCUSED node keeps its `focusStyle`: the
+    /// virtual-pointer restyle overlays it last, like the main-window one.
+    /// (Clicking a `<surface>` input used to drop its focus ring on release.)
+    #[test]
+    fn virtual_restyle_keeps_the_focus_overlay() {
+        let (mut app, tx) = op_app();
+        app.init_resource::<PointerMap>()
+            .add_message::<PointerEnter>()
+            .add_message::<PointerLeave>()
+            .add_message::<PointerPress>()
+            .add_message::<PointerRelease>()
+            .add_systems(Update, apply_virtual_interaction_styles);
+        let pointer = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0xF0C5));
+        app.world_mut().spawn(pointer);
+        app.world_mut()
+            .get_resource_or_init::<VirtualPointers>()
+            .register(pointer);
+        tx.send(vec![create(
+            1,
+            "editableText",
+            serde_json::json!({
+                "style": { "border": 1, "borderColor": "#ff0000" },
+                "focusStyle": { "borderColor": "#0000ff" },
+            }),
+        )])
+        .unwrap();
+        app.update();
+        let input = ent(&app, 1);
+        app.world_mut().get_mut::<FocusState>(input).unwrap().0 = true;
+
+        let top = |app: &App| app.world().get::<BorderColor>(input).unwrap().top;
+        let location = Location {
+            target: bevy::camera::NormalizedRenderTarget::Image(Handle::<Image>::default().into()),
+            position: Vec2::ZERO,
+        };
+        let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+        app.world_mut().write_message(PointerPress {
+            entity: input,
+            pointer: Pointer::new(pointer, location.clone()),
+            button: PointerButton::Primary,
+            hit: hit.clone(),
+            count: 1,
+        });
+        app.update();
+        assert_eq!(top(&app), Color::srgb(0.0, 0.0, 1.0), "pressed, focused");
+        app.world_mut().write_message(PointerRelease {
+            entity: input,
+            pointer: Pointer::new(pointer, location),
+            button: PointerButton::Primary,
+            hit,
+        });
+        app.update();
+        assert_eq!(top(&app), Color::srgb(0.0, 0.0, 1.0), "released, focused");
     }
 }
