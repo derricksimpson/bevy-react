@@ -1001,15 +1001,17 @@ impl Plugin for ReactUiPlugin {
                     .before(crate::layer::resolve_layer_repaints),
                 // Interior/quad clip maps: needs this frame's membership
                 // (sync_layer_geometry) and bevy_ui's final CalculatedClip
-                // (PostLayout). Deliberately NOT feeding
-                // resolve_layer_repaints — clip changes never dirty a
-                // capture (scrolling must stay a cache hit).
+                // (PostLayout — its clipping system writes through commands,
+                // and the edge puts a sync point in between). Deliberately
+                // NOT feeding resolve_layer_repaints — clip changes never
+                // dirty a capture (scrolling must stay a cache hit).
                 crate::layer::clip::sync_layer_clips
                     .after(crate::layer::sync_layer_geometry)
                     .after(bevy::ui::UiSystems::PostLayout),
-                // Retained UI extraction: a node whose interior clip entry
-                // changed (it joined/left a layer) is flagged so bevy
-                // re-extracts it inside this frame's swap window.
+                // Retained UI extraction: a node whose strip count changed
+                // (it joined/left a layer under a clipping ancestor) is
+                // flagged so bevy re-extracts it inside this frame's swap
+                // window.
                 crate::layer::clip::mark_reclipped_members
                     .after(crate::layer::clip::sync_layer_clips),
                 // Re-clamps deferred controlled-scroll requests (a pin to the

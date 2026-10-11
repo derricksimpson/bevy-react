@@ -131,6 +131,11 @@ the web: a blur inside a scroll view stops at the scroll view's edge.
 Scrolling a layer in or out of view only moves its image and never
 re-renders it.
 
+The clip follows the clipping ancestor's own `transform`, so a rotated scroll
+view cuts a layer along its rotated edge. A `transform3d` layer is the
+exception: under a rotated clipping ancestor it is cut at that ancestor's
+bounding box.
+
 ## Costs
 
 - Each layer holds a texture the size of its node (plus filter reach) at

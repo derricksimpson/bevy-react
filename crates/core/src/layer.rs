@@ -17,8 +17,8 @@
 //!
 //! Captures are also **clip-independent**: ancestor clipping (a scroll
 //! container or the viewport) never reaches the captured pixels — members
-//! are captured under *interior* clips only (the cascade restarted at the
-//! layer root, [`clip`]) and the ancestor clip clamps the **composite quad**
+//! are captured under *interior* clips only (their clip minus the layer
+//! root's own, [`clip`]) and the ancestor clip clamps the **composite quad**
 //! at draw time instead (web semantics: `overflow` clips the filtered
 //! *result*). This is what makes the translation-invariance above actually
 //! hold under scroll: without it, a capture taken while clipped would be
@@ -165,17 +165,9 @@ pub struct LayerMembership {
     /// phase). Also doubles as the per-layer nesting-depth source.
     pub enclosing: HashMap<Entity, Option<Entity>>,
     /// Bumped on every from-scratch rebuild of the two maps. Readers that
-    /// derive their own per-member state from the maps (the clip cascade,
+    /// derive their own per-member state from the maps (the clip maps,
     /// render extraction's steal index) re-derive only when this moves.
     pub rebuilds: u64,
-    /// Bumped on every non-idle frame (rebuild or per-root refresh) —
-    /// stamps [`Self::clip_touched`] as this frame's.
-    pub syncs: u64,
-    /// One-frame handoff to [`clip::sync_layer_clips`]: the roots whose
-    /// interior clip cascade must re-run because a **clipping** member (a
-    /// node with non-visible overflow) changed geometry this frame. Written
-    /// on refresh frames, valid while `syncs` is unchanged since.
-    pub clip_touched: Vec<Entity>,
 }
 
 /// Per-layer observability row in [`LayersRegistry`]. Identity fields are
@@ -588,7 +580,7 @@ pub struct LayerGeometryGate<'w, 's> {
     changed_geometry: Query<
         'w,
         's,
-        (Entity, Option<&'static Node>),
+        Entity,
         (
             Or<(Changed<ComputedNode>, Changed<UiGlobalTransform>)>,
             Without<bevy::ui_widgets::Scrollbar>,
@@ -637,15 +629,11 @@ enum GeometryWork {
 impl LayerGeometryGate<'_, '_> {
     /// Classify this frame's signals. Consumes the removal readers either way,
     /// so a removal observed on a rebuild frame doesn't hold the gate open a
-    /// second frame. On a refresh frame also collects, into `clip_touched`,
-    /// the roots owning a **clipping** node that changed geometry — the clip
-    /// cascade's only geometry dependency (a visible-overflow node's position
-    /// never moves a clip rect).
+    /// second frame.
     fn take_work(
         &mut self,
         membership: &LayerMembership,
         roots: &Query<(), With<PromotedLayer>>,
-        clip_touched: &mut Vec<Entity>,
     ) -> GeometryWork {
         let structural = !self.changed_children.is_empty()
             || !self.added_roots.is_empty()
@@ -668,8 +656,7 @@ impl LayerGeometryGate<'_, '_> {
         // every member maps to the same root (a hash set beats sorting the
         // per-member list).
         let mut touched = EntityHashSet::default();
-        let mut clip_set = EntityHashSet::default();
-        for (entity, node) in &self.changed_geometry {
+        for entity in &self.changed_geometry {
             // The membership map already knows roots (they map to
             // themselves); only an INACTIVE top-level root is absent from it
             // and needs the component check. A root's own geometry is also
@@ -687,16 +674,12 @@ impl LayerGeometryGate<'_, '_> {
                 None => continue, // Outside every promoted subtree: not ours.
             };
             touched.insert(root);
-            if node.is_some_and(|n| !n.overflow.is_visible()) {
-                clip_set.insert(root);
-            }
         }
         touched.extend(self.changed_chains.iter().filter(|e| roots.contains(*e)));
         touched.extend(removed_chains.into_iter().filter(|e| roots.contains(*e)));
         if touched.is_empty() {
             return GeometryWork::Idle;
         }
-        clip_touched.extend(clip_set);
         GeometryWork::Refresh(touched)
     }
 }
@@ -766,8 +749,7 @@ pub fn sync_layer_geometry(
     mut registry: ResMut<LayersRegistry>,
     mut repaints: ResMut<LayerRepaintState>,
 ) {
-    let mut clip_touched = Vec::new();
-    let touched = match gate.take_work(&membership, &root_markers, &mut clip_touched) {
+    let touched = match gate.take_work(&membership, &root_markers) {
         GeometryWork::Idle => return, // Membership + hashes persist for this frame's readers.
         GeometryWork::Rebuild => None,
         GeometryWork::Refresh(touched) => Some(touched),
@@ -783,8 +765,6 @@ pub fn sync_layer_geometry(
         repaints: &mut repaints,
     };
     let membership = &mut *membership;
-    membership.syncs += 1;
-    membership.clip_touched = clip_touched;
     if let Some(touched) = touched {
         // A root whose activity flips changes its subtree's membership (an
         // active root claims its subtree; an inactive one doesn't): that is

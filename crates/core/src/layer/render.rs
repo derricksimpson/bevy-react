@@ -87,6 +87,7 @@ use bevy::shader::ShaderCacheError;
 use bevy::ui::{ComputedNode, ComputedStackIndex, ComputedUiTargetCamera};
 use bevy::ui_render::{SetUiViewBindGroup, TransparentUi, stack_z_offsets};
 
+use super::clip::QuadClip;
 use super::{LayerCaptureRect, LayerGroupAlpha, LayerMembership, PromotedLayer};
 use crate::filters::{MAX_FILTER_PARAM_VECS, ResolvedFilterChain};
 
@@ -294,10 +295,10 @@ pub struct ExtractedLayer {
     pub min: Vec2,
     /// Capture texture size in whole texels.
     pub size: UVec2,
-    /// The screen-space rect the composite quad clamps to (the layer root's
-    /// ancestor clipping, applied at composite time instead of capture time —
-    /// see [`clip`]). `None` = unclipped.
-    pub quad_clip: Option<bevy::math::Rect>,
+    /// What clips the composite quad (the layer root's ancestor clipping,
+    /// applied at composite time instead of capture time — see [`clip`]).
+    /// `None` = unclipped.
+    pub quad_clip: Option<QuadClip>,
     /// Composite-time group alpha.
     pub alpha: f32,
     /// Color format of the camera target — capture textures must match, or
@@ -601,7 +602,7 @@ pub fn extract_ui_layers(
             quad_entity,
             min,
             size,
-            quad_clip: clips.quads.get(&root).copied().flatten(),
+            quad_clip: clips.quads.get(&root).cloned(),
             alpha: alpha.0.clamp(0.0, 1.0),
             target_format,
             needs_capture,
@@ -1036,6 +1037,40 @@ fn push_quad_vertices(
     }
 }
 
+/// Stage a layer's untransformed quad — its capture rect shrunk by `inset`
+/// (see [`clip::clip_quad`]) — under the layer's quad clip. Returns the
+/// vertex count, 0 when the clip leaves nothing to draw. An axis-aligned
+/// clip clamps the rect (two triangles); only a rotated one pays for polygon
+/// clipping.
+fn push_clipped_quad(
+    vertices: &mut RawBufferVec<LayerCompositeVertex>,
+    layer: &ExtractedLayer,
+    inset: f32,
+) -> u32 {
+    if let Some(QuadClip::Rotated(clip)) = &layer.quad_clip {
+        return clip::clip_quad_rotated(layer.min, layer.size, inset, clip, |position, uv| {
+            vertices.push(LayerCompositeVertex {
+                position: position.into(),
+                uv: uv.into(),
+                alpha: layer.alpha,
+            });
+        });
+    }
+    let rect = layer.quad_clip.as_ref().map(QuadClip::bounds);
+    let Some(q) = clip::clip_quad(layer.min, layer.size, inset, rect) else {
+        return 0;
+    };
+    push_quad_vertices(
+        vertices,
+        q.pos_min,
+        q.pos_max,
+        q.uv_min,
+        q.uv_max,
+        layer.alpha,
+    );
+    6
+}
+
 /// Builds composite-quad vertices + bind groups and writes each quad's
 /// [`LayerCompositeBatch`] (through its persistent entity) and vertex range
 /// back into its phase item. GPU uploads happen only when the staged data
@@ -1212,33 +1247,39 @@ pub fn prepare_layer_composites(
         // on clamped sides. A fully clipped-away layer draws no quad at all
         // (the item's batch_range stays `0..0`).
         //
-        // A 3D-transformed quad can't be CPU-clamped (the clip rect is
-        // axis-aligned in screen space; the transformed quad isn't): it keeps
-        // its full geometry/UVs — inflated for the edge-AA feather — and the
-        // ancestor clip moves into the fragment stage via the per-quad
-        // uniform. A "fully clipped away" verdict is likewise unknowable
-        // pre-transform, so the transformed path always draws. Untransformed
-        // quads keep the CPU path, an open clip sentinel, and a zero feather —
-        // the shader stays single-path and pixel-identical for them.
-        let (q, model, clip_rect, feather) = match layer.transform3d {
-            Some(model) => (
-                clip::clip_quad(layer.min, layer.size, -EDGE_AA_INFLATE_PX, None)
-                    .expect("a grown quad is never empty"),
-                model,
-                layer.quad_clip,
-                EDGE_AA_INFLATE_PX,
-            ),
+        // A 3D-transformed quad can't be CPU-clamped (the clip is laid out
+        // in screen space; the transformed quad isn't): it keeps its full
+        // geometry/UVs — inflated for the edge-AA feather — and the ancestor
+        // clip moves into the fragment stage via the per-quad uniform, as one
+        // rect (a rotated clipper's bounding box). A "fully clipped away"
+        // verdict is likewise unknowable pre-transform, so the transformed
+        // path always draws. Untransformed quads keep the CPU path, an open
+        // clip sentinel, and a zero feather — the shader stays single-path
+        // and pixel-identical for them.
+        let (count, model, clip_rect, feather) = match layer.transform3d {
+            Some(model) => {
+                let q = clip::clip_quad(layer.min, layer.size, -EDGE_AA_INFLATE_PX, None)
+                    .expect("a grown quad is never empty");
+                // UVs are quad-relative.
+                push_quad_vertices(
+                    &mut meta.vertices,
+                    q.pos_min,
+                    q.pos_max,
+                    q.uv_min,
+                    q.uv_max,
+                    layer.alpha,
+                );
+                let clip_rect = layer.quad_clip.as_ref().map(QuadClip::bounds);
+                (6, model, clip_rect, EDGE_AA_INFLATE_PX)
+            }
             None => {
-                let Some(q) = clip::clip_quad(layer.min, layer.size, 0.0, layer.quad_clip) else {
+                let count = push_clipped_quad(&mut meta.vertices, layer, 0.0);
+                if count == 0 {
                     continue;
-                };
-                (q, Mat4::IDENTITY, None, 0.0)
+                }
+                (count, Mat4::IDENTITY, None, 0.0)
             }
         };
-        let (min, max) = (q.pos_min, q.pos_max);
-        let (uv_min, uv_max) = (q.uv_min, q.uv_max);
-        // UVs are quad-relative.
-        push_quad_vertices(&mut meta.vertices, min, max, uv_min, uv_max, layer.alpha);
         drawable.insert(layer.quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
@@ -1260,7 +1301,7 @@ pub fn prepare_layer_composites(
         });
         staged_quads.push(StagedQuad {
             entity: layer.quad_entity,
-            range: start..start + 6,
+            range: start..start + count,
             atlas: atlas_index,
             uniform,
         });
@@ -1298,19 +1339,11 @@ pub fn prepare_layer_composites(
         ) else {
             continue;
         };
-        let Some(q) = clip::clip_quad(layer.min, layer.size, layer.outset as f32, layer.quad_clip)
-        else {
-            continue;
-        };
         let start = meta.vertices.len() as u32;
-        push_quad_vertices(
-            &mut meta.vertices,
-            q.pos_min,
-            q.pos_max,
-            q.uv_min,
-            q.uv_max,
-            layer.alpha,
-        );
+        let count = push_clipped_quad(&mut meta.vertices, layer, layer.outset as f32);
+        if count == 0 {
+            continue;
+        }
         drawable.insert(backdrop_quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
@@ -1338,7 +1371,7 @@ pub fn prepare_layer_composites(
         });
         staged_quads.push(StagedQuad {
             entity: backdrop_quad_entity,
-            range: start..start + 6,
+            range: start..start + count,
             atlas: atlas_index,
             uniform,
         });
