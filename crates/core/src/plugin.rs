@@ -650,29 +650,18 @@ impl Plugin for ReactUiPlugin {
             crate::layer::pick3d::drive_transform3d_pointer
                 .before(bevy::picking::PickingSystems::ProcessInput),
         )
-        // Re-filter picking hits against the render-grade inherited clip
-        // (`CalculatedClip`) — bevy_ui 0.19's own clip check misses hits on
-        // scrolled/clipped-away nodes whose direct parent doesn't clip (see
-        // `pick_clip` module docs). Between the backends and the hover-map
-        // update, so every downstream consumer sees only visible hits.
-        .add_systems(
-            PreUpdate,
-            crate::pick_clip::filter_clipped_pointer_hits
-                .after(bevy::picking::PickingSystems::Backend)
-                .before(bevy::picking::PickingSystems::Hover),
-        )
         // Scope hits around the transformed-layer remap (stale layout rects
-        // for the mouse, layer-membership for the virtual pointer) — after
-        // the clip filter for a deterministic filter order.
+        // for the mouse, layer-membership for the virtual pointer). Clipping
+        // needs no pass of ours: bevy_ui's backend tests each node's
+        // inherited `CalculatedClip` itself.
         .add_systems(
             PreUpdate,
             crate::layer::pick3d::suppress_transformed_layer_hits
                 .after(bevy::picking::PickingSystems::Backend)
-                .after(crate::pick_clip::filter_clipped_pointer_hits)
                 .before(bevy::picking::PickingSystems::Hover),
         )
         // Refine hits on JSX `<svg>` nodes into hits on the topmost painted
-        // shape under the cursor (svg::pick module docs). Last of the three
+        // shape under the cursor (svg::pick module docs). Last of the two
         // hit rewriters — after the transform3d suppression: suppression must
         // settle first so a refinement only ever amplifies a SURVIVING svg-node
         // hit (refining a hit that suppression then strips would leave a
@@ -682,7 +671,6 @@ impl Plugin for ReactUiPlugin {
             PreUpdate,
             crate::ext::PickRefineSet
                 .after(bevy::picking::PickingSystems::Backend)
-                .after(crate::pick_clip::filter_clipped_pointer_hits)
                 .after(crate::layer::pick3d::suppress_transformed_layer_hits)
                 .before(bevy::picking::PickingSystems::Hover),
         )

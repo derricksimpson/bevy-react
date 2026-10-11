@@ -21,7 +21,7 @@
 //!
 //! Because the refinement keys off the hit entry's own pointer id and
 //! resolves its [`PointerLocation`] (via the same physical-viewport math as
-//! the core's `pick_clip`), shapes inside `<surface>` texture UI and inside
+//! the bevy_ui picking backend), shapes inside `<surface>` texture UI and inside
 //! 3D-transformed layers work unchanged: those virtual pointers already
 //! carry corrected locations. File-mode svgs (`<image src="x.svg">`, `doc:
 //! Some`) are untouched — whole-node events, like any `<image>`.
@@ -130,7 +130,7 @@ pub(crate) fn refine_svg_pointer_hits(
             let Ok(camera) = cameras.get(data.camera) else {
                 continue;
             };
-            // Physical viewport px (per-target scale — pick_clip's math) →
+            // Physical viewport px (per-target scale) →
             // the node's local box, top-left origin.
             let physical = bevy_react_core::raster::pointer_physical_position(&location, camera);
             let Some(normalized) = node.normalize_point(*transform, physical) else {

@@ -338,9 +338,8 @@ impl DrivenExtValues {
 /// orders `.in_set(…)` and never names a core function.
 ///
 /// - [`PickRefineSet`] (`PreUpdate`): rewrite this frame's `PointerHits`
-///   (refine a node hit into a sub-element hit). After the picking backends,
-///   the clip filter, and the transformed-layer suppression; before the hover
-///   map is built.
+///   (refine a node hit into a sub-element hit). After the picking backends
+///   and the transformed-layer suppression; before the hover map is built.
 /// - [`InteractionSyncSet`] (`Update`): synthesize `Interaction` /
 ///   `RelativeCursorPosition` / [`EventLocalPos`] for elements
 ///   `ui_focus_system` cannot see. After the transformed-layer correction;

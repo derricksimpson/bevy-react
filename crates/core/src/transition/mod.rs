@@ -44,7 +44,7 @@ pub mod layout;
 #[cfg(test)]
 mod layout_shared_tests;
 #[cfg(test)]
-mod layout_tests;
+pub(crate) mod layout_tests;
 mod scroll;
 pub mod shared;
 mod spec;

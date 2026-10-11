@@ -25,6 +25,8 @@ mod update;
 mod virtual_events;
 
 #[cfg(test)]
+pub(crate) mod clip_pick_tests;
+#[cfg(test)]
 mod svg_tests;
 #[cfg(any(test, feature = "test_util"))]
 pub(crate) mod test_util;

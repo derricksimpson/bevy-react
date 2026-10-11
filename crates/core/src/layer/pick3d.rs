@@ -279,7 +279,7 @@ pub fn drive_transform3d_pointer(
 /// rects are stale), and the virtual pointer must hit *only* members of the
 /// layer it is remapping into (its window location overlaps whatever else
 /// layout put there). Runs between the picking backends and the hover-map
-/// update, after the clip filter.
+/// update.
 pub fn suppress_transformed_layer_hits(
     mut hits: MessageMutator<PointerHits>,
     state: Option<Res<Transform3dPointer>>,

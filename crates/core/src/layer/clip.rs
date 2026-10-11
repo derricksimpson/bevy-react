@@ -34,8 +34,8 @@
 //!   exactly; a rotated clipper contributes its bounding box.
 //!
 //! Outside the extract window the real `CalculatedClip` values are always in
-//! place: picking (`crate::pick_clip`) and `bevy_ui`'s own consumers keep
-//! seeing true inherited clips.
+//! place: picking and `bevy_ui`'s other consumers keep seeing true inherited
+//! clips.
 //!
 //! **Retained extraction.** `bevy_ui_render` re-extracts a node only when one
 //! of its components changed, and the swap deliberately bypasses change

@@ -1,8 +1,8 @@
 //! Pins for the per-shape hit refinement: the pure core (topmost-wins,
 //! coordinate mapping, transform inversion) and the system (message in →
 //! refined message out, with the depth/camera/pointer contract and the
-//! file-mode / non-svg / dedupe guards). Harness mirrors
-//! [`crate::pick_clip`]'s tests: scale-1 image-target pointer, bare camera.
+//! file-mode / non-svg / dedupe guards). Harness: scale-1 image-target
+//! pointer, bare camera.
 
 use bevy::camera::{Camera, ImageRenderTarget, NormalizedRenderTarget};
 use bevy::ecs::system::RunSystemOnce;
@@ -163,7 +163,7 @@ fn cursor_maps_to_logical_px_without_view_box_at_dpr2() {
     );
 }
 
-// --- system-level: the pick_clip harness pattern ---
+// --- system-level ---
 
 const POINTER: PointerId = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0x51C5));
 

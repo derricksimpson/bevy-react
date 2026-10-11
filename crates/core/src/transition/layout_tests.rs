@@ -307,7 +307,7 @@ pub(super) struct Written(pub(super) Vec<Entity>);
 /// A headless layout app mirroring bevy_ui's own layout test harness (camera
 /// with a dummy 1000×100 render target, scale factor 1), plus the layout
 /// transition driver and a change probe.
-pub(super) fn layout_app() -> App {
+pub(crate) fn layout_app() -> App {
     use bevy::app::{HierarchyPropagatePlugin, PropagateSet, TaskPoolPlugin};
     use bevy::ui::{ComputedUiRenderTargetInfo, ComputedUiTargetCamera};
     let mut app = App::new();

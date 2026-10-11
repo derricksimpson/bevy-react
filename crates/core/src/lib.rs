@@ -65,7 +65,6 @@ mod host;
 mod keyboard;
 mod message;
 mod names;
-mod pick_clip;
 mod plugin;
 pub mod raster;
 mod reconcile;

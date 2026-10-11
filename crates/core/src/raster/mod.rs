@@ -6,16 +6,32 @@
 
 mod color;
 
-pub use crate::pick_clip::pointer_physical_position;
 pub use color::parse_css_color;
 
 use bevy::asset::{Assets, RenderAssetUsages};
+use bevy::camera::Camera;
 use bevy::ecs::entity::Entity;
 use bevy::image::Image;
 use bevy::math::Vec2;
+use bevy::picking::pointer::Location;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::widget::ImageNode;
 use tiny_skia::Pixmap;
+
+/// A pointer's position in **physical viewport coordinates** — the space node
+/// geometry (`UiGlobalTransform`, `CalculatedClip`) lives in. Mirrors the UI
+/// picking backend's own cursor math; `target_scaling_factor` resolves per
+/// render target, so window pointers (window scale factor) and image-target
+/// virtual pointers (surface/transform3d) take the same path. For an
+/// element's own hit refinement (the `bevy_react_svg` crate's per-shape
+/// picking).
+pub fn pointer_physical_position(location: &Location, camera: &Camera) -> Vec2 {
+    let mut point = location.position * camera.target_scaling_factor().unwrap_or(1.0);
+    if let Some(viewport) = camera.physical_viewport_rect() {
+        point -= viewport.min.as_vec2();
+    }
+    point
+}
 
 /// Largest backing-texture dimension we allocate, in physical pixels. A guard
 /// against a degenerate layout asking for an enormous buffer.
