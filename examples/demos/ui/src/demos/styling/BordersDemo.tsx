@@ -13,7 +13,8 @@ const PAGE: ExplanationData = {
         <InlineCode>border</InlineCode> sets the edge width — and it
         participates in layout, so a thicker border takes real space.{" "}
         <InlineCode>borderColor</InlineCode> paints it, and{" "}
-        <InlineCode>borderRadius</InlineCode> rounds the corners.
+        <InlineCode>borderRadius</InlineCode> rounds the corners — into circular
+        arcs, or elliptical ones with a slash.
       </Paragraph>
       <Code lang="tsx">{`<node
   style={{
@@ -43,10 +44,13 @@ export function BordersDemo() {
     <>
       <DemoRow>
         <BorderRadiusDemo />
-        <BorderWidthDemo />
+        <EllipticalDemo />
       </DemoRow>
       <DemoRow>
+        <BorderWidthDemo />
         <PerSideDemo />
+      </DemoRow>
+      <DemoRow>
         <OutlineDemo />
       </DemoRow>
     </>
@@ -77,6 +81,51 @@ function BorderRadiusCard() {
     <ControlColumn>
       <Box style={{ borderRadius: r }} />
       <Slider value={r} min={0} max={36} onChange={setR} name="borderRadius" />
+    </ControlColumn>
+  );
+}
+
+function EllipticalDemo() {
+  return (
+    <Example
+      title="Elliptical corners"
+      info={
+        <>
+          <Paragraph>
+            A <InlineCode>/</InlineCode> in the string splits it into horizontal
+            and vertical radii, as in CSS. With a slash a percentage follows its
+            own axis, so <InlineCode>"50% / 50%"</InlineCode> is an ellipse,
+            while a plain <InlineCode>"50%"</InlineCode> stays a pill.
+          </Paragraph>
+          <Code lang="tsx">{`<node
+  style={{
+    width: 144,
+    height: 72,
+    borderRadius: "50% / 50%",
+  }}
+/>`}</Code>
+        </>
+      }
+      demo={EllipticalCard}
+    />
+  );
+}
+
+function EllipticalCard() {
+  const [x, setX] = useState(50);
+  const [y, setY] = useState(50);
+  return (
+    <ControlColumn>
+      <Box
+        style={{
+          width: 144,
+          border: 3,
+          borderColor: Colors.amber,
+          borderRadius: `${x}% / ${y}%`,
+        }}
+      />
+      <Slider value={x} min={0} max={50} onChange={setX} name="horizontal %" />
+      <Slider value={y} min={0} max={50} onChange={setY} name="vertical %" />
     </ControlColumn>
   );
 }

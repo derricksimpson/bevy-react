@@ -71,6 +71,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and it is not part of an ancestor's composited layer (an ancestor's
   `opacity`, `filter`, `morphFilter` or `transform3d` doesn't apply to it);
   pair it with `globalZIndex` to float it above everything.
+- **Elliptical `borderRadius`.** The string form takes the CSS slash:
+  `"50% / 25%"`, `"40px 10px / 10px 40px"`, horizontal radii before it and
+  vertical after. With a slash a percentage is of the node's width or
+  height, so `"50% / 50%"` is an ellipse; without one, corners are circular
+  exactly as before (`"50%"` stays a pill). Backgrounds, borders,
+  gradients, shadows, outlines, backdrop filters, images and pointer
+  hit-testing follow the ellipse, and `transition: { borderRadius }` eases
+  every radius. Built on Bevy 0.20's `CornerRadius`.
 
 ### Changed
 
@@ -157,6 +165,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a Rust writer that reads `POSITION_TYPE`). It was Bevy's `PositionType`,
   which has no `Fixed`; `Node::position_type` is `Absolute` for a fixed
   node. `FixedNode` on a React entity is written by bevy-react.
+- **`borderRadius`'s value is `protocol::visual::BorderRadiusSpec`**
+  (breaking for a Rust writer that reads `BORDER_RADIUS`). It was a `Rect`;
+  `.radii()` gives the `CornerRadii` (`x`, and `y` for elliptical corners),
+  which is also the type of `TransitionInput::border_radius`. A `Rect`
+  converts to either with `.into()`.
 - **`add_react_handler` and `add_react_request_handler` take one generic
   parameter less** (breaking). Bevy's observers dropped their `Bundle`
   parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.

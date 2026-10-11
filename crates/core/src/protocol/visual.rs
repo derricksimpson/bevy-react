@@ -1,5 +1,5 @@
-//! Visual spec wire types: outline, shadows, line metrics, gradients, and
-//! per-side border colors.
+//! Visual spec wire types: outline, shadows, line metrics, gradients,
+//! per-side border colors, and corner radii.
 
 use std::fmt;
 
@@ -8,7 +8,7 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 use super::animatable::Animatable;
 use super::decode_warn;
-use super::units::{Angle, Length};
+use super::units::{Angle, Length, Rect};
 
 /// Outline drawn around (outside) the node's border box.
 #[derive(Debug, Clone, PartialEq, Default, Deserialize)]
@@ -257,11 +257,199 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
     }
 }
 
+/// The corners' radii: `x` alone for circular corners (the [`Rect`] sides
+/// are the corners, CSS order), or `x` horizontal and `y` vertical for
+/// elliptical ones. The transition engine's `borderRadius` value.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct CornerRadii {
+    /// The radii of circular corners, or the horizontal radii when `y` is set.
+    pub x: Rect,
+    /// The vertical radii; `None` = circular corners.
+    pub y: Option<Rect>,
+}
+
+impl From<Rect> for CornerRadii {
+    fn from(x: Rect) -> Self {
+        Self { x, y: None }
+    }
+}
+
+/// A `borderRadius` value as a style stores it: any [`Rect`] form for
+/// circular corners, or the CSS slash string (`"40px 10px / 10px 40px"`:
+/// horizontal radii, then vertical) for elliptical ones. Read it through
+/// [`Self::radii`].
+///
+/// Only the elliptical half is boxed: a circular value — what nearly every
+/// styled node sets — is the size of a `Rect` and stays in the style store's
+/// inline slot (`border_radius_stays_inline`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum BorderRadiusSpec {
+    Circular(Rect),
+    /// `[horizontal, vertical]`.
+    Elliptical(Box<[Rect; 2]>),
+}
+
+impl BorderRadiusSpec {
+    pub fn radii(&self) -> CornerRadii {
+        match self {
+            Self::Circular(x) => (*x).into(),
+            Self::Elliptical(xy) => CornerRadii {
+                x: xy[0],
+                y: Some(xy[1]),
+            },
+        }
+    }
+}
+
+impl From<CornerRadii> for BorderRadiusSpec {
+    fn from(radii: CornerRadii) -> Self {
+        match radii.y {
+            None => Self::Circular(radii.x),
+            Some(y) => Self::Elliptical(Box::new([radii.x, y])),
+        }
+    }
+}
+
+impl From<Rect> for BorderRadiusSpec {
+    fn from(rect: Rect) -> Self {
+        Self::Circular(rect)
+    }
+}
+
+impl<'de> Deserialize<'de> for BorderRadiusSpec {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use de::IntoDeserializer;
+        use de::value::MapAccessDeserializer;
+
+        /// Every form goes to [`Rect`]'s own decoder (its fallbacks and
+        /// `rect` warnings included); a string is split at the slash first,
+        /// each half a rect shorthand of its own.
+        struct RadiiVisitor;
+        impl<'de> Visitor<'de> for RadiiVisitor {
+            type Value = BorderRadiusSpec;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a rect, or a \"<horizontal radii> / <vertical radii>\" string")
+            }
+            fn visit_f64<E: de::Error>(self, v: f64) -> Result<BorderRadiusSpec, E> {
+                Rect::deserialize(v.into_deserializer()).map(Into::into)
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<BorderRadiusSpec, E> {
+                Rect::deserialize(v.into_deserializer()).map(Into::into)
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<BorderRadiusSpec, E> {
+                Rect::deserialize(v.into_deserializer()).map(Into::into)
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> Result<BorderRadiusSpec, E> {
+                let side =
+                    |s: &str| -> Result<Rect, E> { Rect::deserialize(s.into_deserializer()) };
+                Ok(match s.split_once('/') {
+                    Some((x, y)) => BorderRadiusSpec::Elliptical(Box::new([side(x)?, side(y)?])),
+                    None => side(s)?.into(),
+                })
+            }
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<BorderRadiusSpec, A::Error> {
+                Rect::deserialize(MapAccessDeserializer::new(map)).map(Into::into)
+            }
+        }
+        d.deserialize_any(RadiiVisitor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protocol::animatable::AnimatableField;
     use crate::style::Style;
-    use crate::style::props::BORDER_COLOR;
+    use crate::style::props::{BORDER_COLOR, BORDER_RADIUS, WIDTH};
+
+    /// `borderRadius`: a slash in the string form splits horizontal from
+    /// vertical radii, each half a rect shorthand of its own; every form
+    /// without one decodes exactly as the `Rect` it always was (circular).
+    #[test]
+    fn border_radius_decodes_the_slash_form() {
+        use super::{BorderRadiusSpec, CornerRadii};
+        use crate::protocol::units::{Length::*, Rect};
+        let radii = |v: serde_json::Value| {
+            serde_json::from_value::<BorderRadiusSpec>(v)
+                .expect("decodes")
+                .radii()
+        };
+        let rect = |v: serde_json::Value| serde_json::from_value::<Rect>(v).expect("decodes");
+
+        let r = radii(serde_json::json!("10px 20px / 5px"));
+        assert_eq!(r.x, rect(serde_json::json!("10px 20px")));
+        assert_eq!(r.y, Some(rect(serde_json::json!(5))));
+        assert_eq!((r.x.top, r.x.right), (Px(10.0), Px(20.0)));
+        // Spaces around the slash are optional.
+        assert_eq!(
+            radii(serde_json::json!("50%/25%")),
+            radii(serde_json::json!("50% / 25%"))
+        );
+        assert_eq!(
+            radii(serde_json::json!("50%/25%")).y.map(|y| y.top),
+            Some(Percent(25.0))
+        );
+
+        for v in [
+            serde_json::json!(8),
+            serde_json::json!(2.5),
+            serde_json::json!("8px 16px"),
+            serde_json::json!({ "top": 4 }),
+            serde_json::json!({ "horizontal": 4 }),
+        ] {
+            assert_eq!(radii(v.clone()), CornerRadii::from(rect(v)));
+        }
+    }
+
+    /// Through the style store and the `{ animated }` wrapper: the static
+    /// value reads back elliptical, a wrapper's seed takes the slash too.
+    #[test]
+    fn border_radius_slash_decodes_through_the_style() {
+        let s: Style = serde_json::from_str(r#"{ "borderRadius": "40px / 10px" }"#).unwrap();
+        let radii = s.get(&BORDER_RADIUS).static_ref().expect("static").radii();
+        assert!(radii.y.is_some());
+
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "borderRadius": { "animated": { "id": 3 }, "seed": "40px / 10px" }
+        }))
+        .unwrap();
+        let value = s.get(&BORDER_RADIUS).expect("present");
+        assert!(value.binding().is_some() && value.value().is_none());
+        assert_eq!(value.seed().map(|seed| seed.radii()), Some(radii));
+    }
+
+    /// A malformed slash value never aborts the batch: the bad half (or
+    /// token) is 0 and reports a `rect` warning, the siblings decode.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn bad_border_radius_slash_values_warn_and_fall_back() {
+        use crate::protocol::units::{Length, Rect};
+        let decode = |radius: &str| {
+            crate::diag::decode_batch_start();
+            let s: Style =
+                serde_json::from_value(serde_json::json!({ "borderRadius": radius, "width": 40 }))
+                    .expect("a bad radius must not abort deserialization");
+            assert_eq!(s.get(&WIDTH).static_val(), Some(Length::Px(40.0)));
+            let radii = s.get(&BORDER_RADIUS).static_ref().expect("static").radii();
+            let warned: Vec<String> = crate::diag::take_decode_warnings()
+                .into_iter()
+                .filter(|w| w.kind == "rect")
+                .map(|w| w.value)
+                .collect();
+            (radii, warned)
+        };
+
+        let (radii, warned) = decode("10px / ");
+        assert_eq!(radii.y, Some(Rect::default()), "an empty half is 0");
+        assert_eq!(warned.len(), 1, "{warned:?}");
+
+        let (radii, warned) = decode("10px / bogus");
+        assert_eq!(radii.y, Some(Rect::default()));
+        assert_eq!(warned, ["bogus"]);
+
+        // A second slash is a bad token of the vertical half.
+        let (_, warned) = decode("1px / 2px / 3px");
+        assert_eq!(warned, ["/"]);
+    }
 
     /// Gradient leaves accept `{ animated }` wrappers; static forms decode as
     /// before; the wire types compare (PartialEq — required by the transition

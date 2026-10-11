@@ -158,7 +158,7 @@ const bar: ScrollbarStyle = {
 
 `track` and `thumb` take only `backgroundColor`, `borderColor` (one color
 or a per-side object), `borderRadius` and `border` (both four-sided
-values), plus `hover` and `pressed` overlays of the same four fields;
+values; the radius has no `/` form), plus `hover` and `pressed` overlays of the same four fields;
 `pressed`, active while the bar is dragged, wins over `hover`. Unset fields
 keep the defaults: the thumb's radius stays half the thickness. An unknown
 field or keyword is ignored with a `scrollbar` devtools warning.

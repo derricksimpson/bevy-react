@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 use crate::animations::{Lerp, Runner, build_runner};
 use crate::protocol::units::{Length, Rect};
+use crate::protocol::visual::CornerRadii;
 
 use super::spec::ChannelTransition;
 use super::{gradient_channel, transform3d};
@@ -18,8 +19,8 @@ use super::{gradient_channel, transform3d};
 /// Consumed by the mount-seed block (every row seeds `state.<channel>` from
 /// `input.<channel>` at its identity default) and by the size drive block
 /// (`size` rows, which also name the written `Node` field); the `radius`
-/// row (`border_radius`, a whole [`Rect`] eased per corner) has its own
-/// drive block. Every non-`size` row is also a shared-element seed channel
+/// row (`border_radius`, whole [`CornerRadii`] eased per corner and axis)
+/// has its own drive block. Every non-`size` row is also a shared-element seed channel
 /// (`super::shared::copy_value_channels`). The
 /// color/filter/backdrop/transform3d/scroll/shape channels have their own
 /// target shapes and stay explicit.
@@ -37,7 +38,7 @@ macro_rules! with_input_channels {
             (height, (Length::Auto), size),
             (max_width, (Length::Auto), size),
             (max_height, (Length::Auto), size),
-            (border_radius, (crate::protocol::units::Rect::default()), radius),
+            (border_radius, (crate::protocol::visual::CornerRadii::default()), radius),
         }
     };
 }
@@ -63,8 +64,8 @@ pub struct TransitionState {
     pub(super) height: ProgressChannel<Length>,
     pub(super) max_width: ProgressChannel<Length>,
     pub(super) max_height: ProgressChannel<Length>,
-    /// Corner radii, eased per corner (`Rect`'s [`Lerp`]).
-    pub(super) border_radius: ProgressChannel<Rect>,
+    /// Corner radii, eased per corner and axis (`CornerRadii`'s [`Lerp`]).
+    pub(super) border_radius: ProgressChannel<CornerRadii>,
     pub(super) filter: FilterChannel,
     pub(super) backdrop_filter: FilterChannel,
     /// Whole-value gradient easing per surface (see
@@ -616,6 +617,22 @@ impl Lerp for Rect {
             right: self.right.lerp(other.right, t),
             bottom: self.bottom.lerp(other.bottom, t),
             left: self.left.lerp(other.left, t),
+        }
+    }
+}
+
+/// Eight leaves — a horizontal and a vertical radius per corner — each a
+/// [`Length`] lerp. Two circular values stay circular (the [`Rect`] lerp). A
+/// circular value facing an elliptical one reads as `r / r`, CSS's meaning
+/// of a single radius, so `8` ↔ `"40px / 20px"` eases.
+impl Lerp for CornerRadii {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        CornerRadii {
+            x: self.x.lerp(other.x, t),
+            y: match (self.y, other.y) {
+                (None, None) => None,
+                (a, b) => Some(a.unwrap_or(self.x).lerp(b.unwrap_or(other.x), t)),
+            },
         }
     }
 }

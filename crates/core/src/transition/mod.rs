@@ -34,7 +34,7 @@ use bevy::ui::{BackgroundGradient, BorderGradient, UiTransform};
 
 use crate::protocol::units::Length;
 use crate::style::Style;
-use crate::ui_map::{length_to_val, rect_to_border_radius};
+use crate::ui_map::{length_to_val, radii_to_border_radius};
 
 mod channels;
 mod gradient_channel;
@@ -49,6 +49,8 @@ mod layout_fixed_tests;
 mod layout_shared_tests;
 #[cfg(test)]
 pub(crate) mod layout_tests;
+#[cfg(test)]
+mod radius_tests;
 mod scroll;
 pub mod shared;
 mod spec;
@@ -651,17 +653,18 @@ pub fn drive_transitions(
 
         // Corner radii (layout, like size: the radius lives on `Node`, so an
         // eased frame is a relayout — compare-before-write keeps a settled
-        // radius silent). Eased per corner; an unset target is square corners,
-        // what `node_from` wrote. Content dirt is required: the radius
-        // is not in the layer geometry hash (`fold_member_geometry` folds
-        // translation/matrix/size only), so a cached enclosing layer would
-        // otherwise never re-capture the changing corners.
+        // radius silent). Eased per corner and axis; an unset target is
+        // square corners, what `node_from` wrote. Content dirt is required:
+        // the radius is not in the layer geometry hash
+        // (`fold_member_geometry` folds translation/matrix/size only), so a
+        // cached enclosing layer would otherwise never re-capture the
+        // changing corners.
         if input.spec.border_radius.as_ref().or(shared_spec).is_some()
             && !skip_radius
             && let Some(node) = targets.node.as_mut()
         {
             let target = input.border_radius.unwrap_or_default();
-            let r = rect_to_border_radius(state.border_radius.drive(
+            let r = radii_to_border_radius(state.border_radius.drive(
                 target,
                 arm_spec(seed_frame, input.spec.border_radius.as_ref(), shared_spec),
                 dt,

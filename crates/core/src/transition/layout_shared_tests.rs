@@ -331,9 +331,9 @@ fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
     let mut input = shared_spec(1.0);
     input.width = Some(Length::Px(200.0));
     input.height = Some(Length::Px(200.0));
-    input.border_radius = Some(px(16.0));
+    input.border_radius = Some(px(16.0).into());
     let mut seed_state = TransitionState::at_identity();
-    seed_state.border_radius.init(px(36.0));
+    seed_state.border_radius.init(px(36.0).into());
     let hero = app
         .world_mut()
         .spawn((

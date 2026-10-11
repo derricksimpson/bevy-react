@@ -8,8 +8,9 @@ use crate::image_rendering::ImageRendering;
 use crate::protocol::animatable::Animatable;
 use crate::protocol::background_image::{BackgroundImageSpec, de_background_image};
 use crate::protocol::keywords::{FOCUS_POLICY_KEYWORDS, IMAGE_RENDERING_KEYWORDS};
-use crate::protocol::units::Rect;
-use crate::protocol::visual::{BorderColorSpec, BoxShadowList, GradientList, OutlineSpec};
+use crate::protocol::visual::{
+    BorderColorSpec, BorderRadiusSpec, BoxShadowList, GradientList, OutlineSpec,
+};
 use crate::scrollbar::ScrollbarSpec;
 use crate::style::{Codec, Invalidate, StyleProperty};
 
@@ -34,10 +35,15 @@ pub static BORDER_COLOR: StyleProperty<Animatable<BorderColorSpec>> = StylePrope
         ),
     )
 };
-/// Corner radii; same forms as the other rect properties. Animatable as a
-/// whole: a bound value drives all four corners in px (no per-corner
-/// wrappers); `transition: { borderRadius }` eases static changes per corner.
-pub static BORDER_RADIUS: StyleProperty<Animatable<Rect>> = StyleProperty {
+/// Corner radii; same forms as the other rect properties, the sides naming
+/// the corners. Those corners are circular, a percentage being of the node's
+/// shorter side. The string form also takes the CSS slash for elliptical
+/// corners — `"50% / 25%"`, horizontal radii before it and vertical after,
+/// each a percentage of its own axis. Animatable as a whole: a bound value
+/// drives all four corners in px, circular (no per-corner wrappers);
+/// `transition: { borderRadius }` eases static changes per corner and axis.
+/// The TS type stays `Rect` — a slash string is a `string`.
+pub static BORDER_RADIUS: StyleProperty<Animatable<BorderRadiusSpec>> = StyleProperty {
     invalidate: Invalidate::Fixed(LAYOUT_PAINT),
     ..StyleProperty::with_codec("borderRadius", Codec::serde_as("Animatable<Rect>"))
 };

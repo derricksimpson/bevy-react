@@ -90,7 +90,11 @@ export type FontSize = number | string;
  *  (`"8px"`, `"8px 16px"`, `"1px 2px 3px 4px"`), an explicit per-side object, or
  *  an axis pair — `horizontal` sets left + right, `vertical` sets top + bottom.
  *  On `borderRadius` the sides name the four corners, so `horizontal` is the
- *  top-right + bottom-left pair. */
+ *  top-right + bottom-left pair; there the string also takes the CSS slash
+ *  for elliptical corners (`"50% / 25%"`, `"40px 10px / 10px 40px"`):
+ *  horizontal radii before it, vertical after, a percentage of its own axis.
+ *  Without a slash corners are circular and a percentage is of the shorter
+ *  side. */
 export type Rect =
   | number
   | string
@@ -288,7 +292,9 @@ export interface BevyTransition {
   /** Eases `borderRadius` per corner between style states — every wire form
    * (uniform, shorthand, per-corner object), so uniform-to-per-corner eases too.
    * Same-unit corners interpolate; a corner that changes unit (or hits `auto`)
-   * snaps on its own. Unsetting the field eases to square corners. The radius
+   * snaps on its own. A value with a slash eases both radii of each corner; a
+   * value without one facing it counts as `r / r`.
+   * Unsetting the field eases to square corners. The radius
    * is a layout property (it lives on the node), so like `size` every eased
    * frame is a relayout. An `{ animated }` binding on `borderRadius` parks it. */
   borderRadius?: BevyTransitionSpec;
@@ -396,7 +402,7 @@ export interface ScrollbarPartVisual {
   borderColor?:
     | Color
     | { top?: Color; right?: Color; bottom?: Color; left?: Color };
-  /** Corner radii (same forms as any [`Rect`]). */
+  /** Corner radii (same forms as any [`Rect`]; circular — no `/` form). */
   borderRadius?: Rect;
   /** Border thickness (same forms as any [`Rect`]). */
   border?: Rect;

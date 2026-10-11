@@ -99,7 +99,8 @@ per side in any of these forms:
   top, right, bottom and left.
 - If an object mixes the two forms, an explicit side wins over its axis.
 - On `borderRadius` the four slots are the corners, starting top-left and
-  going clockwise (see [Borders](borders.md)).
+  going clockwise, and the string form also takes a `/` for elliptical
+  corners (see [Borders](borders.md#elliptical-corners)).
 - A value always replaces the whole rect. `hoverStyle={{ padding: { left: 20 } }}`
   sets the other three sides to `0` while hovered, not to the base style's
   values.

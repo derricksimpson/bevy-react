@@ -8,7 +8,8 @@ use serde::Deserialize;
 
 use crate::animations::{Driver, Easing};
 use crate::protocol::{
-    animatable::AnimatableField, units::Length, units::Rect, units::Time as WireTime,
+    animatable::AnimatableField, units::Length, units::Time as WireTime, visual::BorderRadiusSpec,
+    visual::CornerRadii,
 };
 use crate::style::Style;
 use crate::ui_map::parse_color;
@@ -35,10 +36,11 @@ pub struct Transition {
     /// accordion), unlike the post-layout `transform`.
     pub size: Option<ChannelTransition>,
     /// Eases the corner radii (`borderRadius`) per corner between style
-    /// states — every wire form (uniform, shorthand, per-corner object), so
-    /// uniform→per-corner eases too. Same-unit corners interpolate; a corner
-    /// that changes unit (or hits `auto`) snaps on its own. Unsetting the
-    /// field eases to square corners. The radius lives on `Node`, so like
+    /// states — every wire form (uniform, shorthand, per-corner object,
+    /// the elliptical slash string), so uniform→per-corner eases too.
+    /// Same-unit radii interpolate; one that changes unit (or hits `auto`)
+    /// snaps on its own. A circular value facing an elliptical one eases as
+    /// `r / r`. Unsetting the field eases to square corners. The radius lives on `Node`, so like
     /// `size` every eased frame is a relayout (a settled radius writes
     /// nothing). A `{ animated }` binding on `borderRadius` parks it.
     pub border_radius: Option<ChannelTransition>,
@@ -235,7 +237,7 @@ pub struct TransitionInput {
     pub max_height: Option<Length>,
     /// Target corner radii, written onto `Node.border_radius`. `None` →
     /// unset (square corners, what `node_from` writes).
-    pub border_radius: Option<Rect>,
+    pub border_radius: Option<CornerRadii>,
     /// Target `transform3d` params, eased field-wise onto the layer's
     /// [`LayerTransform3d`](crate::layer::transform3d::LayerTransform3d).
     pub transform3d: Option<crate::protocol::transform::Transform3d>,
@@ -277,7 +279,10 @@ impl TransitionInput {
             height: style.get(&HEIGHT).static_val(),
             max_width: style.get(&MAX_WIDTH).static_val(),
             max_height: style.get(&MAX_HEIGHT).static_val(),
-            border_radius: style.get(&BORDER_RADIUS).static_val(),
+            border_radius: style
+                .get(&BORDER_RADIUS)
+                .static_ref()
+                .map(BorderRadiusSpec::radii),
             transform3d: style.get(&TRANSFORM3D).cloned(),
         })
     }

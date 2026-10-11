@@ -157,7 +157,7 @@ curve (see [Interpolation](interpolation.md)):
 | `transform`: `rotate`                            | Degrees                                          |
 | Layout lengths (listed below)                    | Logical px                                       |
 | `aspectRatio`                                    | Ratio                                            |
-| `borderRadius`                                   | Logical px, all four corners                     |
+| `borderRadius`                                   | Logical px, all four corners, circular           |
 | `backgroundColor`, `borderColor`, `color`        | An `interpolateColor` binding                    |
 | `backgroundImage`: `tint`                        | An `interpolateColor` binding                    |
 | `transform3d` fields                             | See [3D transforms](../styling/3d-transforms.md) |

@@ -4,6 +4,7 @@ use super::*;
 use crate::protocol::animatable::AnimatableField;
 use crate::protocol::props::{Props, props_from_json as props};
 use crate::protocol::units::Rect;
+use crate::protocol::visual::BorderRadiusSpec;
 use crate::style::props::{
     BACKDROP_FILTER, BORDER_RADIUS, CACHE, FILTER, GROUP_ALPHA, IMAGE_RENDERING, LAYOUT_ROUNDING,
     LayerCache, MORPH_FILTER, OPACITY, POSITION_TYPE, PositionMode,
@@ -41,10 +42,11 @@ fn group_alpha_decodes_and_promotes() {
 
 /// A `borderRadius` delta re-runs the transition writer (its channel target
 /// rides `TransitionInput`) alongside the layout writer, and the property
-/// takes an `{ animated }` wrapper whose seed decodes as a `Rect`.
+/// takes an `{ animated }` wrapper whose seed decodes like the value.
 #[test]
 fn border_radius_reruns_transition_and_decodes_binding() {
     let uniform8: Rect = serde_json::from_value(serde_json::json!(8)).expect("rect decodes");
+    let uniform8 = BorderRadiusSpec::from(uniform8);
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "borderRadius": 8 } })),
@@ -54,7 +56,7 @@ fn border_radius_reruns_transition_and_decodes_binding() {
     assert!(runs(&dirty.style, &TRANSITION_WRITER));
     assert!(runs(&dirty.style, &LAYOUT_WRITER));
     let style = cached.style.as_ref().expect("style retained");
-    assert_eq!(style.get(&BORDER_RADIUS).static_val(), Some(uniform8));
+    assert_eq!(style.get(&BORDER_RADIUS).static_ref(), Some(&uniform8));
 
     let s: Style = serde_json::from_value(serde_json::json!({
         "borderRadius": { "animated": { "id": 3 }, "seed": 8 }
@@ -65,7 +67,7 @@ fn border_radius_reruns_transition_and_decodes_binding() {
         "wrapper derives a binding"
     );
     assert_eq!(
-        s.get(&BORDER_RADIUS).static_val(),
+        s.get(&BORDER_RADIUS).static_ref(),
         None,
         "animated reads as unset"
     );
@@ -73,6 +75,25 @@ fn border_radius_reruns_transition_and_decodes_binding() {
         s.get(&BORDER_RADIUS).and_then(|a| a.seed()),
         Some(&uniform8)
     );
+}
+
+/// `borderRadius` is on most styled nodes, so its common value must not cost
+/// an allocation: a circular one (any form without a slash) sits in the
+/// store's inline slot, as the bare `Rect` did. Only an elliptical value
+/// allocates — its boxed pair, the slot itself still inline.
+#[test]
+fn border_radius_stays_inline() {
+    use crate::protocol::animatable::Animatable;
+    type Value = Animatable<BorderRadiusSpec>;
+    assert_eq!(size_of::<Value>(), size_of::<Animatable<Rect>>());
+    assert!(size_of::<Value>() <= size_of::<smallbox::space::S4>());
+    for wire in [
+        serde_json::json!("8px 16px"),
+        serde_json::json!("50% / 25%"),
+    ] {
+        let value: Value = serde_json::from_value(wire).expect("decodes");
+        assert!(!super::stored_value(value).is_heap());
+    }
 }
 
 /// `imageRendering` decodes its keywords (unknown → warn + `auto`) and a

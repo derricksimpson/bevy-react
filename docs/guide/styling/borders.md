@@ -1,5 +1,5 @@
 ---
-description: Border widths, per-side border colors, rounded corners with transitions and animated radii, and outlines drawn outside the box.
+description: Border widths, per-side border colors, rounded and elliptical corners with transitions and animated radii, and outlines drawn outside the box.
 demo: Borders
 covers: [style.border, style.borderColor, style.borderRadius, style.outline]
 ---
@@ -85,20 +85,44 @@ shorthand:
 <node style={{ borderRadius: { top: 0, right: 10, bottom: 20, left: 60 } }} />
 ```
 
-- Percentages resolve against the node's shorter side, and every radius is
-  capped at half of it: `"50%"` makes a square node a circle, and a large
-  pixel value such as `999` makes a pill.
-- One radius per corner: elliptical corners are not supported.
+- These corners are circular. Percentages resolve against the node's
+  shorter side, and every radius is capped at half of it: `"50%"` makes a
+  square node a circle and any other node a pill, as does a large pixel
+  value such as `999`.
 - The radius rounds the background, border, gradients, `boxShadow`,
-  `outline` and a [backdrop filter](backdrop-filters.md). It clips a
-  `backgroundImage` in `"stretch"` mode, but not in the repeat modes.
+  `outline` and a [backdrop filter](backdrop-filters.md), and pointer
+  hit-testing follows the rounded shape. The border's inner edge is the
+  outer radius minus the border width. It clips a `backgroundImage` in
+  `"stretch"` mode, but not in the repeat modes.
 - Bevy keeps the radii with the node's layout, so changing `borderRadius`
   re-runs layout.
+
+### Elliptical corners
+
+The string form takes the CSS slash: horizontal radii before it, vertical
+radii after.
+
+```tsx
+<node style={{ width: 160, height: 80, borderRadius: "50% / 50%" }} />
+<node style={{ borderRadius: "40px 10px / 10px 40px" }} />
+```
+
+- Each half is one to four lengths, expanded like the shorthand and paired
+  corner by corner. The number and object forms are always circular; build
+  a computed value as a string (`` `${rx}px / ${ry}px` ``).
+- With a slash a percentage is of the node's width (horizontal) or height
+  (vertical). Without one it is of the shorter side, so the CSS ellipse
+  `border-radius: 50%` is written `"50% / 50%"` here.
+- Each radius is capped at half the node's size on its own axis. CSS scales
+  all radii down together instead: `"150px / 10px"` on a 200px wide node is
+  `100 / 10` here and `100 / 6.67` in a browser.
+- A radius of `0` or `"auto"` on either axis squares that corner. A half
+  that fails to parse counts as `0` and reports a `rect` warning.
 
 ### Transitions and animation
 
 `transition: { borderRadius }` eases the radii between style states, one
-corner at a time:
+corner at a time (both radii of each corner, with a slash):
 
 ```tsx
 <button
@@ -107,13 +131,18 @@ corner at a time:
 />
 ```
 
-- A corner eases when both values share a unit (px to px, `%` to `%`). A
-  corner that changes unit snaps on its own while the others ease.
+- A radius eases when both values share a unit (px to px, `%` to `%`). One
+  that changes unit snaps on its own while the others ease.
+- Between a value with a slash and one without, the plain radius `r` counts
+  as `r / r`. That is exact for pixel radii that fit the node. A percentage
+  or an oversized pill radius (`999`) means something else with a slash, so
+  that shape jumps at the start: ease a pill as its real radius.
 - Unsetting `borderRadius` eases to square corners.
 - Every eased frame is a relayout; prefer short transitions on large trees.
 
 `borderRadius: { animated: sv }` binds all four corners to one shared value,
-in pixels. There are no per-corner bindings. A binding wins over the
+in pixels, as circular corners. There are no per-corner or per-axis
+bindings. A binding wins over the
 transition. See [Animated values](../animations/animated-values.md).
 
 ## Outline
@@ -148,7 +177,7 @@ transition. See [Animated values](../animations/animated-values.md).
 - On a node without a composited layer, `opacity` does not fade
   `borderColor` or `outline` (see [Opacity](opacity.md)).
 - Overflow clipping is rectangular: children are not clipped to the rounded
-  corners.
+  or elliptical corners.
 
 See [`border`](../reference/style-properties.md#border),
 [`borderColor`](../reference/style-properties.md#borderColor),

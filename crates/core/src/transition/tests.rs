@@ -192,7 +192,7 @@ fn color_channel_lerps_to_target() {
 }
 
 /// Build a one-entity world running `drive_transitions`, advancing `Time`.
-fn drive_world() -> (World, Schedule) {
+pub(super) fn drive_world() -> (World, Schedule) {
     let mut world = World::new();
     world.init_resource::<crate::layer::LayerContentDirt>();
     world.insert_resource(Time::<()>::default());
@@ -201,7 +201,7 @@ fn drive_world() -> (World, Schedule) {
     (world, schedule)
 }
 
-fn advance(world: &mut World, secs: f32) {
+pub(super) fn advance(world: &mut World, secs: f32) {
     world
         .resource_mut::<Time>()
         .advance_by(Duration::from_secs_f32(secs));
@@ -881,111 +881,6 @@ fn scroll_snap_to_parks_a_mid_flight_ease() {
     advance(&mut world, 0.5);
     schedule.run(&mut world);
     assert_eq!(world.entity(e).get::<ScrollPosition>().unwrap().0, live);
-}
-
-/// `Rect` lerps per leaf: same-unit corners interpolate while a corner that
-/// changes unit (or reads `auto`) snaps to its target on its own.
-#[test]
-fn lerp_rect_eases_per_corner_and_snaps_mixed_units() {
-    use crate::protocol::units::Rect as WireRect;
-    use Length::*;
-    let a = WireRect {
-        top: Px(0.0),
-        right: Px(10.0),
-        bottom: Percent(0.0),
-        left: Px(4.0),
-    };
-    let b = WireRect {
-        top: Px(10.0),
-        right: Px(20.0),
-        bottom: Px(50.0),
-        left: Percent(50.0),
-    };
-    let m = a.lerp(b, 0.5);
-    assert_eq!(m.top, Px(5.0));
-    assert_eq!(m.right, Px(15.0));
-    assert_eq!(m.bottom, Px(50.0), "unit change snaps that corner");
-    assert_eq!(m.left, Percent(50.0), "unit change snaps that corner");
-
-    // `rem` corners follow the same rule.
-    let a = WireRect { top: Rem(1.0), ..a };
-    let b = WireRect {
-        top: Rem(3.0),
-        right: Rem(1.0),
-        ..b
-    };
-    let m = a.lerp(b, 0.5);
-    assert_eq!(m.top, Rem(2.0));
-    assert_eq!(m.right, Rem(1.0), "px to rem snaps that corner");
-}
-
-/// `transition: { borderRadius }` eases `Node.border_radius` toward the
-/// input target and pushes content dirt on every writing frame (the radius
-/// is outside the layer geometry hash), then goes silent once settled.
-#[test]
-fn system_eases_border_radius_and_dirties_content() {
-    use crate::layer::LayerContentDirt;
-    use crate::protocol::units::Rect as WireRect;
-    let uniform = |px: f32| WireRect {
-        top: Length::Px(px),
-        right: Length::Px(px),
-        bottom: Length::Px(px),
-        left: Length::Px(px),
-    };
-    let (mut world, mut schedule) = drive_world();
-    let spec = Transition {
-        border_radius: Some(timing(1.0, Easing::Linear)),
-        ..Default::default()
-    };
-    let e = world
-        .spawn((
-            TransitionInput {
-                spec,
-                border_radius: Some(uniform(8.0)),
-                ..Default::default()
-            },
-            TransitionState::default(),
-            Node {
-                border_radius: BorderRadius::all(Val::Px(8.0)),
-                ..Default::default()
-            },
-            UiTransform::default(),
-        ))
-        .id();
-
-    // First frame seeds the resting state (8) — the live value, nothing to write.
-    schedule.run(&mut world);
-    let dirt = std::mem::take(&mut world.resource_mut::<LayerContentDirt>().nodes);
-    assert!(!dirt.contains(&e), "seed frame writes nothing");
-
-    // Retarget to 100: halfway through a 1s linear ease → 54.
-    world
-        .entity_mut(e)
-        .get_mut::<TransitionInput>()
-        .unwrap()
-        .border_radius = Some(uniform(100.0));
-    advance(&mut world, 0.5);
-    schedule.run(&mut world);
-    let r = world.entity(e).get::<Node>().unwrap().border_radius;
-    assert!(
-        matches!(r.top_left.x, Val::Px(v) if (v - 54.0).abs() < 1.0),
-        "mid expected ~54px, got {r:?}"
-    );
-    assert_eq!(r.bottom_right, r.top_left, "every corner eases");
-    let dirt = std::mem::take(&mut world.resource_mut::<LayerContentDirt>().nodes);
-    assert!(dirt.contains(&e), "an easing frame pushes content dirt");
-
-    advance(&mut world, 0.5);
-    schedule.run(&mut world);
-    let r = world.entity(e).get::<Node>().unwrap().border_radius;
-    assert_eq!(r, BorderRadius::all(Val::Px(100.0)), "exact settle");
-    world.resource_mut::<LayerContentDirt>().nodes.clear();
-
-    // Settled: no write, no dirt.
-    advance(&mut world, 0.1);
-    schedule.run(&mut world);
-    let dirt = std::mem::take(&mut world.resource_mut::<LayerContentDirt>().nodes);
-    assert!(!dirt.contains(&e), "a settled radius pushes no dirt");
 }
 
 /// A commit that drops a channel's `transition` entry must not strand that

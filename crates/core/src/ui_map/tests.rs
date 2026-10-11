@@ -364,7 +364,8 @@ fn rect_shorthand_and_object() {
 
 /// The axis pair reaches `Val` like any other rect form. On `borderRadius`
 /// the sides name corners, so `horizontal` is the top-right + bottom-left
-/// pair (`rect_to_border_radius`'s top/right/bottom/left → TL/TR/BR/BL).
+/// pair (`rect_to_border_radius`'s top/right/bottom/left → TL/TR/BR/BL) —
+/// circular corners, as every value without a slash.
 #[test]
 fn rect_axis_pair_maps_to_val() {
     let s = style(serde_json::json!({
@@ -377,11 +378,51 @@ fn rect_axis_pair_maps_to_val() {
     assert_eq!(pad.top, Val::Percent(50.0));
     assert_eq!(pad.bottom, Val::Percent(50.0));
 
-    let radius = rect_to_border_radius(s.get(&BORDER_RADIUS).static_val().unwrap());
+    let radius = border_radius_of(&s);
     assert_eq!(radius.top_right, CornerRadius::circular(Val::Px(4.0)));
     assert_eq!(radius.bottom_left, CornerRadius::circular(Val::Px(4.0)));
     assert_eq!(radius.top_left, CornerRadius::circular(Val::Px(0.0)));
     assert_eq!(radius.bottom_right, CornerRadius::circular(Val::Px(0.0)));
+}
+
+/// The `BorderRadius` a style's static `borderRadius` maps to.
+fn border_radius_of(s: &Style) -> BorderRadius {
+    radii_to_border_radius(s.get(&BORDER_RADIUS).static_ref().unwrap().radii())
+}
+
+/// A slash makes every corner elliptical: `CornerRadius::new(x, y)`, the
+/// halves paired corner by corner after each expands like the shorthand.
+/// `auto` there is 0 — a `Val::Auto` axis would make bevy read the corner
+/// as circular with the other axis's radius. Without a slash the corners
+/// stay circular (bevy tells the two apart: `circular(8) != all(8)`).
+#[test]
+fn border_radius_slash_maps_to_elliptical_corners() {
+    let radius = |v: &str| border_radius_of(&style(serde_json::json!({ "borderRadius": v })));
+
+    let r = radius("10px 20px / 5px");
+    assert_eq!(r.top_left, CornerRadius::new(Val::Px(10.0), Val::Px(5.0)));
+    assert_eq!(r.top_right, CornerRadius::new(Val::Px(20.0), Val::Px(5.0)));
+    assert_eq!(
+        r.bottom_right,
+        CornerRadius::new(Val::Px(10.0), Val::Px(5.0))
+    );
+    assert_eq!(
+        r.bottom_left,
+        CornerRadius::new(Val::Px(20.0), Val::Px(5.0))
+    );
+
+    let r = radius("50% / 25%");
+    assert_eq!(
+        r,
+        BorderRadius::all(CornerRadius::new(Val::Percent(50.0), Val::Percent(25.0)))
+    );
+
+    let r = radius("auto / 10px");
+    assert_eq!(r.top_left, CornerRadius::new(Val::ZERO, Val::Px(10.0)));
+    assert_ne!(r.top_left, CornerRadius::circular(Val::Px(10.0)));
+
+    assert_eq!(radius("12px"), BorderRadius::all(Val::Px(12.0)));
+    assert_ne!(radius("12px"), radius("12px / 12px"));
 }
 
 #[test]

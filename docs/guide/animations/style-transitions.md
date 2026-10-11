@@ -123,7 +123,8 @@ How values move:
 - `rotate` eases numerically, so 350 to 10 degrees turns the long way
   through 180.
 - Unsetting `borderRadius` eases to square corners, and a corner that
-  changes unit snaps on its own while the others ease. The radius is part of
+  changes unit snaps on its own while the others ease. An elliptical value
+  (`"40px / 20px"`) eases both radii of each corner. The radius is part of
   layout, so every eased frame is a relayout.
 - `morphFilter` is the one channel that animates without an entry: a key
   change eases over 300 ms with `"easeInOut"`. An entry only changes that

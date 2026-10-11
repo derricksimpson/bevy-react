@@ -19,9 +19,9 @@ use crate::protocol::{
     background_image::ImageMode, background_image::ImageModeSpec, background_image::SliceBorder,
     background_image::SliceScale, background_image::SliceSpec, units::Angle, units::FontSize,
     units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList, visual::BoxShadowSpec,
-    visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec, visual::GradientStop,
-    visual::LetterSpacingSpec, visual::LineHeightSpec, visual::LinearGradientSpec,
-    visual::RadialGradientSpec, visual::RadialShapeSpec,
+    visual::ConicGradientSpec, visual::CornerRadii, visual::GradientList, visual::GradientSpec,
+    visual::GradientStop, visual::LetterSpacingSpec, visual::LineHeightSpec,
+    visual::LinearGradientSpec, visual::RadialGradientSpec, visual::RadialShapeSpec,
 };
 use crate::scrollbar::ScrollbarPosition;
 use crate::style::Style;
@@ -95,6 +95,29 @@ pub fn rect_to_border_radius(rect: Rect) -> BorderRadius {
         top_right: length_to_val(rect.right).into(),
         bottom_right: length_to_val(rect.bottom).into(),
         bottom_left: length_to_val(rect.left).into(),
+    }
+}
+
+/// Convert wire corner radii into a `BorderRadius`. Circular (no vertical
+/// radii): exactly [`rect_to_border_radius`]. Elliptical: a
+/// `CornerRadius::new(x, y)` per corner, each axis resolved against its own
+/// side — where `auto` reads as 0, since bevy takes a `Val::Auto` on one
+/// axis to mean "circular, with the other axis's radius".
+pub fn radii_to_border_radius(radii: CornerRadii) -> BorderRadius {
+    let Some(y) = radii.y else {
+        return rect_to_border_radius(radii.x);
+    };
+    let axis = |l: Length| match length_to_val(l) {
+        Val::Auto => Val::ZERO,
+        v => v,
+    };
+    let corner = |x: Length, y: Length| CornerRadius::new(axis(x), axis(y));
+    let x = radii.x;
+    BorderRadius {
+        top_left: corner(x.top, y.top),
+        top_right: corner(x.right, y.right),
+        bottom_right: corner(x.bottom, y.bottom),
+        bottom_left: corner(x.left, y.left),
     }
 }
 
@@ -271,8 +294,8 @@ pub(crate) fn node_from(style: Option<&Style>) -> Node {
     // `static_val`: an `{ animated }` radius reads as unset here (identity
     // corners) and the animation apply stage re-asserts it each frame — the
     // `width` precedent.
-    if let Some(r) = s.get(&BORDER_RADIUS).static_val() {
-        node.border_radius = rect_to_border_radius(r);
+    if let Some(r) = s.get(&BORDER_RADIUS).static_ref() {
+        node.border_radius = radii_to_border_radius(r.radii());
     }
 
     node
