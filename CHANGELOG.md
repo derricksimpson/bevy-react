@@ -56,9 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bevy::ui_widgets::TextInput` next to `EditableText`. Clicking anywhere
   else now blurs the field, and so does Escape. A field also keeps clicks
   and scene picking from what lies beneath it, whatever its `focusPolicy`.
-- **`overflow` clips follow transforms.** A rotated or scaled clipping node
-  clips its children along its transformed box (Bevy 0.20), composited
-  layers included.
+- **`overflow` clips follow transforms and layout transitions.** A rotated
+  or scaled clipping node clips its children along its transformed box (Bevy
+  0.20), composited layers included. With `transition: { layout }` the clip
+  eases with the box, so a clipping wrapper can reveal auto-height content.
 - **`add_react_handler` and `add_react_request_handler` take one generic
   parameter less** (breaking). Bevy's observers dropped their `Bundle`
   parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.

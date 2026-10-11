@@ -200,6 +200,8 @@ a changed flex or grid property, a window resize.
   layout unless they have their own `layout` entry, so give it to every item
   of a list whose order changes.
 - Pointer events follow the eased position.
+- The node's `overflow` clip follows the eased box too, in drawing and in
+  pointer hits. See [Clipped reveals](#clipped-reveals).
 - The first layout is adopted silently, and an unmounted node disappears at
   once. A node that goes from `display: "none"` (or zero size) to visible
   grows in place from its final position; one that collapses to zero size
@@ -218,6 +220,42 @@ explicit sizes), and its children use `layout` to glide to their new slots.
 The two channels also compose on one node: the size eases through real
 layout, and a jump the size change does not explain, such as a flipped
 `flexDirection`, still glides by translation.
+
+### Clipped reveals
+
+Because the clip follows the box the node shows, a clipping node with a
+`layout` transition reveals its content as it grows and hides it as it
+shrinks. The content can be any height: the real layout switches between
+`1` and `"auto"` at once, and only the drawn box eases.
+
+```tsx
+<node
+  style={{
+    flexDirection: "column",
+    justifyContent: "center",
+    height: open ? "auto" : 1,
+    overflowY: "hidden",
+    transition: { layout: { duration: 300, easing: "easeInOut" } },
+  }}
+>
+  <node style={{ flexShrink: 0 }}>{details}</node>
+</node>
+```
+
+- Center the content in the box. Children are placed from the box's center,
+  so centered content stays on it while both ends are cropped equally.
+  Content pinned to the top would jump by half the height change when the
+  box collapses.
+- Collapse to `1`, not `0`: a node that collapses to zero size snaps. One
+  pixel of the content's middle stays inside the clip, so fade the content
+  with `opacity`, or unmount it once collapsed, if that shows.
+- What comes after the box snaps to its new place unless it has a `layout`
+  entry of its own. The parent's size snaps as well.
+
+Compared with the [`size`](#size) accordion: `size` needs both ends as fixed
+values and re-flows what is around the node through real layout every frame.
+A clipped reveal takes an `"auto"` height and never relayouts, but its
+surroundings only follow if they ease on their own.
 
 ## Scroll
 

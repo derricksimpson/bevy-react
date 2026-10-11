@@ -112,7 +112,10 @@ or `"content-box"`. Note that the default is the opposite of CSS's.
   [Animated values](../animations/animated-values.md).
 - `transition: { layout }` eases a size change visually instead, scaling
   the node's box from the old size to the new one while the real layout
-  snaps. See [Style transitions](../animations/style-transitions.md).
+  snaps. See [Style transitions](../animations/style-transitions.md). With
+  an `overflow` clip on the node it opens and closes content of any height,
+  `"auto"` included: see
+  [Clipped reveals](../animations/style-transitions.md#clipped-reveals).
 - Laid-out sizes are rounded to whole pixels, so a size animated through
   layout steps a pixel at a time and its neighbours hop. Turn rounding off
   for that subtree with [Layout rounding](layout-rounding.md).

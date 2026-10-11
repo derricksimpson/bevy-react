@@ -18,6 +18,7 @@ import {
 import { Code } from "@/components/docs";
 import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
+import { ClippedRevealDemo } from "./ClippedRevealDemo";
 
 // A pure-UI demo of CSS-like `transition`: a style change (hover/press, or React
 // state) *eases* instead of snapping, governed by the same Bevy animation engine
@@ -71,6 +72,7 @@ export function TransitionDemo() {
       </DemoRow>
       <DemoRow>
         <LayoutDemo />
+        <ClippedRevealDemo />
       </DemoRow>
     </>
   );

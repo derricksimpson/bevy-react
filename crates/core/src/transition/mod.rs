@@ -42,6 +42,8 @@ mod gradient_channel;
 mod gradient_tests;
 pub mod layout;
 #[cfg(test)]
+mod layout_clip_tests;
+#[cfg(test)]
 mod layout_shared_tests;
 #[cfg(test)]
 pub(crate) mod layout_tests;
