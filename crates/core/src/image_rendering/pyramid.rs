@@ -14,7 +14,7 @@ use std::fmt;
 
 use bevy::color::Srgba;
 use bevy::image::Image;
-use bevy::render::render_resource::{TextureDimension, TextureFormat};
+use bevy::render::render_resource::{TextureDimension, TextureFormat, TextureUsages};
 
 /// Why an image can't take a generated pyramid. `Display` is the user-facing
 /// reason (`diag` warning text).
@@ -66,8 +66,9 @@ pub fn check(image: &Image) -> Result<(), PyramidError> {
 }
 
 /// Append the full mip chain to `image` (levels 1.. after level 0 in
-/// `data`, wgpu's default `LayerMajor` layout) and set `mip_level_count`.
-/// Returns the level count. On `Err` the image is untouched.
+/// `data`, wgpu's default `LayerMajor` layout), set `mip_level_count` and
+/// drop `COPY_DST` from its usage. Returns the level count. On `Err` the
+/// image is untouched.
 pub fn build_pyramid(image: &mut Image) -> Result<u32, PyramidError> {
     check(image)?;
     let desc = &image.texture_descriptor;
@@ -117,6 +118,13 @@ pub fn build_pyramid(image: &mut Image) -> Result<u32, PyramidError> {
         (w, h) = (nw, nh);
     }
     image.texture_descriptor.mip_level_count = levels;
+    // bevy's `GpuImage` rewrites a same-size `COPY_DST` texture in place, mip
+    // 0 only, so a rebuilt pyramid (a hot reload) would keep its old smaller
+    // levels; without the flag every insert uploads a fresh texture.
+    image
+        .texture_descriptor
+        .usage
+        .remove(TextureUsages::COPY_DST);
     Ok(levels)
 }
 
@@ -247,6 +255,23 @@ mod tests {
         let mut img = image(4, 2, TextureFormat::Rgba8UnormSrgb, &[b; 8]);
         assert_eq!(build_pyramid(&mut img), Ok(3));
         assert_eq!(img.data.as_ref().unwrap().len(), 32 + 8 + 4);
+    }
+
+    /// A mipped image is never re-uploaded in place: bevy's `GpuImage` reuse
+    /// path (same descriptor + `COPY_DST`) writes mip 0 only, which would
+    /// leave a hot-reloaded variant's smaller levels stale.
+    #[test]
+    fn a_built_pyramid_is_not_copy_dst() {
+        let mut img = image(2, 2, TextureFormat::Rgba8UnormSrgb, &[[0; 4]; 4]);
+        assert!(
+            img.texture_descriptor
+                .usage
+                .contains(TextureUsages::COPY_DST)
+        );
+        build_pyramid(&mut img).unwrap();
+        let usage = img.texture_descriptor.usage;
+        assert!(usage.contains(TextureUsages::TEXTURE_BINDING));
+        assert!(!usage.contains(TextureUsages::COPY_DST));
     }
 
     /// Unsupported inputs are refused with a reason and leave the image

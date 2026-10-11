@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI under a virtual pointer (a `<surface>` subtree) lost its `focusStyle`
   on the next hover or press change: releasing the pointer over a focused
   `<editableText>` dropped its focus ring.
+- A hot-reloaded image kept its old smaller mip levels under
+  `imageRendering: "trilinear"`: drawn small, it still showed the previous
+  picture.
 
 ## [0.7.0] - 2026-10-05
 
