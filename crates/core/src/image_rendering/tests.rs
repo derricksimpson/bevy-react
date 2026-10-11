@@ -10,6 +10,7 @@ use bevy::ui::widget::ImageNode;
 
 fn test_app() -> App {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.init_asset::<Image>();
     register(&mut app);

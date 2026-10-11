@@ -12,6 +12,7 @@ use crate::reconcile::OpApplyStats;
 /// channel (the same harness shape as `keyboard.rs`'s tests).
 pub(super) fn test_app(config: DevtoolsConfig) -> (App, UnboundedReceiver<Outbound>) {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     // Hold the diag test lock for the app's lifetime: `emit_runtime_warnings`
     // drains the process-global runtime sink every update, so concurrent
     // test apps would steal entries from each other (and from the

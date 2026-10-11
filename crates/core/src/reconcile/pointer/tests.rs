@@ -16,6 +16,7 @@ const MOUSE: PointerId = PointerId::Mouse;
 /// messages, with a `JsBridge` whose outbound receiver is returned.
 fn drag_app() -> (App, UnboundedReceiver<Outbound>) {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins(MinimalPlugins);
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();

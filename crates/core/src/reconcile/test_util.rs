@@ -51,6 +51,7 @@ fn build_op_app(
     setup: impl FnOnce(&mut App),
 ) -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     if manual_time {
         app.add_plugins((
             MinimalPlugins.build().disable::<bevy::time::TimePlugin>(),

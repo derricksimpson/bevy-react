@@ -72,6 +72,8 @@ pub mod raster;
 mod reconcile;
 mod registry;
 mod request;
+#[cfg(any(test, feature = "test_util", feature = "schedule_shuffle"))]
+mod schedule_shuffle;
 mod scroll;
 mod scrollbar;
 mod shared_tags;
@@ -134,6 +136,7 @@ pub mod test_util {
     pub use crate::plugin::Fonts;
     pub use crate::reconcile::test_util::*;
     pub use crate::reconcile::{OpApplyStats, apply_js_ops, collect_ui_events, sync_interactions};
+    pub use crate::schedule_shuffle::shuffle_schedules;
     pub use crate::ui_map::AtlasLayoutCache;
 
     use crate::animations::{Driver, SharedId, SharedValues};

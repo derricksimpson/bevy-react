@@ -138,6 +138,7 @@ mod tests {
     /// no camera — exercising `ui_viewport_size`'s window fallback.
     fn test_app() -> (App, UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(MinimalPlugins);
         app.init_resource::<OpApplyStats>();
         let (tx, rx) = unbounded_channel::<Outbound>();
@@ -220,6 +221,7 @@ mod tests {
     #[test]
     fn window_size_request_responds_or_rejects() {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_react_request_handler(handle_window_size_request);
         let (tx, mut rx): (OutboundSender, UnboundedReceiver<Outbound>) = unbounded_channel();
 

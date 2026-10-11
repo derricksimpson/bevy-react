@@ -311,6 +311,7 @@ pub(crate) fn layout_app() -> App {
     use bevy::app::{HierarchyPropagatePlugin, PropagateSet, TaskPoolPlugin};
     use bevy::ui::{ComputedUiRenderTargetInfo, ComputedUiTargetCamera};
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins(TaskPoolPlugin::default());
     app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
         PostUpdate,

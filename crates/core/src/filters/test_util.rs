@@ -18,6 +18,7 @@ use crate::protocol::{NodeId, op::Op, outbound::Outbound, props::Props};
 /// to real embedded handles.
 pub(crate) fn asset_app() -> App {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.init_asset::<Shader>()
         .register_asset_loader(bevy::shader::ShaderLoader);
@@ -93,6 +94,7 @@ pub(crate) fn tick(app: &mut App, secs: f32) {
 /// advanced `Time` (see [`tick`]) so eases step deterministically.
 fn op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>) {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     if manual_time {
         app.add_plugins((
             MinimalPlugins.build().disable::<bevy::time::TimePlugin>(),

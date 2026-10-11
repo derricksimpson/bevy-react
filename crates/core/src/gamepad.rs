@@ -509,6 +509,7 @@ mod tests {
     /// channel (the `keyboard.rs` harness, plus the batch-gate resources).
     fn test_app() -> (App, UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(MinimalPlugins);
         app.add_message::<GamepadEvent>();
         app.add_message::<GamepadConnectionEvent>();
@@ -773,6 +774,7 @@ mod tests {
     /// pad under id 0, both observers attached.
     fn rumble_app() -> (App, Entity) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_message::<GamepadRumbleRequest>();
         let pad = app.world_mut().spawn_empty().id();
         let mut registry = GamepadRegistry::default();
@@ -875,6 +877,7 @@ mod tests {
     #[test]
     fn get_all_request_returns_connected_pads() {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.init_resource::<GamepadRegistry>();
         app.add_react_request_handler(handle_gamepad_get_all);
         let (tx, mut rx): (OutboundSender, UnboundedReceiver<Outbound>) = unbounded_channel();

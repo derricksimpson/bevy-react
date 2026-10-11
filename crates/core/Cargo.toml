@@ -44,6 +44,11 @@ svg_text = ["usvg/text", "usvg/system-fonts"]
 # The headless op harness (`bevy_react_core::test_util`) for a feature crate's
 # own tests: unstable, dev-dependency only.
 test_util = []
+# Randomized system order, to catch missing ordering edges: in the test
+# harnesses and in `ReactUiPlugin`'s schedules, when `BEVY_REACT_SHUFFLE_SEED`
+# is set (`crate::schedule_shuffle`). A debugging aid, never a default:
+# `bevy/debug` is another feature configuration of Bevy, i.e. a full rebuild.
+schedule_shuffle = ["bevy/debug"]
 
 [dependencies]
 accesskit = { workspace = true }

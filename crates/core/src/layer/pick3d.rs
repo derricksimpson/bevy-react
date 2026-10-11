@@ -531,6 +531,7 @@ mod tests {
         use bevy::input::mouse::MouseButtonInput;
 
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(bevy::input::InputPlugin)
             .init_resource::<bevy::picking::pointer::PointerMap>()
             .init_resource::<Messages<PointerInput>>()

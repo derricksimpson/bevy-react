@@ -399,6 +399,9 @@ impl Plugin for ReactUiPlugin {
     }
 
     fn build(&self, app: &mut App) {
+        // A real app under a shuffled schedule (see `crate::schedule_shuffle`).
+        #[cfg(feature = "schedule_shuffle")]
+        crate::schedule_shuffle::shuffle_schedules(app);
         // Render-side wiring, gated on a render pipeline being present (the
         // canonical `DefaultPlugins`-first setup), since `embedded_asset!` and the
         // render sub-app need the asset + render infrastructure — a headless `App`

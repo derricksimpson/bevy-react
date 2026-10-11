@@ -1476,6 +1476,7 @@ mod tests {
     fn layer_app() -> (bevy::app::App, crossbeam_channel::Sender<Vec<Op>>) {
         use bevy::app::App;
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         app.init_asset::<Image>();
         app.init_asset::<bevy::image::TextureAtlasLayout>();
@@ -1961,6 +1962,7 @@ mod tests {
 
     fn image_asset_change_repaints<B: Bundle>(image: impl FnOnce(Handle<Image>) -> B) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
         app.init_asset::<Image>();
         app.init_resource::<LayerContentDirt>();

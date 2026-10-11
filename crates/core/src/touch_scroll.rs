@@ -282,6 +282,7 @@ mod tests {
         use bevy::input::touch::{Touches, touch_screen_input_system};
 
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(MinimalPlugins);
         app.init_resource::<Touches>();
         app.init_resource::<PointerCapture>();

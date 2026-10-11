@@ -64,6 +64,7 @@ fn bad_color_reports_runtime_warning() {
 #[test]
 fn image_opacity_fades_tint_alpha() {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.init_asset::<Image>();
     let assets = app.world().resource::<AssetServer>();
@@ -151,6 +152,7 @@ fn focus_policy_maps_with_pass_default() {
 /// the per-side border insets and tile scale modes carried through.
 fn assets_app() -> App {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.init_asset::<Image>();
     app

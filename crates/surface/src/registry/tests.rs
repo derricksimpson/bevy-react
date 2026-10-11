@@ -8,6 +8,7 @@ use crate::pointer::SurfacePointer;
 
 fn test_app() -> App {
     let mut app = App::new();
+    bevy_react_core::test_util::shuffle_schedules(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.init_asset::<Image>();
     app.init_resource::<Surfaces>();

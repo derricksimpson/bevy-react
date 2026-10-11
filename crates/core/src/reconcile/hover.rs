@@ -143,6 +143,7 @@ mod tests {
     /// [`collect_hover_events`] scheduled.
     fn hover_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(MinimalPlugins);
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();

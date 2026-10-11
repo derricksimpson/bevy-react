@@ -59,6 +59,7 @@ struct Writes(usize);
 /// counter.
 fn sync_app() -> App {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.init_resource::<PointerMap>()
         .init_resource::<HoverMap>()
         .init_resource::<PointerState>()
@@ -207,6 +208,7 @@ fn every_pointer_counts() {
 #[test]
 fn a_left_window_drops_mouse_hover() {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.init_resource::<PointerMap>()
         .add_systems(Update, sync_interactions);
     // A window without a cursor position, and the mouse still "on" it.

@@ -55,6 +55,7 @@ cargo test -p bevy_react_svg               # a feature crate (its op-path tests 
 cargo test -p bevy_react_anchor -p bevy_react_canvas -p bevy_react_portal -p bevy_react_surface
 cargo test -p bevy-react --features bevy/x11   # the facade (group + KNOWN_FEATURES pins, macros without serde/ts-rs deps)
 cargo test -p demos --test roundtrip   # headless end-to-end bridge test (real JS runtime)
+BEVY_REACT_SHUFFLE_SEED=7 cargo test --workspace --lib --features bevy_react_core/schedule_shuffle   # shuffled system order in the test harnesses (a second Bevy build: `bevy/debug`)
 ```
 
 The `roundtrip` test (and the other bundle-driven tests under `examples/demos/tests/`: `demo_switch`, `devtools_roundtrip`, `home_shared_flight`) drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos`); if the bundle is missing it skips (passes) with a notice. The synthetic-bundle tests (`decode_warnings`, `hot_reload`, …) stay under `crates/core/tests/`.

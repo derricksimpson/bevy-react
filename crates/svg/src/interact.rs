@@ -80,6 +80,7 @@ mod tests {
     /// `(app, root, shape)`.
     fn shape_app() -> (App, Entity, Entity) {
         let mut app = App::new();
+        bevy_react_core::test_util::shuffle_schedules(&mut app);
         app.init_resource::<SvgPointerShapeHits>()
             .add_systems(Update, sync_shape_event_pos);
         let root = app.world_mut().spawn_empty().id();

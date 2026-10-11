@@ -117,6 +117,7 @@ mod tests {
     /// keyboard system registered. Returns the app and the receiving end.
     fn test_app() -> (App, UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        crate::schedule_shuffle::shuffle_schedules(&mut app);
         app.add_plugins(MinimalPlugins);
         // `collect_keyboard_events` needs the `KeyboardInput` message + the
         // `ButtonInput<KeyCode>` resource; register both without full `DefaultPlugins`.

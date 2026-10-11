@@ -92,6 +92,7 @@ fn real_app() -> (
     tokio::sync::mpsc::UnboundedReceiver<Outbound>,
 ) {
     let mut app = App::new();
+    bevy_react_core::test_util::shuffle_schedules(&mut app);
     app.add_plugins((
         MinimalPlugins,
         bevy::asset::AssetPlugin::default(),

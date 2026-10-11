@@ -103,6 +103,7 @@ fn click_location() -> bevy::picking::pointer::Location {
 /// (with its outbound receiver kept alive) + `PointerClick` messages.
 fn click_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
     let mut app = App::new();
+    crate::schedule_shuffle::shuffle_schedules(&mut app);
     app.init_resource::<bevy::picking::pointer::PointerMap>();
     app.add_plugins(MinimalPlugins);
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
