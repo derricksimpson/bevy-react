@@ -4,17 +4,21 @@
 //! pushes controlled values into it, and reports edits back as its own
 //! events (`onChange`/`onSelect`). Focus is the common `FOCUS` group's
 //! (`reconcile::focus`); an input is focusable without a `tabIndex`.
+//! `readOnly` and `disabled` set bevy's `TextReadWriteMode`.
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::AutoFocus;
 use bevy::prelude::*;
-use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
+use bevy::text::{
+    EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange, TextReadWriteMode,
+};
 use serde::Serialize;
 
-use crate::element::{Attribute, Common, Element, ElementEvent, ElementEvents, SpawnCtx};
+use super::{DISABLED, DISABLED_WRITER};
+use crate::element::{Attribute, Attrs, Common, Element, ElementEvent, ElementEvents, SpawnCtx};
 use crate::ext::{ElementFlags, TextRole};
-use crate::style::{Writer, WriterCtx, owns};
+use crate::style::{Invalidation, Writer, WriterCtx, owns};
 
 /// The controlled text. Act-now: seeds the field on create; on update it is
 /// pushed into the widget only when it diverges from the live buffer (so
@@ -38,6 +42,27 @@ pub static SELECTION_START: Attribute<usize> = Attribute::new("selectionStart");
 pub static SELECTION_END: Attribute<usize> = Attribute::new("selectionEnd");
 /// The accessible name announced to assistive tech.
 pub static ARIA_LABEL: Attribute<String> = Attribute::new("ariaLabel");
+/// The text can be focused, selected and copied, but not changed by the
+/// user (a controlled `value` still applies).
+pub static READ_ONLY: Attribute<bool> = Attribute {
+    // The selection is drawn in the unfocused color.
+    invalidate: Invalidation::PAINT,
+    ..Attribute::new("readOnly")
+};
+
+/// `readOnly` / `disabled` as bevy's text mode. A disabled input is
+/// `Static` — no caret, no selection — because bevy's key handler lets
+/// every edit through in `Editable` mode, `InteractionDisabled` or not.
+fn mode(attrs: &Attrs) -> TextReadWriteMode {
+    let on = |attr: &'static Attribute<bool>| attrs.get(attr).copied().unwrap_or(false);
+    if on(&DISABLED) {
+        TextReadWriteMode::Static
+    } else if on(&READ_ONLY) {
+        TextReadWriteMode::ReadOnly
+    } else {
+        TextReadWriteMode::Editable
+    }
+}
 
 /// The payload of `onSelect`: the selection as UTF-8 byte offsets.
 #[derive(Debug, Clone, Serialize, ts_rs::TS)]
@@ -72,9 +97,11 @@ pub static EDITABLE_TEXT: Element = Element {
         &SELECTION_START,
         &SELECTION_END,
         &ARIA_LABEL,
+        &READ_ONLY,
+        &DISABLED,
     ],
     common: Common::IDENTITY.with(Common::VARIANTS).with(Common::FOCUS),
-    writers: &[&EDITABLE_WRITER],
+    writers: &[&EDITABLE_WRITER, &DISABLED_WRITER],
     events: &[&CHANGE, &SELECT],
     spawn: Some(spawn_editable),
     ..Element::new("editableText")
@@ -103,14 +130,19 @@ fn spawn_editable(ctx: &mut SpawnCtx) -> Entity {
     editable.max_characters = attrs.get(&MAX_LENGTH).copied();
     editable.allow_newlines = multiline;
     let (text_color, font, line_height, letter_spacing) = ctx.text_style();
-    let a11y = a11y_node(
+    let mode = mode(attrs);
+    let mut a11y = a11y_node(
         multiline,
         attrs.get(&ARIA_LABEL).map(String::as_str),
         &value,
     );
+    if mode == TextReadWriteMode::ReadOnly {
+        a11y.set_read_only();
+    }
     let entity = ctx.spawn((
         (
             editable,
+            mode,
             text_color,
             font,
             line_height,
@@ -175,8 +207,8 @@ fn a11y_node(multiline: bool, label: Option<&str>, value: &str) -> accesskit::No
 
 /// The live input from the attributes: the controlled value (pushed only
 /// when it diverges from the buffer), the controlled selection pair, the
-/// accessible label, and the length/newline limits — each compare-before-
-/// write.
+/// accessible label, the length/newline limits, and the read/write mode —
+/// each compare-before-write.
 pub static EDITABLE_WRITER: Writer = Writer {
     reads: &[],
     attrs: &[
@@ -186,11 +218,14 @@ pub static EDITABLE_WRITER: Writer = Writer {
         &SELECTION_START,
         &SELECTION_END,
         &ARIA_LABEL,
+        &READ_ONLY,
+        &DISABLED,
     ],
     writes: &[
         owns::<EditableValue>,
         owns::<PendingSelection>,
         owns::<AccessibilityNode>,
+        owns::<TextReadWriteMode>,
     ],
     apply: apply_editable,
 };
@@ -217,7 +252,16 @@ fn apply_editable(ctx: &WriterCtx, _s: &crate::style::Style, ec: &mut EntityComm
     let label = ctx.attr(&ARIA_LABEL).cloned();
     let max = ctx.attr(&MAX_LENGTH).copied();
     let newlines = ctx.attr(&MULTILINE).copied().unwrap_or(false);
+    let mode = mode(ctx.attrs);
     ec.queue(move |mut entity: EntityWorldMut| {
+        if entity.get::<TextReadWriteMode>() != Some(&mode) {
+            entity.insert(mode);
+            // The mode decides how the caret and selection are drawn, but
+            // bevy re-extracts a text node on `Changed<EditableText>` only.
+            if let Some(mut editable) = entity.get_mut::<EditableText>() {
+                editable.set_changed();
+            }
+        }
         if let Some(value) = value {
             if let Some(mut editable) = entity.get_mut::<EditableText>()
                 && editable.value().to_string() != value
@@ -238,12 +282,20 @@ fn apply_editable(ctx: &WriterCtx, _s: &crate::style::Style, ec: &mut EntityComm
                 editable.allow_newlines = newlines;
             }
         }
-        if let Some(mut node) = entity.get_mut::<AccessibilityNode>()
-            && node.label() != label.as_deref()
-        {
-            match &label {
-                Some(label) => node.set_label(label.clone()),
-                None => node.clear_label(),
+        if let Some(mut node) = entity.get_mut::<AccessibilityNode>() {
+            if node.label() != label.as_deref() {
+                match &label {
+                    Some(label) => node.set_label(label.clone()),
+                    None => node.clear_label(),
+                }
+            }
+            let read_only = mode == TextReadWriteMode::ReadOnly;
+            if node.is_read_only() != read_only {
+                if read_only {
+                    node.set_read_only();
+                } else {
+                    node.clear_read_only();
+                }
             }
         }
     });

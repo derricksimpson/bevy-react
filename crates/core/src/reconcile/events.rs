@@ -42,6 +42,11 @@ pub(super) type ClickOwners = Or<(
 /// above it (a clickable badge laid over it) still clicks. Runs after
 /// `collect_pointer_events`, so the gesture's `pointerUp` goes out before
 /// its `click`, as in the DOM.
+///
+/// A disabled control (`InteractionDisabled`: a `<button disabled>`) still
+/// owns the click that lands on it, and swallows it — nothing is sent, not
+/// to an ancestor's `onClick` either (a DOM disabled button).
+#[allow(clippy::too_many_arguments)]
 pub fn collect_ui_events(
     bridge: Res<JsBridge>,
     // `Option` so headless tests needn't init them (production:
@@ -54,6 +59,7 @@ pub fn collect_ui_events(
     mut clicks: MessageReader<PointerClick>,
     // Click ownership (see [`ClickOwners`]).
     targets: Query<&ReactNode, ClickOwners>,
+    disabled: Query<(), With<bevy::ui::InteractionDisabled>>,
     child_of: Query<&ChildOf>,
 ) {
     // One gesture fans out to every entity in the pointer's hover map (a
@@ -107,6 +113,9 @@ pub fn collect_ui_events(
         }
     }
     for (_, (_, target)) in topmost {
+        if disabled.contains(target) {
+            continue;
+        }
         if let Ok(rnode) = targets.get(target) {
             tracing::debug!("click -> reconciler node {}", rnode.0);
             send_ui_event(&bridge, rnode.0, "click", None, None, None, None);

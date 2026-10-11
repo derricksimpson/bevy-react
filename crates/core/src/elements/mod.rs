@@ -7,7 +7,7 @@ mod node;
 mod text;
 
 pub(crate) use node::label_buttons;
-pub use node::{BUTTON, NODE, ROOT};
+pub use node::{BUTTON, DISABLED, DISABLED_WRITER, NODE, ROOT};
 pub use text::{TEXT, TEXT_SPAN};
 
 use crate::element::Element;

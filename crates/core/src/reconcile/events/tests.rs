@@ -168,6 +168,49 @@ fn picking_click_fires_once_primary_only() {
     );
 }
 
+/// A disabled control still owns the click that lands on it, and swallows
+/// it: the `onClick` ancestor behind it is not clicked instead.
+#[test]
+fn a_disabled_button_swallows_its_click() {
+    use bevy::ui::InteractionDisabled;
+
+    let (mut app, mut out_rx) = click_app();
+    app.add_systems(Update, collect_ui_events);
+    let card = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            ReactNode(2),
+            bevy::ui_widgets::Button,
+            InteractionDisabled,
+            ChildOf(card),
+        ))
+        .id();
+    let mut click = |app: &mut App| {
+        for (entity, depth) in [(button, 0.0), (card, 0.00001)] {
+            app.world_mut().write_message(PointerClick {
+                entity,
+                pointer: Pointer::new(PointerId::Mouse, click_location()),
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, depth, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            });
+        }
+        app.update();
+        drain_clicks(&mut out_rx)
+            .into_iter()
+            .map(|event| event.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(click(&mut app), [0u32; 0]);
+
+    app.world_mut()
+        .entity_mut(button)
+        .remove::<InteractionDisabled>();
+    assert_eq!(click(&mut app), [2]);
+}
+
 /// Clicks do NOT bubble: when nested click owners are all under the
 /// pointer (pass-through hit stack), only the topmost owner — the resolving
 /// hit with the smallest `HitData.depth`, not the first message (hover-map

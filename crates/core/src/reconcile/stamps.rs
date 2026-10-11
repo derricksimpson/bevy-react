@@ -288,16 +288,18 @@ pub(super) fn warn_ignored_styles(
 /// Stamp (or clear) bevy's `TabIndex` from `tabIndex` — what makes an element
 /// focusable: by a press (`reconcile::focus`), by Tab (bevy's
 /// `TabNavigationPlugin`, the app's opt-in) and from Rust. A text input is
-/// focusable without the prop (`0`). `onFocus`/`onBlur` need no stamp:
-/// `sync_focus` reads them off the retained props.
+/// focusable without the prop (`0`); a disabled control is never focusable.
+/// `onFocus`/`onBlur` need no stamp: `sync_focus` reads them off the
+/// retained props.
 pub(crate) fn apply_focus(
     ec: &mut EntityCommands,
     props: &Props,
     flags: crate::ext::ElementFlags,
     fresh: bool,
 ) {
+    let disabled = props.attrs.get(&crate::elements::DISABLED) == Some(&true);
     let implied = (flags.text == crate::ext::TextRole::Input).then_some(0);
-    match props.tab_index.or(implied) {
+    match props.tab_index.or(implied).filter(|_| !disabled) {
         Some(index) => {
             ec.insert(TabIndex(index));
             // bevy_winit stops updating the accessibility tree while the

@@ -252,15 +252,13 @@ fn editable_is_a_focusable_text_input() {
     assert!(pickable(blocking).should_block_lower);
 }
 
-/// End to end with bevy's own input path: a key typed while the input holds
-/// the focus reaches its `EditableText`. (Bevy's key handler only acts on
-/// `TextInput` entities — an `EditableText` alone would ignore it.)
-#[test]
-fn typed_keys_reach_a_focused_editable() {
-    use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
-    use bevy::input::{ButtonState, InputPlugin};
+/// The op harness with bevy's key dispatch and text input widget — what a
+/// typed key goes through — plus the focus sync. Returns the window keys are
+/// sent to. Nothing applies the queued edits here: they stay in
+/// `EditableText::pending_edits`.
+fn typing_app() -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
+    use bevy::input::InputPlugin;
     use bevy::input_focus::{InputDispatchPlugin, InputFocus};
-    use bevy::text::TextEdit;
     use bevy::window::{PrimaryWindow, Window};
 
     let (mut app, tx) = op_app_with(|app| {
@@ -277,38 +275,192 @@ fn typed_keys_reach_a_focused_editable() {
             .add_message::<bevy::window::Ime>()
             .add_message::<bevy::input::gamepad::GamepadButtonChangedEvent>()
             .add_message::<bevy::input::mouse::MouseWheel>()
-            .add_message::<bevy::picking::events::PointerRelease>();
+            .add_message::<bevy::picking::events::PointerRelease>()
+            .add_systems(
+                Update,
+                crate::reconcile::sync_focus.after(crate::reconcile::apply_js_ops),
+            );
     });
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
         .id();
-    tx.send(vec![create(1, "editableText", serde_json::json!({}))])
-        .unwrap();
-    app.update();
-    let input = ent(&app, 1);
-    app.insert_resource(InputFocus::from_entity(input));
+    (app, tx, window)
+}
+
+/// Focus node `id`, then press `key` (typing `text`) and run a frame.
+fn type_into(app: &mut App, window: Entity, id: u32, key: bevy::input::keyboard::Key) {
+    use bevy::input::ButtonState;
+    use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
+
+    let input = ent(app, id);
+    app.insert_resource(bevy::input_focus::InputFocus::from_entity(input));
+    let text = match &key {
+        Key::Character(c) => Some(c.clone()),
+        _ => None,
+    };
     app.world_mut().write_message(KeyboardInput {
         key_code: KeyCode::KeyA,
-        logical_key: Key::Character("a".into()),
+        logical_key: key,
         state: ButtonState::Pressed,
-        text: Some("a".into()),
+        text,
         repeat: false,
         window,
     });
     app.update();
-    let editable = app
-        .world()
-        .get::<bevy::text::EditableText>(input)
-        .expect("an input");
+}
+
+fn editable(app: &App, id: u32) -> &bevy::text::EditableText {
+    app.world()
+        .get::<bevy::text::EditableText>(ent(app, id))
+        .expect("an input")
+}
+
+/// End to end with bevy's own input path: a key typed while the input holds
+/// the focus reaches its `EditableText`. (Bevy's key handler only acts on
+/// `TextInput` entities — an `EditableText` alone would ignore it.)
+#[test]
+fn typed_keys_reach_a_focused_editable() {
+    use bevy::input::keyboard::Key;
+    use bevy::text::TextEdit;
+
+    let (mut app, tx, window) = typing_app();
+    tx.send(vec![create(1, "editableText", serde_json::json!({}))])
+        .unwrap();
+    app.update();
+    type_into(&mut app, window, 1, Key::Character("a".into()));
+    let pending = &editable(&app, 1).pending_edits;
     assert!(
-        editable
-            .pending_edits
-            .contains(&TextEdit::Insert("a".into()))
-            || editable.value() == "a",
-        "the typed key reached the input: pending {:?}, value {:?}",
-        editable.pending_edits,
-        editable.value().to_string()
+        pending.contains(&TextEdit::Insert("a".into())),
+        "{pending:?}"
+    );
+}
+
+/// `readOnly` and `disabled` map onto bevy's text mode: read-only keeps the
+/// field focusable (and says so to assistive tech), disabled makes it
+/// static, marks it `InteractionDisabled` and takes it out of focus — and
+/// wins over `readOnly`.
+#[test]
+fn read_only_and_disabled_set_the_text_mode() {
+    use bevy::input_focus::tab_navigation::TabIndex;
+    use bevy::text::TextReadWriteMode;
+    use bevy::ui::InteractionDisabled;
+
+    let (mut app, tx) = op_app();
+    tx.send(vec![create(
+        1,
+        "editableText",
+        serde_json::json!({ "readOnly": true }),
+    )])
+    .unwrap();
+    app.update();
+    let input = ent(&app, 1);
+    // (mode, announced read-only, focusable, disabled)
+    let state = |app: &App| {
+        let entity = app.world().entity(input);
+        (
+            *entity.get::<TextReadWriteMode>().unwrap(),
+            entity
+                .get::<bevy::a11y::AccessibilityNode>()
+                .unwrap()
+                .is_read_only(),
+            entity.contains::<TabIndex>(),
+            entity.contains::<InteractionDisabled>(),
+        )
+    };
+    assert_eq!(
+        state(&app),
+        (TextReadWriteMode::ReadOnly, true, true, false)
+    );
+
+    let mut delta = |props: serde_json::Value, unset: &[&str]| {
+        tx.send(vec![update(1, "editableText", props, unset, &[])])
+            .unwrap();
+        app.update();
+        state(&app)
+    };
+    assert_eq!(
+        delta(serde_json::json!({ "disabled": true }), &[]),
+        (TextReadWriteMode::Static, false, false, true)
+    );
+    assert_eq!(
+        delta(serde_json::json!({}), &["disabled"]),
+        (TextReadWriteMode::ReadOnly, true, true, false)
+    );
+    assert_eq!(
+        delta(serde_json::json!({}), &["readOnly"]),
+        (TextReadWriteMode::Editable, false, true, false)
+    );
+}
+
+/// A read-only field takes the focus and caret moves, but no edit from the
+/// keyboard; a controlled `value` still replaces its text.
+#[test]
+fn a_read_only_field_keeps_its_text() {
+    use bevy::input::keyboard::Key;
+    use bevy::text::TextEdit;
+
+    let (mut app, tx, window) = typing_app();
+    tx.send(vec![create(
+        1,
+        "editableText",
+        serde_json::json!({ "value": "ab", "readOnly": true }),
+    )])
+    .unwrap();
+    app.update();
+    type_into(&mut app, window, 1, Key::Character("a".into()));
+    type_into(&mut app, window, 1, Key::ArrowRight);
+    let pending = &editable(&app, 1).pending_edits;
+    assert!(
+        pending.contains(&TextEdit::Right(false))
+            && !pending
+                .iter()
+                .any(|edit| matches!(edit, TextEdit::Insert(_))),
+        "{pending:?}"
+    );
+
+    tx.send(vec![update(
+        1,
+        "editableText",
+        serde_json::json!({ "value": "xyz" }),
+        &[],
+        &[],
+    )])
+    .unwrap();
+    app.update();
+    assert_eq!(editable(&app, 1).value().to_string(), "xyz");
+}
+
+/// A disabled field takes no key at all, and cannot keep a focus it was
+/// given.
+#[test]
+fn a_disabled_field_ignores_keys() {
+    use bevy::input::keyboard::Key;
+    use bevy::text::TextEdit;
+
+    let (mut app, tx, window) = typing_app();
+    tx.send(vec![create(
+        1,
+        "editableText",
+        serde_json::json!({ "value": "ab", "disabled": true }),
+    )])
+    .unwrap();
+    app.update();
+    type_into(&mut app, window, 1, Key::Character("a".into()));
+    assert_eq!(
+        app.world()
+            .resource::<bevy::input_focus::InputFocus>()
+            .get(),
+        None,
+        "the focus it was given is released"
+    );
+    type_into(&mut app, window, 1, Key::ArrowRight);
+    let pending = &editable(&app, 1).pending_edits;
+    assert!(
+        !pending
+            .iter()
+            .any(|edit| matches!(edit, TextEdit::Insert(_) | TextEdit::Right(_))),
+        "{pending:?}"
     );
 }
 

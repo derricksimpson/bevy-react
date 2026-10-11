@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { InlineCode, List, ListItem, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Readout } from "@/components";
+import { Checkbox, DemoRow, Example, Readout } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -65,6 +65,7 @@ export function FocusDemo() {
     <DemoRow>
       <TabOrderExample />
       <ActivationExample />
+      <DisabledExample />
     </DemoRow>
   );
 }
@@ -191,6 +192,83 @@ function ActivationCard() {
   );
 }
 
+const DISABLED = `<button tabIndex={0} disabled={off}>
+  <text>Middle</text>
+</button>
+<editableText disabled={off} />`;
+
+function DisabledExample() {
+  return (
+    <Example
+      title="Disabled"
+      info={
+        <>
+          <Paragraph>
+            <InlineCode>disabled</InlineCode> on a{" "}
+            <InlineCode>{"<button>"}</InlineCode> or an{" "}
+            <InlineCode>{"<editableText>"}</InlineCode> takes it out of focus:
+            while the box is checked, a click on the middle button or the field
+            focuses nothing, Tab goes from First straight to Last, and the
+            button doesn't click. Uncheck it and both join the row again. An
+            element that becomes disabled while focused gives the focus up.
+          </Paragraph>
+          <Code lang="tsx">{DISABLED}</Code>
+        </>
+      }
+      demo={DisabledCard}
+    />
+  );
+}
+
+function DisabledCard() {
+  const [off, setOff] = useState(true);
+  const [clicks, setClicks] = useState(0);
+  const [text, setText] = useState("Field");
+  const chip = off ? disabledChipStyle : chipStyle;
+  return (
+    <>
+      <Readout label="Middle clicks" value={clicks} />
+      <node style={rowStyle}>
+        <button
+          tabIndex={0}
+          style={chipStyle}
+          hoverStyle={chipHoverStyle}
+          focusStyle={focusStyle}
+        >
+          <text style={chipLabelStyle}>First</text>
+        </button>
+        <button
+          tabIndex={0}
+          disabled={off}
+          onClick={() => setClicks((c) => c + 1)}
+          style={chip}
+          hoverStyle={off ? undefined : chipHoverStyle}
+          focusStyle={focusStyle}
+        >
+          <text style={off ? disabledLabelStyle : chipLabelStyle}>Middle</text>
+        </button>
+        <editableText
+          value={text}
+          onChange={setText}
+          disabled={off}
+          ariaLabel="Field"
+          style={off ? disabledFieldStyle : fieldStyle}
+          focusStyle={focusStyle}
+        />
+        <button
+          tabIndex={0}
+          style={chipStyle}
+          hoverStyle={chipHoverStyle}
+          focusStyle={focusStyle}
+        >
+          <text style={chipLabelStyle}>Last</text>
+        </button>
+      </node>
+      <Checkbox label="disabled" enabled={off} onChange={setOff} />
+    </>
+  );
+}
+
 const rowStyle: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
@@ -226,8 +304,7 @@ const chipLabelStyle: BevyStyle = {
 const fieldStyle: BevyStyle = {
   width: 140,
   height: 36,
-  justifyContent: "center",
-  padding: { horizontal: 12 },
+  padding: { horizontal: 12, vertical: 8 },
   borderRadius: 10,
   border: 1,
   borderColor: Colors.lineStrong,
@@ -235,6 +312,27 @@ const fieldStyle: BevyStyle = {
   color: Colors.text,
   fontSize: FontSizes.sm,
   cursor: "text",
+};
+
+// `disabled` has no look of its own: the app dims the control.
+const disabledChipStyle: BevyStyle = {
+  ...chipStyle,
+  borderColor: Colors.line,
+  backgroundColor: Colors.raised,
+  cursor: "notAllowed",
+};
+
+const disabledLabelStyle: BevyStyle = {
+  ...chipLabelStyle,
+  color: Colors.textFaint,
+};
+
+const disabledFieldStyle: BevyStyle = {
+  ...fieldStyle,
+  borderColor: Colors.line,
+  backgroundColor: Colors.raised,
+  color: Colors.textFaint,
+  cursor: "notAllowed",
 };
 
 // Applied on the Bevy side while the element holds the focus.

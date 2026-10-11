@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bold, BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example, Readout } from "@/components";
+import { Button, Checkbox, DemoRow, Example, Readout } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -84,6 +84,19 @@ function BasicButtonExample() {
 >
   <text>Click me</text>
 </button>`}</Code>
+          <Paragraph>
+            <InlineCode>disabled</InlineCode> makes it inert: no click (it is
+            swallowed, not passed on), no focus, no{" "}
+            <InlineCode>pressStyle</InlineCode>. The look is yours — style it
+            with the same flag.
+          </Paragraph>
+          <Code lang="tsx">{`<button
+  disabled={locked}
+  onClick={open}
+  style={locked ? dimStyle : style}
+>
+  <text>Open</text>
+</button>`}</Code>
         </>
       }
       demo={BasicButtonCard}
@@ -93,17 +106,23 @@ function BasicButtonExample() {
 
 function BasicButtonCard() {
   const [count, setCount] = useState(0);
+  const [disabled, setDisabled] = useState(false);
   return (
     <>
       <Readout label="Clicks" value={count} />
       <button
+        disabled={disabled}
         onClick={() => setCount((c) => c + 1)}
-        style={basicButtonStyle}
-        hoverStyle={{ backgroundColor: Colors.brassBright }}
+        style={disabled ? disabledButtonStyle : basicButtonStyle}
+        // A disabled button still hovers: drop the overlay with the flag.
+        hoverStyle={
+          disabled ? undefined : { backgroundColor: Colors.brassBright }
+        }
         pressStyle={{ backgroundColor: Colors.brassDeep }}
       >
         <BoxLabel style={{ fontSize: FontSizes.sm }}>Click me</BoxLabel>
       </button>
+      <Checkbox label="disabled" enabled={disabled} onChange={setDisabled} />
     </>
   );
 }
@@ -159,6 +178,13 @@ const basicButtonStyle: BevyStyle = {
   borderRadius: 10,
   backgroundColor: Colors.brass,
   cursor: "pointer",
+};
+
+// `disabled` has no look of its own.
+const disabledButtonStyle: BevyStyle = {
+  ...basicButtonStyle,
+  backgroundColor: Colors.control,
+  cursor: "notAllowed",
 };
 
 const richButtonStyle: BevyStyle = {

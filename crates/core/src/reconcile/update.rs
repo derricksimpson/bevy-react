@@ -225,7 +225,13 @@ pub(super) fn apply_update(
     if common.contains(Common::WHEEL) && dirty.wheel {
         apply_wheel_listener(&mut ec, &props, false);
     }
-    if common.contains(Common::FOCUS) && dirty.tab_index {
+    // `disabled` takes the element out of focus, so it re-stamps too.
+    let disabled_dirty = dirty.attrs.any()
+        && info.attr("disabled").is_some_and(|(index, attr)| {
+            crate::element::is_attr(attr, &crate::elements::DISABLED)
+                && dirty.attrs.0 & (1 << index) != 0
+        });
+    if common.contains(Common::FOCUS) && (dirty.tab_index || disabled_dirty) {
         apply_focus(&mut ec, &props, flags, false);
     }
     // Bindings are derived from the merged style and attributes, so any

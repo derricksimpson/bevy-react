@@ -258,6 +258,77 @@ fn an_unmounted_focused_node_releases_the_focus() {
     assert_eq!(events(&mut rx), []);
 }
 
+/// A control that becomes disabled while focused gives the focus up (with
+/// its `blur`), and is focusable again once enabled.
+#[test]
+fn a_disabled_control_gives_the_focus_up() {
+    let (mut app, tx, mut rx) = focus_app(|_| {});
+    tx.send(vec![create(1, "editableText", json!({ "onBlur": true }))])
+        .unwrap();
+    app.update();
+    focus(&mut app, 1);
+    app.update();
+    let index = |app: &App| app.world().get::<TabIndex>(ent(app, 1)).copied();
+
+    tx.send(vec![update(
+        1,
+        "editableText",
+        json!({ "disabled": true }),
+        &[],
+        &[],
+    )])
+    .unwrap();
+    app.update();
+    assert_eq!(focused(&app), None);
+    assert_eq!(events(&mut rx), sent(&[(1, "blur")]));
+    assert_eq!(index(&app), None, "nothing to press or Tab to");
+
+    tx.send(vec![update(
+        1,
+        "editableText",
+        json!({}),
+        &["disabled"],
+        &[],
+    )])
+    .unwrap();
+    app.update();
+    assert_eq!(index(&app), Some(TabIndex(0)));
+}
+
+/// `disabled` on a `<button>`: bevy's marker, and no `TabIndex` — a press
+/// resolves past it and Tab skips it.
+#[test]
+fn a_disabled_button_is_not_focusable() {
+    let (mut app, tx, _rx) = focus_app(|_| {});
+    tx.send(vec![create(
+        1,
+        "button",
+        json!({ "tabIndex": 0, "disabled": true }),
+    )])
+    .unwrap();
+    app.update();
+    let button = ent(&app, 1);
+    let state = |app: &App| {
+        let entity = app.world().entity(button);
+        (
+            entity.contains::<bevy::ui::InteractionDisabled>(),
+            entity.contains::<TabIndex>(),
+        )
+    };
+    assert_eq!(state(&app), (true, false));
+
+    tx.send(vec![update(
+        1,
+        "button",
+        json!({ "disabled": false }),
+        &[],
+        &[],
+    )])
+    .unwrap();
+    app.update();
+    assert_eq!(state(&app), (false, true));
+}
+
 /// The indicator bit follows bevy's `InputFocusVisible` while the focus
 /// stays put; a text input shows it however it was focused.
 #[test]
@@ -394,6 +465,11 @@ fn enter_and_space_click_a_focused_button() {
     tx.send(vec![
         create(1, "button", json!({ "tabIndex": 0, "onClick": true })),
         create(2, "node", json!({ "tabIndex": 0, "onClick": true })),
+        create(
+            3,
+            "button",
+            json!({ "tabIndex": 0, "onClick": true, "disabled": true }),
+        ),
     ])
     .unwrap();
     app.update();
@@ -426,4 +502,9 @@ fn enter_and_space_click_a_focused_button() {
 
     focus(&mut app, 2);
     assert_eq!(key(&mut app, KeyCode::Enter, down, false), [], "a node");
+
+    // A disabled button: not even with a focus forced onto it.
+    focus(&mut app, 3);
+    assert_eq!(key(&mut app, KeyCode::Enter, down, false), []);
+    assert_eq!(focused(&app), None);
 }

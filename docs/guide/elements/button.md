@@ -71,6 +71,33 @@ stay hovered.
   elsewhere does not click. For other buttons use `onPointerDown` and read
   `e.button`. See [Mouse](../events/mouse.md).
 
+## Disabled
+
+`disabled` makes a button inert without unmounting it or dropping its
+handlers:
+
+```tsx
+<button
+  disabled={!canSave}
+  onClick={save}
+  style={canSave ? saveStyle : { ...saveStyle, ...dimmed }}
+>
+  <text>Save</text>
+</button>
+```
+
+- `onClick` doesn't fire, by pointer or by keyboard. The button still owns
+  the click: it is swallowed, not passed to an `onClick` ancestor.
+- It can't take the focus: a press doesn't focus it, Tab skips it, and a
+  button that becomes disabled while focused gives the focus up.
+- `pressStyle` never applies. `hoverStyle` and the `onPointer*` handlers
+  keep working, as CSS `:hover` does on a disabled control (a tooltip on a
+  disabled button needs them). Drop the `hoverStyle` yourself if it
+  shouldn't light up.
+- There is no disabled look and no `disabledStyle`: the button is styled by
+  the same prop that disables it, as above.
+- Assistive tech sees the button as disabled.
+
 ## Keyboard
 
 A `<button>` takes the keyboard focus only with a `tabIndex`. While it is
@@ -97,8 +124,6 @@ flattens while pressed.
 
 ## Limits
 
-- There is no `disabled` attribute. To disable a button, drop its `onClick`
-  (it still swallows the click) and style it as disabled.
 - There is no `ariaLabel`. The button is named for assistive tech from the
   text under it (nested wrappers included), refreshed when its direct
   children change, so an icon-only button has no name.

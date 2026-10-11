@@ -33,6 +33,7 @@ mod tests;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+pub(crate) use attribute::is_attr;
 pub use attribute::{AnyAttribute, AttrBinding, Attribute, animatable_binding};
 pub use decl::{Common, Element, SpawnCtx, SpawnFn};
 pub use event::{AnyElementEvent, ElementEvent, ElementEvents, EventSubscriptions, handler_prop};

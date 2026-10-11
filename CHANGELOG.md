@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enter and Space click a focused `<button>`.** Its `onClick` fires once
   per key press. A `<button>` is focusable only with a `tabIndex`, so
   existing buttons don't start taking those keys.
+- **`<editableText readOnly>` and `disabled`.** A read-only field keeps the
+  focus, the caret and a selection to copy, but takes no edit; a disabled
+  one is inert (no focus, no caret, skipped by Tab) and reports as disabled
+  to assistive tech. Both still follow a controlled `value`.
+- **`<button disabled>`.** A disabled button doesn't click (it still
+  swallows the click), can't be focused and never shows its `pressStyle`;
+  `hoverStyle` and the `onPointer*` handlers keep working. Style it through
+  `style`: there is no `disabledStyle`.
 - **`onPointerHover`.** Fires on each frame the pointer moved while over the
   element (between its `onPointerEnter` and `onPointerLeave`), a button held
   or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only

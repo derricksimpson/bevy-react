@@ -124,6 +124,33 @@ fn hover_then_press_then_none() {
     assert_eq!(writes(&app), 0, "an idle frame writes nothing");
 }
 
+/// A disabled control is hovered but never pressed: held down it reads
+/// `Hovered` while the pointer is on it and `None` once it left. It still
+/// counts as UI under the pointer.
+#[test]
+fn a_disabled_node_is_never_pressed() {
+    let mut app = sync_app();
+    app.init_resource::<crate::PointerCapture>();
+    let node = app
+        .world_mut()
+        .spawn((ReactInteraction::None, bevy::ui::InteractionDisabled))
+        .id();
+    hover(app.world_mut(), PointerId::Mouse, &[node]);
+    press(
+        app.world_mut(),
+        PointerId::Mouse,
+        PointerButton::Primary,
+        &[node],
+    );
+    app.update();
+    assert_eq!(state(&app, node), ReactInteraction::Hovered);
+    assert!(app.world().resource::<crate::PointerCapture>().over_ui);
+
+    hover(app.world_mut(), PointerId::Mouse, &[]);
+    app.update();
+    assert_eq!(state(&app, node), ReactInteraction::None);
+}
+
 #[test]
 fn press_is_sticky_until_release() {
     let mut app = sync_app();

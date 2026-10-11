@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "@/components";
+import { DemoRow, Example } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -37,6 +37,10 @@ const PAGE: ExplanationData = {
         <ListItem>
           maxLength caps input; autofocus grabs focus on mount.
         </ListItem>
+        <ListItem>
+          readOnly keeps the text selectable but unchangeable; disabled takes
+          the field out of focus altogether.
+        </ListItem>
       </List>
     </>
   ),
@@ -52,6 +56,15 @@ type Selection = {
 export function EditableTextDemo() {
   useDemoPage(PAGE);
   return (
+    <DemoRow>
+      <NameFormExample />
+      <ModesExample />
+    </DemoRow>
+  );
+}
+
+function NameFormExample() {
+  return (
     <Example
       title="Name form"
       info={
@@ -62,8 +75,8 @@ export function EditableTextDemo() {
             caret or selection range, and whether an IME composition is in
             flight. Moving between the fields, the old one's{" "}
             <InlineCode>onBlur</InlineCode> arrives before the new one's{" "}
-            <InlineCode>onFocus</InlineCode>, so the label never flickers back
-            to "none".
+            <InlineCode>onFocus</InlineCode>, so a plain set and clear pair
+            tracks the focused field.
           </Paragraph>
           <Code lang="tsx">{`<editableText
   value={first}
@@ -79,6 +92,77 @@ export function EditableTextDemo() {
       }
       demo={NameFormCard}
     />
+  );
+}
+
+function ModesExample() {
+  return (
+    <Example
+      title="Modes"
+      info={
+        <>
+          <Paragraph>
+            One text in three fields. The first edits it. The{" "}
+            <InlineCode>readOnly</InlineCode> one still takes the focus, the
+            caret and a selection you can copy, but no edit. The{" "}
+            <InlineCode>disabled</InlineCode> one is inert: a click doesn't
+            focus it, Tab skips it, and it shows no caret. Both follow the
+            controlled <InlineCode>value</InlineCode>. There is no disabled
+            look: dim the field through its <InlineCode>style</InlineCode>.
+          </Paragraph>
+          <Code lang="tsx">{`<editableText
+  value={text}
+  onChange={setText}
+/>
+<editableText value={text} readOnly />
+<editableText
+  value={text}
+  disabled
+  style={{ ...inputStyle, ...dimStyle }}
+/>`}</Code>
+        </>
+      }
+      demo={ModesCard}
+    />
+  );
+}
+
+function ModesCard() {
+  const [text, setText] = useState("Sable City");
+  return (
+    <node style={formStyle}>
+      <node style={fieldStyle}>
+        <text style={labelStyle}>Editable</text>
+        <editableText
+          value={text}
+          onChange={setText}
+          ariaLabel="Editable"
+          maxLength={40}
+          style={inputStyle}
+          focusStyle={focusStyle}
+        />
+      </node>
+      <node style={fieldStyle}>
+        <text style={labelStyle}>readOnly</text>
+        <editableText
+          value={text}
+          readOnly
+          ariaLabel="Read-only"
+          style={inputStyle}
+          focusStyle={focusStyle}
+        />
+      </node>
+      <node style={fieldStyle}>
+        <text style={labelStyle}>disabled</text>
+        <editableText
+          value={text}
+          disabled
+          ariaLabel="Disabled"
+          style={{ ...inputStyle, ...dimStyle }}
+          focusStyle={focusStyle}
+        />
+      </node>
+    </node>
   );
 }
 
@@ -194,6 +278,12 @@ const inputStyle: BevyStyle = {
 const focusStyle: BevyStyle = {
   borderColor: Colors.cyan,
   boxShadow: { blurRadius: 3, color: Colors.cyanGlow },
+};
+
+// A disabled field has no look of its own: the app dims it.
+const dimStyle: BevyStyle = {
+  color: Colors.textFaint,
+  backgroundColor: Colors.raised,
 };
 
 const greetingStyle: BevyStyle = {

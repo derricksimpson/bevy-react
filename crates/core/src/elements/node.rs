@@ -3,14 +3,14 @@
 //! detached, window-filling overlay root).
 
 use bevy::prelude::*;
-use bevy::ui::FocusPolicy;
+use bevy::ui::{FocusPolicy, InteractionDisabled};
 
-use crate::element::{Common, Element};
+use crate::element::{Attribute, Common, Element};
 use crate::ext::ElementFlags;
 use crate::protocol::animatable::Animatable;
 use crate::protocol::units::Length;
-use crate::style::Style;
 use crate::style::props::{FLEX_DIRECTION, FOCUS_POLICY, GLOBAL_Z_INDEX, HEIGHT, WIDTH};
+use crate::style::{Invalidation, Style, Writer, owns};
 
 /// `<node>`: a plain styled container.
 pub static NODE: Element = Element::new("node");
@@ -19,7 +19,10 @@ pub static NODE: Element = Element::new("node");
 /// `ReactInteraction` the hover/press styling rides) that captures the
 /// pointer by default — like bevy_ui's native buttons, so a button doesn't
 /// leak its click to a sibling, an ancestor, or the 3D scene behind it.
+/// `disabled` keeps it owning its clicks, and drops them.
 pub static BUTTON: Element = Element {
+    attrs: &[&DISABLED],
+    writers: &[&DISABLED_WRITER],
     default_style: Some(button_style),
     // The headless widget button (`Role::Button` for accessibility), always
     // interactive: hover/press state with or without handlers or variants.
@@ -32,6 +35,45 @@ fn button_style() -> Style {
     style.set(&FOCUS_POLICY, FocusPolicy::Block);
     style
 }
+
+/// `disabled` on a control (`<button>`, `<editableText>`): it takes no
+/// focus (`stamps::apply_focus` drops its `TabIndex`), is never pressed
+/// (`sync_interactions`), and — per element — no click or edit. Hover and
+/// the `onPointer*` events are unaffected, as CSS `:hover` on a disabled
+/// control.
+pub static DISABLED: Attribute<bool> = Attribute {
+    // A disabled input hides its caret and selection.
+    invalidate: Invalidation::PAINT,
+    ..Attribute::new("disabled")
+};
+
+/// `disabled` → bevy_ui's `InteractionDisabled` (which also marks the
+/// entity's accessibility node disabled).
+pub static DISABLED_WRITER: Writer = Writer {
+    reads: &[],
+    attrs: &[&DISABLED],
+    writes: &[owns::<InteractionDisabled>],
+    apply: |ctx, _style, ec| {
+        let disabled = ctx.attr(&DISABLED).copied().unwrap_or(false);
+        if ctx.fresh {
+            if disabled {
+                ec.insert(InteractionDisabled);
+            }
+            return;
+        }
+        // Compare first: a full restyle re-runs every element writer.
+        ec.queue(move |mut entity: EntityWorldMut| {
+            if entity.contains::<InteractionDisabled>() == disabled {
+                return;
+            }
+            if disabled {
+                entity.insert(InteractionDisabled);
+            } else {
+                entity.remove::<InteractionDisabled>();
+            }
+        });
+    },
+};
 
 /// Label each `<button>` for assistive technology with the text it shows:
 /// every text block in its subtree, in tree order, joined by spaces. (The

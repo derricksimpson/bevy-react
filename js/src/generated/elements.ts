@@ -17,6 +17,7 @@ composing: boolean, };
 
 export interface BevyButtonProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps, BevyFocusProps {
   style?: BevyStyle;
+  disabled?: boolean;
   children?: ReactNode;
 }
 
@@ -29,6 +30,8 @@ export interface BevyEditableTextProps extends BevyAttributes, BevyVariantProps,
   selectionStart?: number;
   selectionEnd?: number;
   ariaLabel?: string;
+  readOnly?: boolean;
+  disabled?: boolean;
   onChange?: (payload: string) => void;
   onSelect?: (payload: SelectEvent) => void;
   children?: ReactNode;

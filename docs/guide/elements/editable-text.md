@@ -46,6 +46,8 @@ const [name, setName] = useState("");
 | `selectionStart` | `number`  | none    | Selection anchor, a UTF-8 byte offset                 |
 | `selectionEnd`   | `number`  | none    | Selection focus (the caret end), a UTF-8 byte offset  |
 | `ariaLabel`      | `string`  | none    | The field's accessible name                           |
+| `readOnly`       | `boolean` | `false` | The user can select and copy the text, not change it  |
+| `disabled`       | `boolean` | `false` | The field is inert: no focus, caret or edits          |
 
 ## Events
 
@@ -141,6 +143,28 @@ useEffect(() => {
 
 See [Keyboard](../events/keyboard.md) for the event payload.
 
+## Read-only and disabled
+
+|                                 | `readOnly`            | `disabled`       |
+| ------------------------------- | --------------------- | ---------------- |
+| Focus (click, Tab, `autofocus`) | Yes                   | No               |
+| Caret, selection, copy          | Yes                   | No (both hidden) |
+| Typing, paste, cut, IME         | No                    | No               |
+| `onChange` from the user        | Never                 | Never            |
+| `onSelect` from the user        | Fires                 | Never            |
+| `focusStyle`                    | Applies while focused | Never            |
+| `hoverStyle`                    | Applies               | Applies          |
+| `pressStyle`                    | Applies               | Never            |
+
+- Both still follow a controlled `value`.
+- A field that becomes `disabled` while focused gives the focus up (its
+  `onBlur` fires). `disabled` wins when both are set.
+- Neither has a look of its own. Dim a disabled field through its `style`:
+  `style={disabled ? dimmed : normal}`.
+- A read-only field draws its selection in the unfocused color (Bevy's
+  `TextCursorStyle::unfocused_selection_color`), even while focused.
+- Assistive tech sees the field as read-only or disabled.
+
 ## Layout and styles
 
 - The field has no intrinsic width, and its intrinsic height is one line,
@@ -159,8 +183,7 @@ See [Keyboard](../events/keyboard.md) for the event payload.
 ## Limits
 
 - Plain text with one style for the whole field.
-- No placeholder, read-only, disabled or password mode, no undo or redo, and
-  no submit event.
+- No placeholder or password mode, no undo or redo, and no submit event.
 - Rejecting an edit in `onChange` doesn't revert the field: if the state
   stays at the previous `value`, the prop doesn't change and the field keeps
   the user's text.

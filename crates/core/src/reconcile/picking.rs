@@ -70,7 +70,9 @@ pub(crate) fn device(pointer: PointerId, transform3d: Option<&Transform3dPointer
 /// wherever the pointer is ([`PointerState`]'s `pressing` set).
 ///
 /// Hover is hover-map membership, so it stops at the first blocking node
-/// (`focusPolicy: "block"`), exactly like clicks. Two pointers' hover is not
+/// (`focusPolicy: "block"`), exactly like clicks. A disabled control
+/// (`InteractionDisabled`) is never `Pressed`, only hovered while the pointer
+/// is on it (CSS `:active` / `:hover`). Two pointers' hover is not
 /// taken at face value:
 /// - the mouse (and its transform3d twin) once the cursor has left its
 ///   window: bevy_picking keeps the last location, so the map keeps naming
@@ -99,6 +101,7 @@ pub fn sync_interactions(
     pointers: Query<(&PointerId, &PointerLocation, &PointerPressState)>,
     windows: Query<&Window>,
     mut nodes: Query<&mut ReactInteraction>,
+    disabled: Query<(), With<bevy::ui::InteractionDisabled>>,
     // `Option`: headless harnesses run this without the plugin's resources.
     capture: Option<ResMut<PointerCapture>>,
     // What the last run left non-`None`.
@@ -138,7 +141,9 @@ pub fn sync_interactions(
             .and_then(|presses| presses.get(pointer, PointerButton::Primary));
         for &entity in pressing.iter().flat_map(|state| state.pressing.keys()) {
             if nodes.contains(entity) {
-                next.insert(entity, ReactInteraction::Pressed);
+                if !disabled.contains(entity) {
+                    next.insert(entity, ReactInteraction::Pressed);
+                }
                 over_ui |= on_window;
             }
         }

@@ -33,6 +33,7 @@ use bevy::picking::events::PointerPress;
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::EditableText;
+use bevy::ui::InteractionDisabled;
 
 use super::events::climb;
 use crate::bridge::{FocusState, JsBridge, OutboundResource, ReactNode};
@@ -164,7 +165,8 @@ fn resolve_pointer_focus(
 /// A despawned element gives the focus up here. Bevy itself only notices on
 /// the next key press, and until then names a dead entity (bevy_winit skips
 /// its accessibility updates meanwhile); no `blur` is sent — the element's
-/// handlers went with it.
+/// handlers went with it. So does an element that became `disabled` while
+/// focused (bevy's `InteractionDisabled` alone keeps the focus).
 ///
 /// A few lookups per frame, whatever the node count.
 #[allow(clippy::too_many_arguments)]
@@ -176,7 +178,7 @@ pub fn sync_focus(
     out: Option<Res<OutboundResource>>,
     bridge: Option<Res<JsBridge>>,
     entities: &Entities,
-    nodes: Query<&ReactNode>,
+    nodes: Query<(&ReactNode, Has<InteractionDisabled>)>,
     inputs: Query<(), With<EditableText>>,
     mut states: Query<&mut FocusState>,
     mut last: Local<Option<Entity>>,
@@ -185,7 +187,9 @@ pub fn sync_focus(
         return;
     };
     let mut current = focus.get();
-    if current.is_some_and(|entity| !entities.contains(entity)) {
+    if current.is_some_and(|entity| {
+        !entities.contains(entity) || nodes.get(entity).is_ok_and(|(_, disabled)| disabled)
+    }) {
         focus.clear();
         current = None;
     }
@@ -207,7 +211,7 @@ pub fn sync_focus(
         return;
     }
     let send = |entity: Entity, event: &str, wanted: fn(&Props) -> bool| {
-        let (Ok(node), Some(out), Some(bridge)) = (nodes.get(entity), &out, &bridge) else {
+        let (Ok((node, _)), Some(out), Some(bridge)) = (nodes.get(entity), &out, &bridge) else {
             return;
         };
         if bridge.props_cache.get(&node.0).is_some_and(|p| wanted(p)) {
@@ -235,7 +239,7 @@ pub fn sync_focus(
 /// `collect_ui_events` already reports.
 pub(crate) fn click_focused_button(
     key: On<FocusedInput<KeyboardInput>>,
-    buttons: Query<&ReactNode, With<bevy::ui_widgets::Button>>,
+    buttons: Query<&ReactNode, (With<bevy::ui_widgets::Button>, Without<InteractionDisabled>)>,
     out: Option<Res<OutboundResource>>,
 ) {
     let input = &key.input;

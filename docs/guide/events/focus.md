@@ -127,6 +127,15 @@ key press (not on auto-repeat). Only a `<button>` is activated this way; a
 focused `<node onClick>` is not, as on the web. The keys still arrive as
 `keyDown` events.
 
+## Disabled controls
+
+`disabled` on a [`<button>`](../elements/button.md#disabled) or an
+[`<editableText>`](../elements/editable-text.md#read-only-and-disabled)
+takes the element out of focus altogether: a press doesn't focus it, Tab
+skips it, and it gives the focus up when it becomes disabled while focused.
+A press on a disabled control inside a focusable container focuses the
+container.
+
 ## Focus from Rust
 
 `InputFocus` is an ordinary Bevy resource: set it to a React entity (found
