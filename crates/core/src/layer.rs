@@ -1133,7 +1133,7 @@ pub fn resolve_layer_repaints(
     // 4. A focused editable inside a layer repaints every frame: the caret
     //    blink is rendered by Bevy's text systems with no signal we can see.
     for (e, focus) in &focused_inputs {
-        if focus.0
+        if focus.focused
             && let Some(&layer) = membership.node_to_layer.get(&e)
         {
             state.dirty.insert(layer);

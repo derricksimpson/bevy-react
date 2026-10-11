@@ -84,6 +84,8 @@ main window tree differs: it centers top-level elements and spaces them
 - **Props.** A `<root>` takes `style`, `name`, `sharedTag` and `key`. State
   styles and event handlers on it are ignored with a `propIgnored` warning;
   put them on a child.
+- **Tab order.** With [Tab navigation](../events/focus.md#tab-navigation),
+  a root's focusable elements come after the main tree's.
 
 ## Blocking modals
 

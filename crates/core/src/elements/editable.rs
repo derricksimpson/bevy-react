@@ -2,17 +2,16 @@
 //! `EditableTextInputPlugin` (registered by `DefaultPlugins`) drives
 //! keyboard/focus/cursor/selection/clipboard; the element spawns the widget,
 //! pushes controlled values into it, and reports edits back as its own
-//! events (`onChange`/`onSelect`/`onFocus`/`onBlur`).
+//! events (`onChange`/`onSelect`). Focus is the common `FOCUS` group's
+//! (`reconcile::focus`); an input is focusable without a `tabIndex`.
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
-use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::input_focus::{AutoFocus, FocusGained, FocusLost};
+use bevy::input_focus::AutoFocus;
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
 use serde::Serialize;
 
-use crate::bridge::FocusState;
 use crate::element::{Attribute, Common, Element, ElementEvent, ElementEvents, SpawnCtx};
 use crate::ext::{ElementFlags, TextRole};
 use crate::style::{Writer, WriterCtx, owns};
@@ -59,11 +58,6 @@ pub static CHANGE: ElementEvent<String> = ElementEvent::new("change");
 /// The selection moved (only sent while an `onSelect` is declared — caret
 /// moves are frequent).
 pub static SELECT: ElementEvent<SelectEvent> = ElementEvent::new("select");
-/// The input gained focus.
-pub static FOCUS: ElementEvent<()> = ElementEvent::new("focus");
-/// The input lost focus.
-pub static BLUR: ElementEvent<()> = ElementEvent::new("blur");
-
 /// The `<editableText>` element.
 pub static EDITABLE_TEXT: Element = Element {
     flags: ElementFlags {
@@ -79,9 +73,9 @@ pub static EDITABLE_TEXT: Element = Element {
         &SELECTION_END,
         &ARIA_LABEL,
     ],
-    common: Common::IDENTITY.with(Common::VARIANTS),
+    common: Common::IDENTITY.with(Common::VARIANTS).with(Common::FOCUS),
     writers: &[&EDITABLE_WRITER],
-    events: &[&CHANGE, &SELECT, &FOCUS, &BLUR],
+    events: &[&CHANGE, &SELECT],
     spawn: Some(spawn_editable),
     ..Element::new("editableText")
 };
@@ -141,9 +135,6 @@ fn spawn_editable(ctx: &mut SpawnCtx) -> Entity {
             // `TextInput` entities only (`EditableText` alone is just the
             // editing state).
             bevy::ui_widgets::TextInput,
-            // Focusable via click (bevy's pointer focus resolves a press to
-            // the `TabIndex` target) and Tab.
-            TabIndex(0),
             // The input is a click owner BY TYPE — `collect_ui_events`
             // matches `EditableText` directly — so a press inside it resolves
             // to the input, not to an `onClick` ancestor behind it. The
@@ -302,46 +293,6 @@ pub fn on_text_edit_change(
                 },
             );
         }
-    }
-}
-
-/// Send an input's `focus` event and set the node's [`FocusState`] so a
-/// `focusStyle` is applied by the interaction restyle. `FocusGained`
-/// bubbles, with `ev.entity` rewritten at every hop, so this acts on the
-/// originally focused entity only; `FocusState` is general (a no-op for
-/// nodes without it).
-pub fn on_focus_gained(
-    ev: On<FocusGained>,
-    events: ElementEvents,
-    mut focus_states: Query<&mut FocusState>,
-) {
-    if ev.entity != ev.original_event_target() {
-        return;
-    }
-    set_focus_state(&mut focus_states, ev.entity, true);
-    events.send(ev.entity, &FOCUS, &());
-}
-
-/// See [`on_focus_gained`]; the blur counterpart.
-pub fn on_focus_lost(
-    ev: On<FocusLost>,
-    events: ElementEvents,
-    mut focus_states: Query<&mut FocusState>,
-) {
-    if ev.entity != ev.original_event_target() {
-        return;
-    }
-    set_focus_state(&mut focus_states, ev.entity, false);
-    events.send(ev.entity, &BLUR, &());
-}
-
-/// Set a node's [`FocusState`] (if it has one), nudging change detection only
-/// when the value flips.
-fn set_focus_state(focus_states: &mut Query<&mut FocusState>, entity: Entity, focused: bool) {
-    if let Ok(mut state) = focus_states.get_mut(entity)
-        && state.0 != focused
-    {
-        state.0 = focused;
     }
 }
 

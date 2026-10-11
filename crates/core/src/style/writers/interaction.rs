@@ -30,23 +30,16 @@ pub static FOCUS_POLICY_WRITER: Writer = Writer {
     },
 };
 
-/// The `Pickable` mirror of `policy` on an element with `flags`.
-///
-/// A text input blocks the picks beneath it whatever its policy: bevy's
-/// pointer focus (`PointerFocusPlugin`) asks for focus once per PRESSED
-/// entity, and a request that reaches the window clears the focus. Under a
-/// pass-through input one press would also land on every node below it and
-/// on the window, so the same click would both focus and blur the field (in
-/// hover-map order). Blocking keeps the press, and its one focus request, on
-/// the input — so the pointer over an input hovers and presses nothing
-/// beneath it either.
+/// The `Pickable` mirror of `policy` on an element with `flags`. Keyboard
+/// focus plays no part in it: which element a press focuses is resolved over
+/// the whole pressed stack (`reconcile::focus`), so a focusable element
+/// passes or blocks like any other.
 pub(crate) fn focus_pickable(flags: crate::ext::ElementFlags, policy: FocusPolicy) -> Pickable {
     if flags.pick_ignore {
         Pickable::IGNORE
     } else {
         Pickable {
-            should_block_lower: policy == FocusPolicy::Block
-                || flags.text == crate::ext::TextRole::Input,
+            should_block_lower: policy == FocusPolicy::Block,
             is_hoverable: true,
         }
     }

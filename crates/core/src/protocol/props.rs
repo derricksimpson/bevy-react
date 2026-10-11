@@ -79,6 +79,16 @@ pub struct Props {
     /// node (any node, unlike `onScroll`, which needs `overflow: scroll`).
     pub on_wheel: bool,
 
+    // --- keyboard focus ---
+    /// The element's `tabIndex`, stamped as bevy's `TabIndex`: what makes it
+    /// focusable by a press, by Tab and from Rust. A text input is focusable
+    /// without one.
+    pub tab_index: Option<i32>,
+    /// Whether this element has an `onFocus` handler registered in JS.
+    pub on_focus: bool,
+    /// Whether this element has an `onBlur` handler registered in JS.
+    pub on_blur: bool,
+
     // --- identity ---
     /// The element's `name` prop: stamped on the entity as a Bevy `Name` and
     /// indexed by name (see [`crate::ReactNodes`]) so app systems can find
@@ -128,6 +138,8 @@ pub struct PropsDirty {
     pub wheel: bool,
     /// `scrollStep` changed.
     pub scroll_step: bool,
+    /// `tabIndex` set or unset.
+    pub tab_index: bool,
     /// `name` (the entity's Bevy `Name`) set or unset.
     pub name: bool,
     /// `sharedTag` (the shared-element identity) set or unset.
@@ -181,6 +193,9 @@ enum Key {
     ScrollTop,
     ScrollLeft,
     ScrollStep,
+    TabIndex,
+    OnFocus,
+    OnBlur,
     Name,
     SharedTag,
     Attr(u8, &'static dyn AnyAttribute),
@@ -209,6 +224,9 @@ fn common_key(name: &str) -> Option<(Key, Option<Common>)> {
         "scrollLeft" => (Key::ScrollLeft, Some(Common::SCROLL)),
         "scrollStep" => (Key::ScrollStep, Some(Common::SCROLL)),
         "onWheel" => (Key::OnWheel, Some(Common::WHEEL)),
+        "tabIndex" => (Key::TabIndex, Some(Common::FOCUS)),
+        "onFocus" => (Key::OnFocus, Some(Common::FOCUS)),
+        "onBlur" => (Key::OnBlur, Some(Common::FOCUS)),
         "name" => (Key::Name, Some(Common::IDENTITY)),
         "sharedTag" => (Key::SharedTag, Some(Common::IDENTITY)),
         _ => return None,
@@ -327,6 +345,13 @@ impl<'de> serde::Deserialize<'de> for Props {
                         Key::ScrollTop => props.scroll_top = map.next_value()?,
                         Key::ScrollLeft => props.scroll_left = map.next_value()?,
                         Key::ScrollStep => props.scroll_step = map.next_value()?,
+                        // Through `f32`: a fractional index from JS must
+                        // not fail the whole op batch.
+                        Key::TabIndex => {
+                            props.tab_index = map.next_value::<Option<f32>>()?.map(|v| v as i32)
+                        }
+                        Key::OnFocus => props.on_focus = flag(&mut map)?,
+                        Key::OnBlur => props.on_blur = flag(&mut map)?,
                         Key::Name => props.name = map.next_value()?,
                         Key::SharedTag => props.shared_tag = map.next_value()?,
                         Key::Attr(index, attr) => match map.next_value_seed(AttrSeed(attr))? {

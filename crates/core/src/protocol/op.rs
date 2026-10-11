@@ -372,8 +372,10 @@ mod tests {
                 assert_eq!(a.get(&SELECTION_START), Some(&0));
                 assert_eq!(a.get(&SELECTION_END), Some(&2));
                 assert_eq!(a.get(&ARIA_LABEL).map(String::as_str), Some("Name"));
-                // onChange / onSelect / onFocus / onBlur: all four events.
-                assert_eq!(props.handlers, 0b1111);
+                // onChange / onSelect: both element events; onFocus / onBlur
+                // are common props.
+                assert_eq!(props.handlers, 0b11);
+                assert!(props.on_focus && props.on_blur);
                 assert!(props.focus_style.is_some());
             }
             other => panic!("expected create, got {other:?}"),

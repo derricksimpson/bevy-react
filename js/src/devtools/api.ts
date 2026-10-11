@@ -211,7 +211,7 @@ export interface DevtoolsAttr {
 /** One registered element — a row of the `devtools.elements` response
  *  (`devtools/element_fields.rs`): its attributes, its own event handler
  *  props, and the common prop groups that apply (`identity`, `variants`,
- *  `pointer`, `scroll`, `wheel`). */
+ *  `pointer`, `scroll`, `wheel`, `focus`). */
 export interface DevtoolsElement {
   name: string;
   attrs: DevtoolsAttr[];

@@ -163,6 +163,21 @@ fn member_of_layer(
     }
 }
 
+/// Schedule [`drive_transform3d_pointer`]: before bevy_picking consumes
+/// pointer input, and after bevy_input updated the buttons it forwards — so
+/// the forwarded press lands in the frame of the mouse's own. One click is
+/// then one frame of presses, which the press-to-focus rule
+/// (`reconcile::focus`) resolves together; a frame apart, the mouse's press
+/// on the window would blur what the forwarded press then refocuses.
+pub(crate) fn add_pointer_driver(app: &mut App) {
+    app.add_systems(
+        PreUpdate,
+        drive_transform3d_pointer
+            .after(bevy::input::InputSystems)
+            .before(bevy::picking::PickingSystems::ProcessInput),
+    );
+}
+
 /// Remap the window cursor into the topmost visually-transformed layer under
 /// it and drive the virtual pointer there (`PointerInput` move/press/release,
 /// the surface driver's contract). With no transformed layer under the
@@ -487,6 +502,81 @@ mod tests {
             .unwrap();
         let got = survivors(&mut world);
         assert_eq!(got[0].1, Vec::<Entity>::new());
+    }
+
+    /// A mouse press is forwarded in the frame it happens (the driver reads
+    /// the buttons after bevy_input updated them).
+    #[test]
+    fn a_press_is_forwarded_the_frame_it_happens() {
+        use bevy::input::ButtonState;
+        use bevy::input::mouse::MouseButtonInput;
+
+        let mut app = App::new();
+        app.add_plugins(bevy::input::InputPlugin)
+            .init_resource::<bevy::picking::pointer::PointerMap>()
+            .init_resource::<Messages<PointerInput>>()
+            .add_systems(Startup, init_transform3d_pointer);
+        add_pointer_driver(&mut app);
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), PrimaryWindow))
+            .id();
+        let target = bevy::camera::NormalizedRenderTarget::Window(
+            bevy::window::WindowRef::Entity(window)
+                .normalize(None)
+                .unwrap(),
+        );
+        app.world_mut().spawn((
+            PointerId::Mouse,
+            PointerLocation::new(Location {
+                target,
+                position: Vec2::new(150.0, 50.0),
+            }),
+        ));
+        // A 100×100 layer at 0..100, drawn 100 px to the right.
+        let root = app
+            .world_mut()
+            .spawn((
+                PromotedLayer {
+                    reasons: crate::layer::PromotionReasons(
+                        crate::layer::PromotionReasons::TRANSFORM3D,
+                    ),
+                },
+                ComputedNode {
+                    size: Vec2::splat(100.0),
+                    inverse_scale_factor: 1.0,
+                    ..Default::default()
+                },
+                UiGlobalTransform::from_translation(Vec2::splat(50.0)),
+                LayerTransform3dMatrix {
+                    model: Mat4::from_translation(Vec3::new(100.0, 0.0, 0.0)),
+                    identity: false,
+                    windowed: true,
+                },
+            ))
+            .id();
+        app.world_mut().insert_resource(UiStack {
+            uinodes: vec![root],
+            partition: std::iter::once(0..1).collect(),
+        });
+        app.update();
+        app.world_mut()
+            .resource_mut::<Messages<PointerInput>>()
+            .clear();
+
+        app.world_mut().write_message(MouseButtonInput {
+            button: MouseButton::Left,
+            state: ButtonState::Pressed,
+            window,
+        });
+        app.update();
+        let id = app.world().resource::<Transform3dPointer>().id;
+        let pressed = app
+            .world_mut()
+            .resource_mut::<Messages<PointerInput>>()
+            .drain()
+            .any(|input| input.pointer_id == id && matches!(input.action, PointerAction::Press(_)));
+        assert!(pressed);
     }
 
     /// A press forwarded into a layer keeps that layer until the release:

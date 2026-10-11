@@ -28,7 +28,7 @@ pub(super) struct DevtoolsElement {
     /// The element's own event handler props (`onChange`, …).
     events: Vec<String>,
     /// The common prop groups that apply: `identity`, `variants`,
-    /// `pointer`, `scroll`, `wheel`.
+    /// `pointer`, `scroll`, `wheel`, `focus`.
     common: Vec<String>,
 }
 
@@ -64,6 +64,7 @@ fn element(decl: &'static Element) -> DevtoolsElement {
         (Common::POINTER, "pointer"),
         (Common::SCROLL, "scroll"),
         (Common::WHEEL, "wheel"),
+        (Common::FOCUS, "focus"),
     ];
     DevtoolsElement {
         name: decl.name.to_owned(),
@@ -115,7 +116,7 @@ mod tests {
         assert_eq!(max.category, "number");
         assert!(el.events.contains(&"onChange".to_owned()));
         assert!(el.events.contains(&"onSelect".to_owned()));
-        assert_eq!(el.common, ["identity", "variants"]);
+        assert_eq!(el.common, ["identity", "variants", "focus"]);
     }
 
     #[test]
@@ -124,7 +125,9 @@ mod tests {
         assert!(el.attrs.is_empty());
         assert_eq!(
             el.common,
-            ["identity", "variants", "pointer", "scroll", "wheel"]
+            [
+                "identity", "variants", "pointer", "scroll", "wheel", "focus"
+            ]
         );
     }
 

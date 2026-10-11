@@ -58,6 +58,7 @@ fn groups(element: &Element) -> Vec<&'static str> {
         (Common::POINTER, "BevyPointerProps"),
         (Common::SCROLL, "BevyScrollProps"),
         (Common::WHEEL, "BevyWheelProps"),
+        (Common::FOCUS, "BevyFocusProps"),
     ] {
         if common.contains(group) {
             out.push(name);

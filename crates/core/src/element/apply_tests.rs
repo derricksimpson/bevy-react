@@ -214,10 +214,10 @@ fn editable_value_seeds_on_create() {
 }
 
 /// An `<editableText>` is a working text input: it carries bevy's
-/// `TextInput` (its key/pointer/IME systems act on nothing else), announces
-/// as a text field rather than `TextInput`'s bare default, and blocks the
-/// picks beneath it even at the default pass-through `focusPolicy` — so a
-/// click is one press, and one focus request, on the input.
+/// `TextInput` (its key/pointer/IME systems act on nothing else) and
+/// announces as a text field rather than `TextInput`'s bare default. Like
+/// any element it passes the pointer unless its `focusPolicy` blocks — the
+/// press-to-focus rule (`reconcile::focus`) needs no blocking.
 #[test]
 fn editable_is_a_focusable_text_input() {
     let (mut app, tx) = op_app();
@@ -227,11 +227,15 @@ fn editable_is_a_focusable_text_input() {
             "editableText",
             serde_json::json!({ "ariaLabel": "Name" }),
         ),
-        create(2, "node", serde_json::json!({})),
+        create(
+            2,
+            "editableText",
+            serde_json::json!({ "style": { "focusPolicy": "block" } }),
+        ),
     ])
     .unwrap();
     app.update();
-    let (input, node) = (ent(&app, 1), ent(&app, 2));
+    let (input, blocking) = (ent(&app, 1), ent(&app, 2));
     let world = app.world();
     assert!(world.get::<bevy::ui_widgets::TextInput>(input).is_some());
     assert!(
@@ -244,11 +248,8 @@ fn editable_is_a_focusable_text_input() {
         .expect("an accessibility node");
     assert_eq!(a11y.label(), Some("Name"), "our node, not the default");
     let pickable = |e| *world.get::<bevy::picking::Pickable>(e).unwrap();
-    assert!(pickable(input).should_block_lower);
-    assert!(
-        !pickable(node).should_block_lower,
-        "plain nodes pass through"
-    );
+    assert!(!pickable(input).should_block_lower);
+    assert!(pickable(blocking).should_block_lower);
 }
 
 /// End to end with bevy's own input path: a key typed while the input holds

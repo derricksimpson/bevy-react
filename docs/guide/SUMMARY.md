@@ -54,6 +54,7 @@
 - Events
   - [Mouse](events/mouse.md)
   - [Keyboard](events/keyboard.md)
+  - [Focus](events/focus.md)
   - [Gamepad](events/gamepad.md)
   - [Window](events/window.md)
 - Extending

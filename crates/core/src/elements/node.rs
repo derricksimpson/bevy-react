@@ -89,7 +89,14 @@ pub static ROOT: Element = Element {
     },
     common: Common::IDENTITY,
     default_style: Some(root_style),
-    spawn: Some(|ctx| ctx.spawn(crate::bridge::RRoot)),
+    // A tab group of its own, after the window tree's (bevy's Tab
+    // navigation, when the app adds it).
+    spawn: Some(|ctx| {
+        ctx.spawn((
+            crate::bridge::RRoot,
+            bevy::input_focus::tab_navigation::TabGroup::new(1),
+        ))
+    }),
     ..Element::new("root")
 };
 

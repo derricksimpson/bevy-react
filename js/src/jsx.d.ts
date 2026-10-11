@@ -545,6 +545,23 @@ export interface BevyVariantProps {
   focusStyle?: BevyStyle;
 }
 
+/** Keyboard focus (the `FOCUS` common group). */
+export interface BevyFocusProps {
+  /** Makes the element focusable (Bevy's `TabIndex`): a press on it — or on
+   *  anything inside it that is not focusable itself — gives it the keyboard
+   *  focus, and so can Rust (`InputFocus`). `0` also puts it in the Tab order
+   *  (tree order), a negative value keeps it out, and a positive value sorts
+   *  it **after** every `0`, ascending (unlike HTML). Tab itself needs Bevy's
+   *  `TabNavigationPlugin` in the app. An `<editableText>` is focusable
+   *  without it (`0`). */
+  tabIndex?: number;
+  /** The element gained the keyboard focus. Does not bubble. */
+  onFocus?: () => void;
+  /** The element lost the keyboard focus (fires before the next element's
+   *  `onFocus`). Does not bubble. */
+  onBlur?: () => void;
+}
+
 /** Click and pointer handlers (the `POINTER` common group). */
 export interface BevyPointerProps {
   /** Clicked with the primary (left) mouse button: fires on release over the

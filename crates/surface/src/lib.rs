@@ -74,7 +74,12 @@ impl Plugin for SurfacePlugin {
             // offscreen UI is hit-tested with this frame's cursor.
             .add_systems(
                 PreUpdate,
-                drive_surface_pointer.before(bevy::picking::PickingSystems::ProcessInput),
+                drive_surface_pointer
+                    // After bevy_input: the press it forwards lands in the
+                    // frame of the mouse's own (see the core's transform3d
+                    // pointer).
+                    .after(bevy::input::InputSystems)
+                    .before(bevy::picking::PickingSystems::ProcessInput),
             )
             // After the op drain, so a freshly mounted surface binds the same
             // frame.

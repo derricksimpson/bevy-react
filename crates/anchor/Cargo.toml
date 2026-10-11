@@ -16,7 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Exactly what the code references (see the core manifest).
-bevy = { workspace = true, features = ["bevy_ui", "bevy_picking", "bevy_camera"] }
+bevy = { workspace = true, features = ["bevy_ui", "bevy_picking", "bevy_camera", "bevy_input_focus"] }
 tracing = { workspace = true }
 bevy_react_core = { workspace = true }
 serde = { workspace = true }

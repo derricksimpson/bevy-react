@@ -28,6 +28,7 @@ const COMMON_GROUPS: [iface: string, title: string][] = [
   ["BevyPointerProps", "Pointer events"],
   ["BevyScrollProps", "Scrolling"],
   ["BevyWheelProps", "Wheel"],
+  ["BevyFocusProps", "Focus"],
 ];
 
 interface Decl {

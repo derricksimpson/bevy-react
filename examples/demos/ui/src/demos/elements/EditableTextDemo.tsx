@@ -31,8 +31,8 @@ const PAGE: ExplanationData = {
           side, no onFocus/onBlur round-trip or React focus state needed.
         </ListItem>
         <ListItem>
-          onFocus / onBlur / onSelect report focus and selection; onBlur for the
-          old field fires AFTER onFocus for the new one.
+          onFocus / onBlur / onSelect report focus and selection; the old
+          field's onBlur fires before the new field's onFocus.
         </ListItem>
         <ListItem>
           maxLength caps input; autofocus grabs focus on mount.
@@ -60,19 +60,16 @@ export function EditableTextDemo() {
             Two controlled fields feeding one greeting, with a status box
             mirroring what the element reports: which field is focused, the
             caret or selection range, and whether an IME composition is in
-            flight. Note the blur guard — because{" "}
-            <InlineCode>onBlur</InlineCode> for the old field arrives after{" "}
-            <InlineCode>onFocus</InlineCode> for the new one, clear the focused
-            label only if it still names the field losing focus.
+            flight. Moving between the fields, the old one's{" "}
+            <InlineCode>onBlur</InlineCode> arrives before the new one's{" "}
+            <InlineCode>onFocus</InlineCode>, so the label never flickers back
+            to "none".
           </Paragraph>
-          <Code lang="tsx">{`const blur = (label: string) =>
-  setFocused((f) => (f === label ? null : f));
-
-<editableText
+          <Code lang="tsx">{`<editableText
   value={first}
   onChange={setFirst}
   onFocus={() => setFocused("First name")}
-  onBlur={() => blur("First name")}
+  onBlur={() => setFocused(null)}
   onSelect={(s) => setSel(s)}
   autofocus
   style={inputStyle}
@@ -93,9 +90,8 @@ function NameFormCard() {
 
   const name = [first, last].filter(Boolean).join(" ");
 
-  // `onBlur` fires for the old field after `onFocus` for the new one, so only
-  // clear when the field losing focus is still the one we have recorded.
-  const blur = (label: string) => setFocused((f) => (f === label ? null : f));
+  // The old field's `onBlur` fires before the new field's `onFocus`.
+  const blur = () => setFocused(null);
   const select = (s: {
     selectionStart: number;
     selectionEnd: number;
@@ -117,7 +113,7 @@ function NameFormCard() {
           value={first}
           onChange={setFirst}
           onFocus={() => setFocused("First name")}
-          onBlur={() => blur("First name")}
+          onBlur={blur}
           onSelect={select}
           autofocus
           ariaLabel="First name"
@@ -133,7 +129,7 @@ function NameFormCard() {
           value={last}
           onChange={setLast}
           onFocus={() => setFocused("Last name")}
-          onBlur={() => blur("Last name")}
+          onBlur={blur}
           onSelect={select}
           ariaLabel="Last name"
           maxLength={40}

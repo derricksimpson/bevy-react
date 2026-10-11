@@ -53,10 +53,11 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 ///   font), `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
 ///   `TextLayout`, `ScrollPosition`, `FocusPolicy`/`Pickable` (the
 ///   `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
-///   `Children`/`ChildOf`, plus this crate's own markers and state
-///   ([`ReactInteraction`], the hover/press state — read-only).
+///   `TabIndex` (the `tabIndex` mirror; `TabGroup` on a `<root>` or
+///   `<surface>`), `Children`/`ChildOf`, plus this crate's own markers and
+///   state ([`ReactInteraction`], the hover/press state — read-only).
 /// - Yours: any component the bridge never inserts (`MaterialNode<M>`,
-///   `TabIndex`, audio, your own markers and data).
+///   audio, your own markers and data).
 ///
 /// Child entities you spawn under a React node die with it (`despawn` is
 /// recursive) but are **orphaned** whenever the bridge rebuilds that node's
@@ -152,12 +153,19 @@ pub enum ReactInteraction {
     None,
 }
 
-/// Whether a node with a `focusStyle` [`StyleVariants::focus`] is currently
-/// focused. A *mutated* bool (never inserted/removed while the node lives) so the
-/// interaction-style system re-merges on `Changed<FocusState>` when focus toggles.
-/// Set by the focus observers; read by `apply_interaction_styles`.
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct FocusState(pub bool);
+/// Whether a node with a `focusStyle` ([`StyleVariants::focus`]) holds the
+/// input focus, and whether the focus indicator shows on it. *Mutated*, never
+/// inserted or removed on a focus change, so the interaction-style system
+/// re-merges on `Changed<FocusState>`. Written by `reconcile::sync_focus`
+/// from bevy's `InputFocus`; read by `apply_interaction_styles`.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FocusState {
+    /// The node is bevy's `InputFocus`.
+    pub focused: bool,
+    /// The focus indicator shows (CSS `:focus-visible`): bevy's
+    /// `InputFocusVisible` is set, or the node is a text input.
+    pub visible: bool,
+}
 
 /// Records which pointer handlers a node declared in JS, so the drag-capture
 /// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for

@@ -132,10 +132,11 @@ what a change touches is re-applied). Read them freely; don't write them:
   `ImageNode`
 - `Text`, `TextSpan`, `TextFont`, `TextColor`, `TextLayout`
 - `ScrollPosition`, `FocusPolicy`, `Pickable`, `ReactInteraction`
+- `TabIndex` (from `tabIndex`), `TabGroup` on a `<root>` or `<surface>`
 - `Name`, `Children`, `ChildOf`
 
 Every other component is yours: your own components and markers,
-`MaterialNode<M>`, `TabIndex`, audio. In particular, don't insert a `Name` on
+`MaterialNode<M>`, audio. In particular, don't insert a `Name` on
 a React node yourself: the index doesn't see it, and the next `name` change
 overwrites it.
 

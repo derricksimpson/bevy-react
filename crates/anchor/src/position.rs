@@ -108,6 +108,9 @@ pub(crate) fn spawn_anchor_layer(mut commands: Commands) {
         },
         GlobalZIndex(-1),
         bevy::picking::Pickable::IGNORE,
+        // Overlays join bevy's Tab navigation (the app's opt-in) after the
+        // window tree's focusables.
+        bevy::input_focus::tab_navigation::TabGroup::new(1),
         AnchorLayer,
     ));
 }

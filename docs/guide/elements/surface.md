@@ -121,6 +121,11 @@ at the hit, and moves a virtual pointer to that pixel of the surface.
   `<button>` un-hovers the card around it.
 - A drag ends when the cursor leaves the mesh: the element gets
   `onPointerUp` at the last position on the surface.
+- A click focuses an `<editableText>` or an element with a `tabIndex` as on
+  screen, and typing goes to it. With
+  [Tab navigation](../events/focus.md#tab-navigation) a surface is its own
+  scope: Tab never enters it from the screen, and cycles among its own
+  elements once the focus is inside.
 - The wheel scrolls the scroll container under the pointer and fires
   `onWheel`; screen UI under the cursor takes it first.
 - The mesh needs UVs, with `(0, 0)` at the texture's top-left. If your

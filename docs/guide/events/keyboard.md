@@ -7,9 +7,9 @@ demo: Keyboard
 
 Key presses reach React as two built-in [events](../communication/bevy-to-react.md),
 `keyDown` and `keyUp`. They are window-wide: they fire for every key the app
-window receives, whichever element has focus, and they are typed in every
-generated `bevy.ts` without any Rust code or registration. There are no
-per-element key handlers.
+window receives, whichever element has [focus](focus.md), and they are typed
+in every generated `bevy.ts` without any Rust code or registration. There
+are no per-element key handlers.
 
 ## Usage
 
@@ -98,6 +98,11 @@ see every keystroke, including the ones typed into an `<editableText>`, and
 React can't stop them. If gameplay keys must pause while the player types,
 tell Bevy with a [message](../communication/react-to-bevy.md) from `onFocus`
 and `onBlur`.
+
+Keys that act on the focused element still arrive here: Tab, when the app
+uses [Tab navigation](focus.md#tab-navigation), and the Enter or Space that
+[clicks a focused button](focus.md#keyboard-activation) are also `keyDown`
+events.
 
 ## Limits
 

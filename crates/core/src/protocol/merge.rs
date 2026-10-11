@@ -104,6 +104,10 @@ impl Props {
             on_scroll => scroll_listener,
             on_wheel => wheel,
         );
+        // Read off the retained props when the focus moves: nothing to
+        // re-stamp.
+        self.on_focus |= delta.on_focus;
+        self.on_blur |= delta.on_blur;
         macro_rules! merge_option {
             ($($f:ident => $flag:ident),* $(,)?) => {
                 $(
@@ -116,6 +120,7 @@ impl Props {
         }
         merge_option!(
             scroll_step => scroll_step,
+            tab_index => tab_index,
             name => name,
             shared_tag => shared_tag,
         );
@@ -149,6 +154,7 @@ impl Props {
                 "onScroll" => on_scroll = false => scroll_listener,
                 "onWheel" => on_wheel = false => wheel,
                 "scrollStep" => scroll_step = None => scroll_step,
+                "tabIndex" => tab_index = None => tab_index,
                 "name" => name = None => name,
                 "sharedTag" => shared_tag = None => shared_tag,
                 ;
@@ -157,6 +163,8 @@ impl Props {
                     self.style = element.default_style().cloned();
                     dirty.style = StyleDirty::ALL;
                 }
+                "onFocus" => self.on_focus = false,
+                "onBlur" => self.on_blur = false,
                 // Event-like props have no retained state to unset.
                 "scrollTop" | "scrollLeft" => {}
                 other => {
@@ -354,6 +362,35 @@ mod tests {
         );
         assert_eq!(cached.shared_tag, None);
         assert!(dirty.shared_tag);
+    }
+
+    /// The focus props are retained like `name`: `tabIndex` flags
+    /// `dirty.tab_index` when set and when unset (a fractional value
+    /// truncates); the handler flags turn on with a delta and off through
+    /// `unset`.
+    #[test]
+    fn merge_delta_focus_props_set_and_unset() {
+        let mut cached = props(serde_json::json!({ "tabIndex": 0, "onFocus": true }));
+        assert_eq!(cached.tab_index, Some(0));
+        assert!(cached.on_focus && !cached.on_blur);
+
+        let (dirty, _) = merge(
+            &mut cached,
+            props(serde_json::json!({ "tabIndex": -1.5, "onBlur": true })),
+            &[],
+            &[],
+        );
+        assert_eq!(cached.tab_index, Some(-1));
+        assert!(dirty.tab_index && cached.on_focus && cached.on_blur);
+
+        let (dirty, _) = merge(
+            &mut cached,
+            Props::default(),
+            &["tabIndex".to_string(), "onFocus".to_string()],
+            &[],
+        );
+        assert_eq!(cached.tab_index, None);
+        assert!(dirty.tab_index && !cached.on_focus && cached.on_blur);
     }
 
     /// `unset` resets props (bools to false, options to None); `style_unset`

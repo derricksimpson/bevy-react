@@ -47,6 +47,12 @@ fn surface_mounts_detached_with_name() {
         "a surface is a detached root — never parented into the on-screen tree"
     );
     assert!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabGroup>(surface)
+            .is_some_and(|group| group.modal),
+        "a surface is a Tab scope of its own"
+    );
+    assert!(
         children_of(&app, ent(&app, 1)).is_empty(),
         "the surface's React parent has no Bevy children"
     );

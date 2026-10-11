@@ -40,7 +40,13 @@ pub static SURFACE: Element = Element {
 
 fn spawn_surface(ctx: &mut SpawnCtx) -> Entity {
     let target = ctx.props.attrs.get(&TARGET).cloned().unwrap_or_default();
-    ctx.spawn(RSurface(target))
+    // A Tab scope of its own (bevy's Tab navigation, when the app adds it):
+    // Tab never enters a surface from the screen, and cycles among its own
+    // focusables once a click put the focus inside.
+    ctx.spawn((
+        RSurface(target),
+        bevy::input_focus::tab_navigation::TabGroup::modal(),
+    ))
 }
 
 /// The default style of a `<surface>`: it fills the offscreen texture (the

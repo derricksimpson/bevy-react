@@ -11,6 +11,7 @@ import { AnchorDemo } from "./demos/AnchorDemo";
 import { MouseDemo } from "./demos/events/MouseDemo";
 import { GamepadDemo } from "./demos/events/gamepadDemo/GamepadDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
+import { FocusDemo } from "./demos/events/FocusDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
 import { CustomElementsDemo } from "./demos/extending/CustomElementsDemo";
@@ -158,6 +159,7 @@ export const DEMOS: DemoItem[] = [
     children: [
       { label: "Mouse", component: MouseDemo },
       { label: "Keyboard", component: KeyboardDemo },
+      { label: "Focus", component: FocusDemo },
       { label: "Gamepad", component: GamepadDemo },
       { label: "Window", component: WindowDemo },
     ],

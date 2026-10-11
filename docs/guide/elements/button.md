@@ -42,6 +42,7 @@ state. See [State styles](node.md#state-styles) for the overlay rules.
 | Default `focusPolicy` | `"pass"`                                 | `"block"`                            |
 | Owns clicks           | Only with `onClick` or an `onPointer*`   | Always, with or without `onClick`    |
 | Hover and press state | Tracked only with state styles, handlers | Always tracked (`ReactInteraction`)  |
+| Focusable             | With a `tabIndex`                        | With a `tabIndex`                    |
 | Bevy components       | `Node`                                   | `Node`, `Button`, `ReactInteraction` |
 
 ### It blocks the pointer
@@ -70,6 +71,18 @@ stay hovered.
   elsewhere does not click. For other buttons use `onPointerDown` and read
   `e.button`. See [Mouse](../events/mouse.md).
 
+## Keyboard
+
+A `<button>` takes the keyboard focus only with a `tabIndex`. While it is
+focused, Enter and Space click it: `onClick` fires once per key press.
+`focusStyle` shows the focus. See [Focus](../events/focus.md).
+
+```tsx
+<button tabIndex={0} onClick={start} focusStyle={{ borderColor: "#7aa2f7" }}>
+  <text>Start</text>
+</button>
+```
+
 ## Building a button component
 
 The element is deliberately bare: wrap it once in your own component with
@@ -86,9 +99,6 @@ flattens while pressed.
 
 - There is no `disabled` attribute. To disable a button, drop its `onClick`
   (it still swallows the click) and style it as disabled.
-- A `<button>` is not focusable and has no keyboard activation: Tab, Enter
-  and Space don't reach it. `focusStyle` applies only if your Rust code
-  gives the entity Bevy's `InputFocus`.
 - There is no `ariaLabel`. The button is named for assistive tech from the
   text under it (nested wrappers included), refreshed when its direct
   children change, so an icon-only button has no name.

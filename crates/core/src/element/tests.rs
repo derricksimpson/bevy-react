@@ -140,9 +140,11 @@ fn decode_reports_unknown_and_ignored_props() {
     assert!(node.attrs.is_empty());
     let root = Props::decode_for(
         "root",
-        serde_json::json!({ "hoverStyle": { "width": 1 }, "onClick": true, "name": "n" }),
+        serde_json::json!({
+            "hoverStyle": { "width": 1 }, "onClick": true, "tabIndex": 0, "name": "n"
+        }),
     );
-    assert!(root.hover_style.is_none() && !root.on_click);
+    assert!(root.hover_style.is_none() && !root.on_click && root.tab_index.is_none());
     assert_eq!(
         root.name.as_deref(),
         Some("n"),
@@ -166,6 +168,7 @@ fn decode_reports_unknown_and_ignored_props() {
             ("unknownProp", "nope"),
             ("propIgnored", "hoverStyle"),
             ("propIgnored", "onClick"),
+            ("propIgnored", "tabIndex"),
             ("unknownProp", "extra"),
         ]
     );

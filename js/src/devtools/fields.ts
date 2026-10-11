@@ -59,6 +59,7 @@ const ELEMENTS = new Map<string, ElementInfo>();
 /** The common scalar props the inspector edits on elements with the matching
  *  group (the act-now scroll offsets are editable too — an edit acts once). */
 const COMMON_EDITABLE: Record<string, [string, FieldCategory][]> = {
+  focus: [["tabIndex", "number"]],
   scroll: [
     ["scrollTop", "number"],
     ["scrollLeft", "number"],

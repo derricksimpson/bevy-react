@@ -109,15 +109,16 @@ const [sel, setSel] = useState({ start: 0, end: 0 });
 
 ## Focus and keyboard
 
-- A field takes focus when clicked, when it mounts with `autofocus`, or when
-  your Rust code sets Bevy's `InputFocus` to it. Clicking anywhere else blurs
-  it, as on the web; so does Escape, and Rust clearing `InputFocus`.
+- A field is focusable without a `tabIndex` (it acts as `tabIndex={0}`; set
+  `-1` to keep it out of the Tab order). It takes focus when clicked, when it
+  mounts with `autofocus`, by Tab, or when your Rust code sets Bevy's
+  `InputFocus` to it. Clicking anywhere else blurs it, as on the web; so
+  does Escape, and Rust clearing `InputFocus`. See
+  [Focus](../events/focus.md).
 - `focusStyle` applies while the field is focused, with no React state.
   `hoverStyle` and `pressStyle` work as on a `<node>`.
-- Don't rely on the order of one field's `onBlur` and the next field's
-  `onFocus`. When tracking the focused field, clear it on blur only if it
-  still names the field losing focus:
-  `onBlur={() => setFocused((f) => (f === "first" ? null : f))}`.
+- When the focus moves between two fields, the first one's `onBlur` fires
+  before the second one's `onFocus`.
 - Editing keys are Bevy's: arrows, Home and End, word moves and deletes with
   Ctrl (Alt on macOS), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V with the system
   clipboard (Cmd on macOS), and Escape to collapse the selection and leave
@@ -168,9 +169,8 @@ See [Keyboard](../events/keyboard.md) for the event payload.
   as shown above.
 - Changing `multiline` after mount switches Enter-to-newline but not
   wrapping. Set it when the field mounts.
-- Tab doesn't move focus between fields by default. Each field carries a
-  `TabIndex(0)`, but Tab navigation needs Bevy's `TabNavigationPlugin` and a
-  `TabGroup` on an ancestor, which bevy-react does not add.
+- Tab moves focus between fields only once the app adds Bevy's
+  `TabNavigationPlugin`. See [Focus](../events/focus.md#tab-navigation).
 
 See [`<editableText>`](../reference/elements.md#editableText) in the element
 reference.

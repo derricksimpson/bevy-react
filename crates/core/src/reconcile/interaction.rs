@@ -67,7 +67,7 @@ pub fn apply_interaction_styles(
         let state_changed = interaction.as_ref().is_some_and(|i| i.is_changed())
             || focus.as_ref().is_some_and(|f| f.is_changed());
         let interaction = interaction.as_deref().copied();
-        let focused = focus.as_deref().is_some_and(|f| f.0);
+        let focused = focus.as_deref().is_some_and(|f| f.focused);
         // What changed: a base-only delta's properties; on a state edge the
         // properties any variant sets (hover-in/out swaps exactly those);
         // after a variant swap or a promotion poke, everything.
@@ -460,7 +460,10 @@ mod tests {
             .unwrap();
         app.update();
         let input = ent(&app, 1);
-        app.world_mut().get_mut::<FocusState>(input).unwrap().0 = true;
+        app.world_mut()
+            .get_mut::<FocusState>(input)
+            .unwrap()
+            .focused = true;
 
         let top = |app: &App| app.world().get::<BorderColor>(input).unwrap().top;
         for (state, when) in [

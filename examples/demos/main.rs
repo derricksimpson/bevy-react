@@ -294,6 +294,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         .add_plugins(sparkle::SparklePlugin)
         // The app-registered `spotlight` style: the gallery chrome's cursor light.
         .add_plugins(spotlight::SpotlightPlugin)
+        // Tab / Shift+Tab move the keyboard focus (the "Focus" demo). Bevy's
+        // own plugin: bevy-react marks its UI roots as tab groups and leaves
+        // the key to the app.
+        .add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin)
         .add_plugins((
             AmbientScenePlugin,
             CubesScenePlugin,

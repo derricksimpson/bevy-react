@@ -8,13 +8,15 @@
 //! common prop stamps shared by both), `stats` (instrumentation + the
 //! `SystemParam` bundles), `events` (click/scroll collectors + shared
 //! utilities), `picking` (pointer state from bevy_picking), `pointer` (drags),
-//! `hover` (enter/leave/hover), `interaction` (the hover/press/focus
-//! restyle), `text_cascade` (text style inheritance). Submodules are private;
-//! everything is re-exported here, so `crate::reconcile::X` is the one path.
+//! `hover` (enter/leave/hover), `focus` (which element a press focuses),
+//! `interaction` (the hover/press/focus restyle), `text_cascade` (text style
+//! inheritance). Submodules are private; everything is re-exported here, so
+//! `crate::reconcile::X` is the one path.
 
 mod apply;
 mod create;
 mod events;
+mod focus;
 mod hover;
 mod interaction;
 pub(crate) mod picking;
@@ -34,6 +36,8 @@ pub(crate) mod test_util;
 pub use apply::apply_js_ops;
 pub(crate) use events::{Modifiers, climb};
 pub use events::{collect_scroll_events, collect_ui_events};
+pub use focus::sync_focus;
+pub(crate) use focus::{add_press_rule, click_focused_button};
 pub use hover::collect_hover_events;
 pub use interaction::apply_interaction_styles;
 pub use picking::{fold_span_hits, sync_interactions};

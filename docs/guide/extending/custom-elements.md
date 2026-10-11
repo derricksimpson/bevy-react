@@ -128,6 +128,7 @@ warning:
 | `Common::POINTER`  | `onClick`, `onPointerEnter`, `onPointerLeave`, …    |
 | `Common::SCROLL`   | `onScroll`, `scrollTop`, `scrollLeft`, `scrollStep` |
 | `Common::WHEEL`    | `onWheel`                                           |
+| `Common::FOCUS`    | `tabIndex`, `onFocus`, `onBlur`                     |
 
 Combine groups with `.with(..)`. `default_style` builds a `Style` with
 `Style::set` and the core property statics in `bevy_react::style::props`

@@ -11,7 +11,7 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 
 use super::apply::resolve;
 use super::stamps::{
-    apply_animated, apply_pointer_handlers, apply_scroll_listener, apply_scroll_step,
+    apply_animated, apply_focus, apply_pointer_handlers, apply_scroll_listener, apply_scroll_step,
     apply_style_variants_delta, apply_wheel_listener, update_controlled_scroll, variant_keys,
 };
 use crate::bridge::{JsBridge, StyleVariants};
@@ -224,6 +224,9 @@ pub(super) fn apply_update(
     }
     if common.contains(Common::WHEEL) && dirty.wheel {
         apply_wheel_listener(&mut ec, &props, false);
+    }
+    if common.contains(Common::FOCUS) && dirty.tab_index {
+        apply_focus(&mut ec, &props, flags, false);
     }
     // Bindings are derived from the merged style and attributes, so any
     // change to either may add/remove/retarget them (bind/unbind is an

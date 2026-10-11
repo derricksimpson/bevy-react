@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`fontSize` in `em`.** On a nested `<text>` it is a multiple of the
   enclosing text's size (`"1em"` takes the parent's size); on a block, of
   the root size.
+- **Keyboard focus on every element: `tabIndex`, `onFocus`, `onBlur`.** An
+  element with a `tabIndex` takes the keyboard focus when pressed (or from
+  Rust, through Bevy's `InputFocus`), `focusStyle` applies to it, and
+  `onFocus`/`onBlur` report it. An `<editableText>` stays focusable without
+  one. A press focuses the topmost element under the pointer that is
+  focusable or has a focusable ancestor: a label focuses the button around
+  it, and a pass-through overlay doesn't take the focus from what is
+  beneath. See the new Focus guide page.
+- **Tab navigation in one line.** Add Bevy's `TabNavigationPlugin` and Tab /
+  Shift+Tab walk the elements with `tabIndex >= 0`. bevy-react marks its UI
+  roots as tab groups: the window tree, then each `<root>` and the
+  `<anchor>` overlays; a `<surface>` is a scope of its own.
+- **Enter and Space click a focused `<button>`.** Its `onClick` fires once
+  per key press. A `<button>` is focusable only with a `tabIndex`, so
+  existing buttons don't start taking those keys.
 - **`onPointerHover`.** Fires on each frame the pointer moved while over the
   element (between its `onPointerEnter` and `onPointerLeave`), a button held
   or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only
@@ -72,8 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     child (a `<button>`) un-hovers its ancestors, a press on it no longer
     presses or drags an ancestor with pointer handlers, and of overlapping
     elements with pointer handlers only the topmost gets the drag.
-  - An `<editableText>` keeps hover and presses from what lies beneath it,
-    whatever its `focusPolicy`; so does a scrollbar.
+  - A scrollbar keeps hover and presses from what lies beneath it.
   - Drags run per pointer: every finger drags its own element (one drag ran
     at a time).
   - `onPointerHover` goes to the elements under the moving pointer. A
@@ -95,8 +109,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   location and the parking location separately.
 - **`<editableText>` follows Bevy 0.20's text input.** The entity carries
   `bevy::ui_widgets::TextInput` next to `EditableText`. Clicking anywhere
-  else now blurs the field, and so does Escape. A field also keeps clicks
-  and scene picking from what lies beneath it, whatever its `focusPolicy`.
+  else now blurs the field, and so does Escape.
+- **Focus events and styles follow Bevy's `InputFocus` directly.** The
+  `onBlur` of the element losing the focus fires before the `onFocus` of the
+  one gaining it, each at most once per frame, and `focusStyle` applies in
+  the frame the focus moves (it was a frame late). An element that unmounts
+  while focused gives the focus up at once. `TabIndex` on a React entity is
+  now written by bevy-react (set `tabIndex`). Breaking for Rust code:
+  `elements::editable::{FOCUS, BLUR, on_focus_gained, on_focus_lost}` are
+  gone, `FocusState` is `{ focused, visible }`, `Common::ALL` includes the
+  new `Common::FOCUS`, and a custom element may no longer declare an
+  attribute named `tabIndex` or an event named `focus` or `blur`.
 - **`overflow` clips follow transforms and layout transitions.** A rotated
   or scaled clipping node clips its children along its transformed box (Bevy
   0.20), composited layers included. With `transition: { layout }` the clip

@@ -32,8 +32,10 @@ impl Common {
     pub const SCROLL: Self = Self(1 << 3);
     /// `onWheel`.
     pub const WHEEL: Self = Self(1 << 4);
+    /// `tabIndex` + `onFocus` / `onBlur`.
+    pub const FOCUS: Self = Self(1 << 5);
     /// Every group.
-    pub const ALL: Self = Self(0b11111);
+    pub const ALL: Self = Self(0b111111);
 
     /// The union of two sets.
     pub const fn with(self, other: Self) -> Self {

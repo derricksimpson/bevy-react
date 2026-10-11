@@ -22,7 +22,7 @@ devtools = ["bevy_react_core/devtools"]
 
 [dependencies]
 # Exactly what the code references (see the core manifest).
-bevy = { workspace = true, features = ["bevy_ui", "bevy_camera", "bevy_light", "bevy_render", "bevy_mesh", "bevy_asset", "bevy_picking", "mesh_picking"] }
+bevy = { workspace = true, features = ["bevy_ui", "bevy_camera", "bevy_light", "bevy_render", "bevy_mesh", "bevy_asset", "bevy_picking", "mesh_picking", "bevy_input_focus"] }
 bevy_react_core = { workspace = true }
 
 [dev-dependencies]

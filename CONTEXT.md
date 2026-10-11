@@ -177,9 +177,14 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   element.
 - **Common prop** — a prop every element shares, fixed on `Props` rather
   than registered: `name`/`sharedTag` (identity), the style variants, the
-  pointer handlers, the scroll props, `onWheel`. Grouped by `Common`; an
-  element declares the groups that apply, and a common prop outside them is
-  ignored with a warning.
+  pointer handlers, the scroll props, `onWheel`, the focus props
+  (`tabIndex`/`onFocus`/`onBlur`). Grouped by `Common`; an element declares
+  the groups that apply, and a common prop outside them is ignored with a
+  warning.
+- **Focusable** — an element that can hold Bevy's `InputFocus`: one with a
+  `tabIndex` (mirrored as Bevy's `TabIndex`), or a text input. A press
+  focuses the topmost pressed element that is focusable or has a focusable
+  ancestor (the click rule), whatever its `focusPolicy`.
 - **Act-now attribute** — an attribute whose presence in a delta means "do
   this once" (push a controlled `value`, replay a `draw` list): never
   retained, and removing it from the JSX props is a no-op. An update op

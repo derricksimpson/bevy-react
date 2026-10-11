@@ -50,6 +50,7 @@ export function App() {
 | `hoverStyle`, `pressStyle`, `focusStyle` | Style overlays for interaction states                     | [State styles](#state-styles) below                  |
 | `onClick`, `onPointer*`                  | Click, drag and hover events                              | [Mouse](../events/mouse.md)                          |
 | `onWheel`                                | Raw wheel deltas over the element                         | [Mouse](../events/mouse.md)                          |
+| `tabIndex`, `onFocus`, `onBlur`          | Keyboard focus                                            | [Focus](../events/focus.md)                          |
 | `scrollTop`, `scrollLeft`, `scrollStep`  | Controlled scrolling of an `overflow: "scroll"` container | [Overflow](../styling/overflow.md)                   |
 | `onScroll`                               | The scroll offset changed                                 | [Overflow](../styling/overflow.md)                   |
 | `name`                                   | Names the Bevy entity, so Rust systems can find it        | [Named nodes](../communication/named-nodes.md)       |
@@ -102,9 +103,9 @@ state, no re-render.
   meanwhile.
 - `{ animated }` bindings work in the base `style` only. A binding in a state
   style is ignored with a `styleBinding` warning.
-- Only `<editableText>` takes focus on its own (by click or `autofocus`). On
-  other elements, `focusStyle` applies only while your Rust code gives the
-  entity Bevy's `InputFocus`.
+- `focusStyle` applies while the element holds the keyboard focus: an
+  `<editableText>`, or any element with a `tabIndex`. See
+  [Focus](../events/focus.md).
 
 ## Pointer behavior
 

@@ -40,12 +40,6 @@ everything behind it:
 An explicit value overrides the element's default, on a `<button>` too. An
 unknown value reports a `focusPolicy` warning and acts as `"pass"`.
 
-An [`<editableText>`](../elements/editable-text.md) is the exception: it
-keeps hover, presses, clicks and scene picking from what lies beneath it
-whatever its `focusPolicy`. A click that also reached the nodes beneath would
-blur the field it just focused. So a hover-styled card loses its `hoverStyle`
-while the pointer is on an input inside it.
-
 ## What blocking stops
 
 Under the pointer, nodes are visited from the topmost down (see

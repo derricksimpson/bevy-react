@@ -4,6 +4,8 @@
 //! a re-render converges on exactly the declared props; `fresh` (the create
 //! path) skips the clears — a freshly spawned entity has nothing to remove.
 
+use bevy::a11y::AccessibilityNode;
+use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, ScrollPosition};
@@ -86,8 +88,8 @@ pub(super) fn apply_style_variants(
             keys: variant_keys(props),
             restyle: Restyle::Full,
         });
-        // Hover/press are driven by `ReactInteraction`; focus by `FocusState` (toggled
-        // by the focus observers). Add each only for the variants present.
+        // Hover/press are driven by `ReactInteraction`; focus by `FocusState`
+        // (written by `sync_focus`). Add each only for the variants present.
         if props.hover_style.is_some() || props.press_style.is_some() {
             ec.insert_if_new(ReactInteraction::default());
         }
@@ -283,6 +285,36 @@ pub(super) fn warn_ignored_styles(
     }
 }
 
+/// Stamp (or clear) bevy's `TabIndex` from `tabIndex` — what makes an element
+/// focusable: by a press (`reconcile::focus`), by Tab (bevy's
+/// `TabNavigationPlugin`, the app's opt-in) and from Rust. A text input is
+/// focusable without the prop (`0`). `onFocus`/`onBlur` need no stamp:
+/// `sync_focus` reads them off the retained props.
+pub(crate) fn apply_focus(
+    ec: &mut EntityCommands,
+    props: &Props,
+    flags: crate::ext::ElementFlags,
+    fresh: bool,
+) {
+    let implied = (flags.text == crate::ext::TextRole::Input).then_some(0);
+    match props.tab_index.or(implied) {
+        Some(index) => {
+            ec.insert(TabIndex(index));
+            // bevy_winit stops updating the accessibility tree while the
+            // focused entity has no node in it. A `<button>`'s or an input's
+            // own node is already there.
+            // ponytail: left behind when `tabIndex` is removed later.
+            ec.insert_if_new(AccessibilityNode(accesskit::Node::new(
+                accesskit::Role::GenericContainer,
+            )));
+        }
+        None if !fresh => {
+            ec.remove::<TabIndex>();
+        }
+        None => {}
+    }
+}
+
 /// Toggle the [`ScrollListener`] marker so
 /// [`collect_scroll_events`](crate::reconcile::collect_scroll_events) reports
 /// this node's `ScrollPosition` changes only while an `onScroll` handler is
@@ -321,8 +353,8 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props, fresh: b
 
 /// The common prop stamps of a freshly spawned element, per the groups its
 /// element declares: the style variants (over the effective style `base`),
-/// the pointer handlers, and the `{ animated }` bindings (always — style and
-/// attribute bindings alike).
+/// the pointer handlers, the tab index, and the `{ animated }` bindings
+/// (always — style and attribute bindings alike).
 ///
 /// **Create only** — the stamp/clear helpers above with `fresh` set: the entity
 /// is freshly spawned, so every "absent → remove" arm is skipped.
@@ -341,6 +373,9 @@ pub(crate) fn stamp_common(
     }
     if common.contains(Common::POINTER) {
         apply_pointer_handlers(ec, props, flags, true);
+    }
+    if common.contains(Common::FOCUS) {
+        apply_focus(ec, props, flags, true);
     }
     apply_animated(ec, animated, id, props, true);
 }

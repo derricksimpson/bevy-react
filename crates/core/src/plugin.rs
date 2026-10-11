@@ -13,8 +13,7 @@ use bevy::window::CustomCursorImage;
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::elements::editable::{
-    apply_pending_selections, on_focus_gained, on_focus_lost, on_text_edit_change,
-    sync_editable_a11y,
+    apply_pending_selections, on_text_edit_change, sync_editable_a11y,
 };
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
@@ -646,15 +645,6 @@ impl Plugin for ReactUiPlugin {
             PreUpdate,
             (dispatch_react_messages, dispatch_react_requests),
         )
-        // Remap the window cursor into 3D-transformed layers (inverse
-        // homography → virtual pointer) before input processing, like the
-        // surface driver. Reads last frame's matrices — the composite quad
-        // the user sees is last frame's too, so picking matches the visual.
-        .add_systems(
-            PreUpdate,
-            crate::layer::pick3d::drive_transform3d_pointer
-                .before(bevy::picking::PickingSystems::ProcessInput),
-        )
         // Scope hits around the transformed-layer remap (stale layout rects
         // for the mouse, layer-membership for the virtual pointer). Clipping
         // needs no pass of ours: bevy_ui's backend tests each node's
@@ -890,6 +880,30 @@ impl Plugin for ReactUiPlugin {
                 .before(apply_interaction_styles)
                 .before(AnimationSet::Apply),
         );
+        // Remap the window cursor into 3D-transformed layers (inverse
+        // homography → virtual pointer) before input processing, like the
+        // surface driver. Reads last frame's matrices — the composite quad
+        // the user sees is last frame's too, so picking matches the visual.
+        crate::layer::pick3d::add_pointer_driver(app);
+        // Which element a press focuses (replacing what bevy's pointer focus
+        // recorded for it).
+        crate::reconcile::add_press_rule(app);
+        // `InputFocus` → `FocusState` (the `focusStyle` overlay) and the
+        // `focus`/`blur` events. After the op drain (a same-commit
+        // `autofocus` and a freshly stamped `FocusState` are visible), before
+        // the restyle, so the style lands in the frame the focus moved. After
+        // the keyboard collector, like the DOM: the `keyDown` that takes the
+        // focus away (Escape) reaches React before the `blur` it causes, so a
+        // field can tell a cancel from a commit.
+        app.add_systems(
+            Update,
+            crate::reconcile::sync_focus
+                .after(apply_js_ops)
+                .after(crate::keyboard::collect_keyboard_events)
+                .before(apply_interaction_styles),
+        );
+        // Enter and Space click a focused `<button>`.
+        app.add_observer(crate::reconcile::click_focused_button);
         // `InteractionSyncSet`: a feature fills the pointer state the core
         // cannot derive — an `EventLocalPos` (an SVG shape's user-space
         // cursor), or a `ReactInteraction` for an entity no picking backend
@@ -1053,12 +1067,10 @@ impl Plugin for ReactUiPlugin {
 
         // `editableText` edits arrive as Bevy's `TextEditChange` trigger; an observer
         // turns real changes into its `change` event and selection moves into
-        // `select`. Two more observers bridge focus gain/loss to `focus`/`blur`.
+        // `select`.
         app.add_observer(on_text_edit_change);
         // A `<button>`'s accessible label, from the text mounted under it.
         app.add_systems(Update, crate::elements::label_buttons.after(ReactApplySet));
-        app.add_observer(on_focus_gained);
-        app.add_observer(on_focus_lost);
 
         // Controlled-selection writes and the a11y value sync run after Bevy's
         // text-edit pass (`EditableTextSystems`) so they see this frame's applied
@@ -1220,6 +1232,9 @@ fn setup(
                 should_block_lower: false,
                 ..default()
             },
+            // Bevy's Tab navigation (the app's opt-in) walks the focusables
+            // under tab groups: the window tree is the first.
+            bevy::input_focus::tab_navigation::TabGroup::new(0),
             UiRoot,
         ))
         .id();
