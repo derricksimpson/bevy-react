@@ -102,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   …) map to Bevy's generic families, which need its `system_font_discovery`
   feature. A single name behaves as before.
 
+
 ### Changed
 
 - **Bevy 0.20** (breaking). bevy-react now builds against Bevy 0.20, which
@@ -199,6 +200,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A node with `width: "100%"` and `maxWidth` (or a content-sized one with
+  `maxWidth`, in a row) reserved the height its wrapped text or `flexWrap`
+  children take at the unclamped width, so the content spilled over what
+  followed. Bevy 0.20 measures it at the clamped width.
 - A composited layer captured while its subtree was hidden stayed empty once
   shown: a `morphFilter` or `opacity` group inside an `<anchor>` (which
   hides until its first layout) drew nothing until something else

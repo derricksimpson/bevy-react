@@ -4,7 +4,6 @@ import { DemoRow, Example } from "@/components";
 import { Code, CodeTabs } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, Fonts, FontSizes } from "@/theme";
-import { useContentWidth } from "@/hooks";
 
 const PAGE: ExplanationData = {
   title: "Cursors",
@@ -85,13 +84,9 @@ function CursorKeywordsDemo() {
 }
 
 function CursorKeywordsCard() {
-  // A px width, not `"100%"` + `maxWidth`: that pair under-measures a wrapping
-  // row, and the swatches spill out of the card. 50 = the example stage's
-  // padding plus the card's rim.
-  const width = Math.min(GRID_WIDTH, useContentWidth() - 50);
   return (
     <>
-      <node style={{ ...grid, width }}>
+      <node style={grid}>
         {CURSORS.map((cursor) => (
           <node key={cursor} style={{ ...swatch, cursor }}>
             <text style={label}>{cursor}</text>
@@ -144,6 +139,8 @@ function CustomCursorCard() {
 const GRID_WIDTH = 420;
 
 const grid: BevyStyle = {
+  width: "100%",
+  maxWidth: GRID_WIDTH,
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 10,

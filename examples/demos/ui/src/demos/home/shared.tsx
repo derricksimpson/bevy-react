@@ -69,9 +69,11 @@ const panelCaption: BevyStyle = {
   textAlign: "center",
 };
 
-/** Width of the card's contents on a phone, `undefined` on desktop. Wrapped
- * text under-measures its height at `width: "100%"` (TODO, Bugs); an explicit
- * px width measures right, so wrapping text on the card takes it from here. */
+/** Width of the card's contents on a phone, `undefined` on desktop. Under
+ * Bevy 0.19 wrapped text under-measured its height at `width: "100%"` and an
+ * explicit px width measured right, so wrapping text on the card takes it
+ * from here. Bevy 0.20 fixed the measure; the card was not re-tested without
+ * this. */
 export function useCardContentWidth(): number | undefined {
   const isMobile = useIsMobile();
   const win = useWindowSize();

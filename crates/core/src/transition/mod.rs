@@ -48,6 +48,8 @@ mod layout_fixed_tests;
 #[cfg(test)]
 mod layout_shared_tests;
 #[cfg(test)]
+mod layout_taffy_tests;
+#[cfg(test)]
 pub(crate) mod layout_tests;
 #[cfg(test)]
 mod radius_tests;

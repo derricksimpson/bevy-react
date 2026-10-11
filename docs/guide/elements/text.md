@@ -296,10 +296,6 @@ A `<text>` block is a full element: it takes pointer handlers, state styles
 - Unsetting both `textAlign` and `lineBreak`, including when a state style
   that set them ends, keeps the last alignment and wrapping. Set
   `textAlign: "left"` and `lineBreak: "wordBoundary"` explicitly instead.
-- Wrapped text inside a node that combines a percentage `width` with
-  `maxWidth` can be measured at the unclamped width, so the node reserves
-  too little height and overlaps what follows. Size such a container in
-  pixels.
 - One shadow per block, without blur.
 
 See [`<text>`](../reference/elements.md#text) in the element reference, and

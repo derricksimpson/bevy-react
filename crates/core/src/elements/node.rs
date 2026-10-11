@@ -154,11 +154,12 @@ pub static ROOT: Element = Element {
 /// (`style.globalZIndex` overrides in either direction; the devtools panel
 /// claims `i32::MAX` explicitly).
 ///
-/// It defaults to a column, like the main UI root: bevy's own default is
-/// `row`, but a row container mis-measures a single content-sized child that
-/// has `maxWidth` + wrapping text (sized at max-content during the row's
-/// main-axis pass, then clamped and wrapped — its height committed one line
-/// short).
+/// It defaults to a column, like the main UI root (bevy's own default is
+/// `row`): the direction a top-level container of an app is expected to
+/// have. Under Bevy 0.19 it also sidestepped a measure bug — a row sized a
+/// content-sized child with `maxWidth` + wrapping text one line short — that
+/// Bevy 0.20 fixed (`transition/layout_taffy_tests.rs` pins it); the default
+/// stays, since apps rely on it.
 ///
 /// It fills its camera's viewport in viewport units (`100vw` × `100vh`), not
 /// `100%`: bevy_ui lays a root out as an item of an implicit grid whose auto

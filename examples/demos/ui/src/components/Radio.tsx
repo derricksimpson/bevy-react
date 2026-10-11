@@ -28,7 +28,9 @@ export type RadioProps<T extends RadioValue = RadioValue> = {
   /** Let the pills wrap onto more lines in a narrow container. Off by
    *  default: taffy breaks flex lines with a strict float compare, so at a
    *  fractional scale factor a group sized to its own content can spuriously
-   *  wrap its last pill. Opt in only where the row really can outgrow the card. */
+   *  wrap its last pill — still so with taffy 0.14 (Bevy 0.20), reproduced by
+   *  the core's ignored `content_sized_wrap_row_keeps_one_line_at_a_fractional_scale`
+   *  test. Opt in only where the row really can outgrow the card. */
   wrap?: boolean;
   onChange: (value: T) => void;
 };
