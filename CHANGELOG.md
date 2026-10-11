@@ -119,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scrolled out of its container, a hidden one, or one beneath a
   `focusPolicy: "block"` node. The cursor now follows the same hover as
   `hoverStyle` and clicks.
+- Releasing a drag over an ancestor with `onClick` clicked it: a slider
+  dragged and released on the card around it clicked the card. While an
+  element is dragged, the click can't go to what lies beneath it. A
+  gesture's `onPointerUp` now always comes before its `onClick` (the order
+  used to vary).
 - A touch neither hovered nor pressed its element while the mouse cursor
   rested elsewhere in the window, and a second finger pressed nothing.
 - Pointer events inside a `<surface>` with a `scale_factor` other than 1

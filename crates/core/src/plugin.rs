@@ -694,7 +694,9 @@ impl Plugin for ReactUiPlugin {
             Update,
             (
                 apply_js_ops.in_set(ReactApplySet),
-                collect_ui_events,
+                // After the drag collector: a click belongs to the drag its
+                // release just ended, and `pointerUp` goes out before `click`.
+                collect_ui_events.after(collect_pointer_events),
                 // Forward window-global keystrokes to React as built-in named
                 // events (`onKeyDown`/`onKeyUp`). Node-independent: reads Bevy's
                 // `KeyboardInput` messages directly, no reconciler state needed.

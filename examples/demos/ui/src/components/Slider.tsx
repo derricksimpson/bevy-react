@@ -65,7 +65,6 @@ const track: BevyStyle = {
   borderRadius: 6,
   backgroundColor: Colors.control,
   cursor: "pointer",
-  focusPolicy: "block",
 };
 
 const fillStyle: BevyStyle = {

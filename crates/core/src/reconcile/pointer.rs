@@ -17,6 +17,7 @@ use crate::layer::pick3d::Transform3dPointer;
 
 /// One element being dragged: an `onPointer*` element a pointer pressed, any
 /// button, until that button is released.
+#[derive(Clone)]
 pub(crate) struct Drag {
     pub entity: Entity,
     /// The pointer whose location and inputs the drag follows.
@@ -24,6 +25,11 @@ pub(crate) struct Drag {
     /// The button that began it — the one whose release ends it; any other
     /// button pressed meanwhile is ignored.
     pub button: PointerButton,
+    /// What the press also landed on *above* the element (a pass-through
+    /// stack presses everything under the pointer): the label inside it, a
+    /// badge laid over it. Still the gesture's to click — what lies beneath
+    /// the element is not (see `collect_ui_events`).
+    pub above: Vec<Entity>,
     /// The last positions reported (`x`/`y` and `clientX`/`clientY`): what a
     /// move is measured against, and the fallback once the pointer is gone.
     last_pos: Vec2,
@@ -36,8 +42,11 @@ pub(crate) struct Drag {
 /// — that touch is *contested* there, and a pan along a scrollable axis
 /// steals it — and the click collector which element a gesture belongs to.
 #[derive(Resource, Default)]
-pub(crate) struct ActiveDrag {
+pub struct ActiveDrag {
     drags: Vec<Drag>,
+    /// The drags the last run ended: the release that ended them is the one
+    /// their gesture's click rides, and the click collector runs after.
+    ended: Vec<Drag>,
 }
 
 impl ActiveDrag {
@@ -48,17 +57,19 @@ impl ActiveDrag {
         button: PointerButton,
         pos: Vec2,
         abs: Vec2,
-    ) {
+    ) -> &mut Drag {
         self.drags.push(Drag {
             entity,
             pointer,
             button,
+            above: Vec::new(),
             last_pos: pos,
             last_abs: abs,
         });
+        self.drags.last_mut().unwrap()
     }
 
-    /// The drag `device` (see [`device`]) is running.
+    /// The drag `device` (see [`device`]) is running — or ended this frame.
     pub(crate) fn of_device(
         &self,
         of: PointerId,
@@ -66,6 +77,7 @@ impl ActiveDrag {
     ) -> Option<&Drag> {
         self.drags
             .iter()
+            .chain(&self.ended)
             .find(|drag| device(drag.pointer, transform3d) == of)
     }
 
@@ -139,12 +151,16 @@ pub fn collect_pointer_events(
         );
     };
 
+    // Last frame's releases are history: every device they freed is idle.
+    active.ended.clear();
+
     // Begin: per idle device, the best of this frame's presses on handler
     // elements. A pass-through stack presses SEVERAL of them at once (a
     // drawing canvas inside a draggable dialog); message order means nothing.
     let live = active.drags.len();
+    let presses: Vec<&PointerPress> = presses.read().collect();
     let mut begins: Vec<&PointerPress> = Vec::new();
-    for press in presses.read() {
+    for &press in &presses {
         let of = device(press.pointer.id, transform3d);
         if !nodes.contains(press.entity) || active.of_device(of, transform3d).is_some() {
             continue;
@@ -167,7 +183,13 @@ pub fn collect_pointer_events(
         let location = press.pointer.location();
         let pos = event_pos(user, geometry, &cameras, &location).unwrap_or(Vec2::ZERO);
         let abs = client_pos(press.pointer.id, &location, &pointers, transform3d);
-        active.begin(press.entity, press.pointer.id, press.button, pos, abs);
+        let (pointer, button) = (press.pointer.id, press.button);
+        active.begin(press.entity, pointer, button, pos, abs).above = presses
+            .iter()
+            .filter(|other| other.pointer.id == pointer && other.button == button)
+            .filter(|other| other.hit.depth < press.hit.depth)
+            .map(|other| other.entity)
+            .collect();
         if handlers.down {
             emit(rnode, "pointerDown", pos, abs, press.button);
         }
@@ -184,7 +206,8 @@ pub fn collect_pointer_events(
         })
         .collect();
     let mut index = 0;
-    active.drags.retain_mut(|drag| {
+    let ActiveDrag { drags, ended } = &mut *active;
+    drags.retain_mut(|drag| {
         let fresh = index >= live;
         index += 1;
         // A node despawned mid-gesture keeps its binding (and the pointer)
@@ -229,6 +252,7 @@ pub fn collect_pointer_events(
                 emit(rnode, "pointerUp", pos, abs, drag.button);
             }
         }
+        ended.push(drag.clone());
         false
     });
 

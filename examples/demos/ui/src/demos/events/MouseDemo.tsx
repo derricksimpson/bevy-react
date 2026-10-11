@@ -7,7 +7,7 @@ import {
   List,
 } from "@/components/typography";
 import { BevyStyle, PointerEventData, WheelEventData } from "bevy-react/jsx";
-import { DemoRow, Example, Stage } from "@/components";
+import { DemoRow, Example, Readout, Slider, Stage } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -88,6 +88,9 @@ export function MouseDemo() {
       <DemoRow>
         <HoverDemo />
         <WheelDemo />
+      </DemoRow>
+      <DemoRow>
+        <OwnClickDemo />
       </DemoRow>
     </>
   );
@@ -379,6 +382,65 @@ function WheelCard() {
     </Stage>
   );
 }
+
+const OWN_CLICK_TSX = `<node onClick={() => setClicks((n) => n + 1)}>
+  <Slider
+    name="Volume"
+    value={volume}
+    onChange={setVolume}
+  />
+</node>`;
+
+function OwnClickDemo() {
+  return (
+    <Example
+      title="A drag owns its click"
+      info={
+        <>
+          <Paragraph>
+            A press lands on every element under the pointer, so pressing the
+            slider also presses the card around it. The gesture's click belongs
+            to the element being dragged: drag the slider and release anywhere
+            on the card, and the card's <InlineCode>onClick</InlineCode> stays
+            silent. A plain click on the card counts.
+          </Paragraph>
+          <Code lang="tsx">{OWN_CLICK_TSX}</Code>
+        </>
+      }
+      demo={OwnClickCard}
+    />
+  );
+}
+
+function OwnClickCard() {
+  const [clicks, setClicks] = useState(0);
+  const [volume, setVolume] = useState(0.4);
+
+  return (
+    <node
+      style={clickCardStyle}
+      hoverStyle={{ backgroundColor: Colors.raised }}
+      onClick={() => setClicks((n) => n + 1)}
+    >
+      <Readout label="CARD CLICKS" value={clicks} color={Colors.cyan} />
+      <Slider name="Volume" value={volume} onChange={setVolume} />
+    </node>
+  );
+}
+
+// The clickable card: room around the slider to release a drag on.
+const clickCardStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 24,
+  width: 320,
+  padding: { horizontal: 48, vertical: 28 },
+  backgroundColor: Colors.card,
+  border: 1,
+  borderColor: Colors.line,
+  borderRadius: 12,
+  cursor: "pointer",
+};
 
 // On top of the `Stage` plate (fill, hairline rim, corner).
 const stageStyle: BevyStyle = {

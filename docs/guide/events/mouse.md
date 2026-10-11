@@ -39,6 +39,11 @@ under the pointer that owns clicks.
   `hoverStyle`/`pressStyle` doesn't take the click from its ancestor.
 - A `<button>` inside a clickable card takes clicks on itself, even with no
   `onClick` of its own.
+- A [drag](#drags-and-pointer-events) owns its click: while an element is
+  being dragged, the click can't go to what lies beneath it, such as its
+  ancestors. A slider dragged and released over the card around it doesn't
+  click the card. A `<button>` inside the dragged element still clicks, and
+  so does a clickable element laid over it.
 
 ## Drags and pointer events
 
@@ -63,6 +68,7 @@ under the pointer that owns clicks.
   button held. Neither fires for an unmoving pointer.
 - Enter and leave fire on the boundary only, not again when the element is
   pressed or released inside it.
+- A gesture's `onPointerUp` comes before its `onClick`.
 
 The pointer handlers receive a `PointerEventData`:
 

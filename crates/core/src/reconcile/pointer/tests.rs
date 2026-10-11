@@ -166,6 +166,10 @@ fn the_topmost_pressed_handler_gets_the_drag() {
     let down = frame(&mut app, &mut rx);
     assert_eq!(kinds(&down), ["pointerDown"]);
     assert_eq!(down[0].id, 1);
+    // The drag remembers what the press hit above its element — still the
+    // gesture's to click — and not what lies beneath.
+    let active = app.world().resource::<ActiveDrag>();
+    assert_eq!(active.of_device(MOUSE, None).unwrap().above, [plain]);
 }
 
 /// One drag per device: another button pressed meanwhile starts nothing and
@@ -471,4 +475,32 @@ fn the_wheel_claim_resets_each_frame() {
         .wheel_captured = true;
     app.update();
     assert!(!app.world().resource::<PointerCapture>().wheel_captured);
+}
+
+/// The release that ends a drag is the one its gesture's click rides, and
+/// the click collector runs after this one: the drag stays visible to it for
+/// that frame, and is gone the next.
+#[test]
+fn an_ended_drag_is_known_for_the_release_frame() {
+    let (mut app, mut rx) = drag_app();
+    let node = handler_node(&mut app, 1);
+    spawn_pointer(app.world_mut(), MOUSE, Vec2::splat(100.0));
+    let dragged = |app: &App| {
+        app.world()
+            .resource::<ActiveDrag>()
+            .of_device(MOUSE, None)
+            .map(|drag| drag.entity)
+    };
+
+    press(&mut app, MOUSE, PRIMARY, Vec2::splat(100.0), &[node]);
+    frame(&mut app, &mut rx);
+    assert_eq!(dragged(&app), Some(node));
+
+    release(&mut app, MOUSE, PRIMARY, Vec2::splat(100.0));
+    frame(&mut app, &mut rx);
+    assert_eq!(dragged(&app), Some(node), "the release frame");
+    assert!(!dragging(&app), "but the pointer is free");
+
+    frame(&mut app, &mut rx);
+    assert_eq!(dragged(&app), None);
 }
