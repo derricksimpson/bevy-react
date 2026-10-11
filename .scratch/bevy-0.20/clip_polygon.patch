@@ -1,0 +1,42 @@
+--- a/crates/bevy_ui_render/src/clipping.rs	2006-07-24 03:21:28.000000000 +0200
++++ b/crates/bevy_ui_render/src/clipping.rs	2026-10-11 18:32:39.279689001 +0200
+@@ -30,6 +30,39 @@
+         return SmallVec::new();
+     };
+ 
++    // Fast path: nearly every quad is entirely inside all of its clip regions
++    // or entirely outside one edge of one of them. Classify the vertices
++    // against each region once (one transform per vertex per region) before
++    // falling back to the general clipper, which moves two inline 16-vertex
++    // buffers per edge.
++    let mut all_inside = true;
++    for region in rects {
++        let (min, max) = (region.rect.min, region.rect.max);
++        // Per edge: are all vertices outside it? (left, right, bottom, top)
++        let mut all_outside = [min.x.is_finite(), max.x.is_finite(), max.y.is_finite(), min.y.is_finite()];
++        for &(position, _) in vertices {
++            let p = region.world_to_clip_local.transform_point2(position);
++            // Same predicate as `edge_clip`: visible when `0 <= distance`;
++            // a non-finite edge does not clip.
++            let inside = [
++                !min.x.is_finite() || 0. <= p.x - min.x,
++                !max.x.is_finite() || 0. <= max.x - p.x,
++                !max.y.is_finite() || 0. <= max.y - p.y,
++                !min.y.is_finite() || 0. <= p.y - min.y,
++            ];
++            for i in 0..4 {
++                all_outside[i] &= !inside[i];
++                all_inside &= inside[i];
++            }
++        }
++        if all_outside.iter().any(|&outside| outside) {
++            return SmallVec::new();
++        }
++    }
++    if all_inside {
++        return SmallVec::from_slice(vertices);
++    }
++
+     let mut visible_region = SmallVec::from_slice(vertices);
+     let mut scratch = SmallVec::new();
+ 
