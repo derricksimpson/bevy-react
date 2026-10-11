@@ -33,12 +33,12 @@ const PAGE: ExplanationData = {
     <>
       <Paragraph>
         A custom filter is a <InlineCode>#[react_filter]</InlineCode> params
-        struct plus a WGSL shader asset, registered with{" "}
+        struct plus a WESL shader asset, registered with{" "}
         <InlineCode>{"app.add_react_filter::<T>()"}</InlineCode> — in both the
         running app and the bindings exporter — then regenerate{" "}
         <InlineCode>bevy.ts</InlineCode> so the params type-check in React.
       </Paragraph>
-      <Code lang="rust">{`#[react_filter(shader = "shaders/ripple.wgsl", outset = 12.0, time = true)]
+      <Code lang="rust">{`#[react_filter(shader = "shaders/ripple.wesl", outset = 12.0, time = true)]
 struct Ripple {
     amplitude: f32,
     frequency: f32,
@@ -48,9 +48,10 @@ struct Ripple {
 app.add_react_filter::<Ripple>();`}</Code>
       <List>
         <ListItem>
-          Shaders <InlineCode>#import bevy_react::filter</InlineCode>, name
-          their entry point <InlineCode>fragment</InlineCode>, and follow the
-          prelude's premultiplied-alpha rules.
+          Shaders import the prelude's helpers (
+          <InlineCode>{"import bevy_react::filter::uniforms;"}</InlineCode>
+          ), name their entry point <InlineCode>fragment</InlineCode>, and
+          follow the prelude's premultiplied-alpha rules.
         </ListItem>
         <ListItem>
           <InlineCode>time = true</InlineCode> feeds the clock uniform and
@@ -91,9 +92,9 @@ function RippleDemo() {
       info={
         <>
           <Paragraph>
-            <InlineCode>ripple</InlineCode> is an app-authored WGSL pass (a{" "}
+            <InlineCode>ripple</InlineCode> is an app-authored WESL pass (a{" "}
             <InlineCode>#[react_filter]</InlineCode> struct +{" "}
-            <InlineCode>shaders/ripple.wgsl</InlineCode>). Declared with{" "}
+            <InlineCode>shaders/ripple.wesl</InlineCode>). Declared with{" "}
             <InlineCode>time = true</InlineCode>, it reads the uniform clock and
             re-renders every frame — animating with zero re-captures: the
             subtree is captured once and only the filter pass re-runs. The wave
@@ -110,7 +111,7 @@ function RippleDemo() {
 >
   …
 </node>`}
-            rust={`#[react_filter(shader = "shaders/ripple.wgsl", outset = 12.0, time = true)]
+            rust={`#[react_filter(shader = "shaders/ripple.wesl", outset = 12.0, time = true)]
 struct Ripple {
     /// Peak displacement, in px.
     amplitude: f32,
@@ -168,7 +169,7 @@ function GlitchDemo() {
             tsx={`<node style={{ filter: { name: "glitch", params: { intensity } } }}>
   …
 </node>`}
-            rust={`#[react_filter(shader = "shaders/glitch.wgsl", time = true)]
+            rust={`#[react_filter(shader = "shaders/glitch.wesl", time = true)]
 struct Glitch {
     /// Overall strength, 0 (clean) ..= 1 (heavily corrupted).
     intensity: f32,
@@ -223,7 +224,7 @@ function DissolveDemo() {
   src="images/parrot.png"
   style={{ filter: { name: "dissolve", params: { progress } } }}
 />`}
-            rust={`#[react_filter(shader = "shaders/dissolve.wgsl")]
+            rust={`#[react_filter(shader = "shaders/dissolve.wesl")]
 struct Dissolve {
     /// 0 = intact, 1 = fully dissolved.
     progress: f32,

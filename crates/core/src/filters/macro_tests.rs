@@ -19,7 +19,7 @@ use crate::{react_filter, react_morph_filter};
 /// plus a param of each straddle-relevant type.
 #[react_filter(
     name = "testGlow",
-    shader = "shaders/glow.wgsl",
+    shader = "shaders/glow.wesl",
     outset = 4.0,
     time = true
 )]
@@ -49,7 +49,7 @@ fn macro_filter_exposes_name_time_and_outset() {
 /// The full custom-MORPH-filter surface: `#[react_morph_filter]` shares the
 /// packing machinery (Angle → radians here) but bakes `IS_MORPH`, the
 /// `ReactMorphFilter` marker, and fixed zero outset / no time.
-#[react_morph_filter(name = "testWipe", shader = "shaders/wipe.wgsl")]
+#[react_morph_filter(name = "testWipe", shader = "shaders/wipe.wesl")]
 struct WipeParams {
     angle: Angle,
     softness: f32,
@@ -150,7 +150,7 @@ fn macro_pack_fills_declaration_order_and_pads_straddling_params() {
 /// `[f32; 3]` + `f32` exactly fill vec0, `Vec4` fills vec1.
 #[test]
 fn macro_pack_exact_fit_does_not_pad() {
-    #[react_filter(shader = "shaders/fill.wgsl")]
+    #[react_filter(shader = "shaders/fill.wesl")]
     struct FillParams {
         a: [f32; 3],
         b: f32,
@@ -173,7 +173,7 @@ fn macro_pack_exact_fit_does_not_pad() {
 /// zero outset.
 #[test]
 fn macro_default_name_lowercases_first_letter() {
-    #[react_filter(shader = "x.wgsl")]
+    #[react_filter(shader = "x.wesl")]
     struct MyEffect {
         amount: f32,
     }
@@ -221,7 +221,7 @@ fn macro_filter_registers_and_resolves_end_to_end() {
             .path()
             .expect("plain asset path")
             .to_string(),
-        "shaders/glow.wgsl"
+        "shaders/glow.wesl"
     );
     assert_eq!((reg.outset)(&glow_json()), Ok(4.0));
 }
@@ -232,7 +232,7 @@ fn macro_filter_registers_and_resolves_end_to_end() {
 /// naming the filter and unit, mirroring blur.
 #[test]
 fn macro_length_param_packs_logical_px_and_rejects_non_px() {
-    #[react_filter(shader = "shaders/wobble.wgsl")]
+    #[react_filter(shader = "shaders/wobble.wesl")]
     struct WobbleParams {
         offset: Length,
         strength: f32,
@@ -260,7 +260,7 @@ fn macro_length_param_packs_logical_px_and_rejects_non_px() {
 /// other filter.
 #[test]
 fn macro_zero_field_struct_packs_empty_and_resolves() {
-    #[react_filter(shader = "z.wgsl")]
+    #[react_filter(shader = "z.wesl")]
     struct NoParams {}
     let (params, layout) = from::<NoParams>(json!({})).pack();
     assert!(params.is_empty());
@@ -281,7 +281,7 @@ fn macro_zero_field_struct_packs_empty_and_resolves() {
 /// field access keeps user names from colliding with generated bindings.
 #[test]
 fn macro_field_names_do_not_shadow_generated_locals() {
-    #[react_filter(shader = "s.wgsl")]
+    #[react_filter(shader = "s.wesl")]
     struct Shadowy {
         params: f32,
         assets: f32,
@@ -317,7 +317,7 @@ fn add_react_filter_registers_and_resolves() {
 fn add_react_filter_dedups_same_type_and_replaces_different_type() {
     use crate::ReactAppExt;
 
-    #[react_filter(name = "testGlow", shader = "other.wgsl")]
+    #[react_filter(name = "testGlow", shader = "other.wesl")]
     struct ImposterGlow {
         amount: f32,
     }
@@ -347,7 +347,7 @@ fn add_react_filter_dedups_same_type_and_replaces_different_type() {
 fn custom_filter_shadows_builtin_in_either_order() {
     use crate::ReactAppExt;
 
-    #[react_filter(name = "blur", shader = "my_blur.wgsl")]
+    #[react_filter(name = "blur", shader = "my_blur.wesl")]
     struct MyBlur {
         #[serde(default)]
         amount: f32,

@@ -1,6 +1,6 @@
 //! `spotlight` — the gallery's cursor light, an app-registered style property
 //! (`style={{ spotlight: { … } }}`) drawn by a bevy [`UiMaterial`]
-//! (`assets/shaders/spotlight.wgsl`). Near the pointer a node's edge
+//! (`assets/shaders/spotlight.wesl`). Near the pointer a node's edge
 //! catches the light and its surface takes a soft wash; away from it the node
 //! shows nothing. The light follows the pointer every frame without a single
 //! React render: the pointer is read here, Bevy-side, and handed to the
@@ -74,7 +74,7 @@ pub static SPOTLIGHT: StyleProperty<Spotlight> = StyleProperty {
     ..StyleProperty::new("spotlight")
 };
 
-/// Mirrors `struct Spotlight` in `spotlight.wgsl`.
+/// Mirrors `struct Spotlight` in `spotlight.wesl`.
 #[derive(Debug, Clone, Copy, PartialEq, ShaderType)]
 struct SpotlightUniform {
     /// Linear RGBA.
@@ -119,7 +119,7 @@ pub struct SpotlightMaterial {
 
 impl UiMaterial for SpotlightMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/spotlight.wgsl".into()
+        "shaders/spotlight.wesl".into()
     }
 }
 
@@ -225,7 +225,7 @@ fn sync_spotlights(
 mod tests {
     use super::*;
 
-    /// The wire value lands in the uniform slots `spotlight.wgsl` reads.
+    /// The wire value lands in the uniform slots `spotlight.wesl` reads.
     #[test]
     fn wire_value_packs_the_shader_uniform() {
         let spotlight: Spotlight = serde_json::from_value(serde_json::json!({

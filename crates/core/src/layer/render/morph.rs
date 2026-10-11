@@ -25,7 +25,7 @@
 //!    0..1 UV stretches it onto the current capture rect), target = the
 //!    dedicated `blend` texture. The engine writes the reserved
 //!    `params[7].x` = progress (see the MORPH CONTRACT in
-//!    `filter_prelude.wgsl`).
+//!    `filter_prelude.wesl`).
 //! 3. [`run_morph_passes`] (called from `ui_layer_capture_pass`, after the
 //!    layer's capture, before its regular filter run) executes the pass.
 //! 4. The regular `filter` chain (if any) sources the blend instead of the
@@ -246,7 +246,7 @@ impl Default for MorphMeta {
 }
 
 /// The engine-reserved param tail of a morph pass (see the MORPH CONTRACT in
-/// `filter_prelude.wgsl`): `params[7].x` = progress (`params[6]` is a
+/// `filter_prelude.wesl`): `params[7].x` = progress (`params[6]` is a
 /// reserved-unused spare). The snapshot needs no transform: it is
 /// layout-anchored, stretched onto the current capture rect by the plain
 /// 0..1 UV lookup. Returns the padded params with the tail written.

@@ -188,7 +188,7 @@ impl ReactFilter for GradientMapParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "gradient_map.wgsl")
+        load_embedded_asset!(assets, "gradient_map.wesl")
     }
 
     fn identity_params() -> Option<Value> {

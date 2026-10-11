@@ -390,7 +390,7 @@ the terminal, naming the layer.
 
 ![A gallery of built-in filters: grayscale, sepia, invert and hue-rotate parrots, a grayscaled product card, a blur and sepia chain, bloom on neon text and chromatic aberration.](../../../screenshots/filters.png)
 
-To write your own filters in WGSL, see
+To write your own filters in WESL, see
 [Custom filters](../extending/custom-filters.md).
 
 See [`filter`](../reference/style-properties.md#filter) in the style

@@ -608,8 +608,8 @@ mod tests {
 
     /// Under the asset-capable harness every built-in resolves to real
     /// embedded shader handles: the seven color ops share
-    /// `color_matrix.wgsl`, blur's two passes share `blur.wgsl`, the two
-    /// shaders are distinct, and bloom's four passes mix `bloom.wgsl`
+    /// `color_matrix.wesl`, blur's two passes share `blur.wesl`, the two
+    /// shaders are distinct, and bloom's four passes mix `bloom.wesl`
     /// (bright-pass/combine) with blur's handle (its middle passes).
     #[test]
     fn resolve_returns_embedded_shader_handles() {
@@ -645,32 +645,32 @@ mod tests {
         }
         assert_eq!(
             &path_of(&color),
-            "embedded://bevy_react_core/filters/builtin/color_matrix.wgsl"
+            "embedded://bevy_react_core/filters/builtin/color_matrix.wesl"
         );
 
         let blur = shader_of("blur");
         assert_ne!(blur, color);
         assert_eq!(
             &path_of(&blur),
-            "embedded://bevy_react_core/filters/builtin/blur.wgsl"
+            "embedded://bevy_react_core/filters/builtin/blur.wesl"
         );
 
         assert_eq!(
             &path_of(&shader_of("chromaticAberration")),
-            "embedded://bevy_react_core/filters/builtin/chromatic_aberration.wgsl"
+            "embedded://bevy_react_core/filters/builtin/chromatic_aberration.wesl"
         );
 
         assert_eq!(
             &path_of(&shader_of("gradientMap")),
-            "embedded://bevy_react_core/filters/builtin/gradient_map.wgsl"
+            "embedded://bevy_react_core/filters/builtin/gradient_map.wesl"
         );
         assert_eq!(
             &path_of(&shader_of("outline")),
-            "embedded://bevy_react_core/filters/builtin/outline.wgsl"
+            "embedded://bevy_react_core/filters/builtin/outline.wesl"
         );
         assert_eq!(
             &path_of(&shader_of("pinch")),
-            "embedded://bevy_react_core/filters/builtin/pinch.wgsl"
+            "embedded://bevy_react_core/filters/builtin/pinch.wesl"
         );
 
         // Bloom deliberately mixes shaders across its passes, so it can't go
@@ -680,7 +680,7 @@ mod tests {
         assert_eq!(passes.len(), 4);
         assert_eq!(
             &path_of(&passes[0].shader),
-            "embedded://bevy_react_core/filters/builtin/bloom.wgsl"
+            "embedded://bevy_react_core/filters/builtin/bloom.wesl"
         );
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
@@ -693,7 +693,7 @@ mod tests {
         assert_eq!(passes.len(), 4);
         assert_eq!(
             &path_of(&passes[0].shader),
-            "embedded://bevy_react_core/filters/builtin/shadow.wgsl"
+            "embedded://bevy_react_core/filters/builtin/shadow.wesl"
         );
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
@@ -785,7 +785,7 @@ mod tests {
 
         let (bloom, rejected) = warm(FilterPartition::Builtins, names(&["bloom"]));
         assert!(rejected.is_empty());
-        assert_eq!(bloom.len(), 2, "bloom.wgsl + blur.wgsl: {bloom:?}");
+        assert_eq!(bloom.len(), 2, "bloom.wesl + blur.wesl: {bloom:?}");
         let (blur, _) = warm(FilterPartition::Builtins, names(&["blur"]));
         assert_eq!(blur.len(), 1);
         assert!(bloom.contains(&blur[0]));

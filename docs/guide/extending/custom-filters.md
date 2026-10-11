@@ -1,11 +1,11 @@
 ---
-description: Write your own WGSL filters and morph transitions with typed TSX params, using #[react_filter], #[react_morph_filter] and the shader prelude.
+description: Write your own WESL filters and morph transitions with typed TSX params, using #[react_filter], #[react_morph_filter] and the shader prelude.
 demo: Custom filters
 ---
 
 # Custom filters
 
-A custom filter is a Rust params struct plus a WGSL fragment shader. Once
+A custom filter is a Rust params struct plus a WESL fragment shader. Once
 registered, it is used by name exactly like a built-in: regular filters in
 the `filter` and `backdropFilter` chains, morph filters in `morphFilter`.
 The params struct is the single source of truth for the TSX side: the
@@ -33,7 +33,7 @@ use bevy_react::prelude::*;
 use bevy_react::protocol::units::Length;
 
 /// Packs as params[0].x = spacing (px), params[0].y = strength.
-#[react_filter(shader = "shaders/scanlines.wgsl")]
+#[react_filter(shader = "shaders/scanlines.wesl")]
 struct Scanlines {
     /// Distance between dark rows.
     #[serde(default = "default_spacing")]
@@ -52,10 +52,10 @@ pub fn register_bindings(app: &mut App) {
 }
 ```
 
-The shader lives in your assets folder (`assets/shaders/scanlines.wgsl`):
+The shader lives in your assets folder (`assets/shaders/scanlines.wesl`):
 
-```wgsl
-#import bevy_react::filter::{FullscreenVertexOutput, sample_source, uniforms}
+```wesl
+import bevy_react::filter::{FullscreenVertexOutput, sample_source, uniforms};
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -82,7 +82,7 @@ setup.
 
 | Argument | Default                              | Effect                                                                        |
 | -------- | ------------------------------------ | ----------------------------------------------------------------------------- |
-| `shader` | required                             | Asset path of the WGSL file; `embedded://` paths work too                     |
+| `shader` | required                             | Asset path of the WESL file; `embedded://` paths work too                     |
 | `name`   | struct name, first letter lowercased | The filter's name in TSX (`Scanlines` becomes `"scanlines"`)                  |
 | `outset` | `0`                                  | Logical px the effect may paint outside the node (see [Outset](#outset))      |
 | `time`   | `false`                              | Re-run the pass every frame (see [Time-driven filters](#time-driven-filters)) |
@@ -119,10 +119,16 @@ from `bevy_react::filters`. Any other field type is a compile error.
 
 ## Writing the shader
 
-The shader imports the prelude with `#import bevy_react::filter::{…}` and
-names its entry point `fragment` (`filter` is a reserved word in WGSL). It
-runs once per pixel of the node's capture: `in.uv` spans the image `0..1`,
-y down, and whatever the function returns is written as-is, alpha included.
+The shader is [WESL](https://wesl-lang.dev), WGSL plus imports and
+conditional compilation (the language Bevy's own shaders use), in a `.wesl`
+file. It imports what it uses from the prelude
+(`import bevy_react::filter::{…};`) and names its entry point `fragment`
+(`filter` is a reserved word in WGSL). It runs once per pixel of the node's
+capture: `in.uv` spans the image `0..1`, y down, and whatever the function
+returns is written as-is, alpha included.
+
+WESL's `@if(NAME)` keeps a declaration or statement only when Bevy sets that
+shader def, for example `@if(SIXTEEN_BYTE_ALIGNMENT)` on WebGL2 builds.
 
 The prelude provides:
 
@@ -168,7 +174,7 @@ that reaches outside it (a glow, a displacement) declares how far with
 `outset`, in logical px:
 
 ```rust
-#[react_filter(shader = "shaders/ripple.wgsl", outset = 12.0, time = true)]
+#[react_filter(shader = "shaders/ripple.wesl", outset = 12.0, time = true)]
 struct Ripple {
     #[serde(default)]
     amplitude: f32,
@@ -217,7 +223,7 @@ one uses `#[react_morph_filter]` and `add_react_morph_filter`:
 ```
 
 ```rust
-#[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/windowslice.wesl")]
 struct Windowslice {
     /// Number of blinds.
     #[serde(default = "default_count")]
@@ -242,14 +248,14 @@ re-runs every frame while it plays. The shader uses three prelude functions:
 `morph_sample_from_lod` and `morph_sample_to_lod` are the explicit-LOD
 variants. Both images are premultiplied; mix them directly.
 
-```wgsl
-#import bevy_react::filter::{
+```wesl
+import bevy_react::filter::{
     FullscreenVertexOutput,
     morph_progress,
     morph_sample_from,
     morph_sample_to,
     uniforms,
-}
+};
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -370,7 +376,7 @@ whose params do not all have defaults precompiles its first shader only.
 - Custom filters cannot fade in or out through an identity value (see
   above), and vector params cannot be animated.
 
-![Custom WGSL filters running on live UI: a ripple distortion, a glitch effect and an animated dissolve.](../../../screenshots/custom-filters.webp)
+![Custom filters running on live UI: a ripple distortion, a glitch effect and an animated dissolve.](../../../screenshots/custom-filters.webp)
 
 See the [filter reference](../reference/filters.md) for the built-ins' params,
 and [`filter`](../reference/style-properties.md#filter),

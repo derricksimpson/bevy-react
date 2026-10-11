@@ -73,7 +73,7 @@ impl ReactFilter for ChromaticAberrationParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "chromatic_aberration.wgsl")
+        load_embedded_asset!(assets, "chromatic_aberration.wesl")
     }
 
     fn identity_params() -> Option<Value> {

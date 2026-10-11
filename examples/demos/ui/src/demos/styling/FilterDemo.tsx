@@ -71,7 +71,7 @@ const PAGE: ExplanationData = {
           engine, per frame, off the React render path.
         </ListItem>
         <ListItem>
-          Your own WGSL passes plug in the same way — see the Custom filters
+          Your own WESL passes plug in the same way — see the Custom filters
           page.
         </ListItem>
       </List>

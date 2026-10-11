@@ -98,7 +98,7 @@ morph and shrink again, crossfading underneath.
 | `squaresMin` | `[20, 20]` | Cells across x and y at the coarsest point                       |
 | `steps`      | `50`       | Number of discrete cell sizes; `0` or less for a continuous ramp |
 
-Custom morphs, written in WGSL, are used the same way; see
+Custom morphs, written in WESL, are used the same way; see
 [Custom filters](../extending/custom-filters.md#custom-morph-filters).
 
 ## Layout during a morph

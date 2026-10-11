@@ -149,11 +149,12 @@ served as is.
   saved between sessions, the Console tab stays empty (use the browser's
   console), and some timing columns in the Bridge tab are not measured. See
   [Devtools](devtools.md).
-- **WebGL2 shaders.** Custom WGSL (filters, materials) is translated to GLSL
-  ES 3.00, so it can't use storage buffers, compute, or the bit-counting
+- **WebGL2 shaders.** Custom shaders (filters, materials) are translated to GLSL
+  ES 3.00, so they can't use storage buffers, compute, or the bit-counting
   built-ins such as `countOneBits`. A shader that fails to compile there can
-  stop the whole app. Bevy also turns some effects off, depth of field among
-  them.
+  stop the whole app; guard a WebGL2 fallback with WESL's
+  `@if(SIXTEEN_BYTE_ALIGNMENT)`, a shader def Bevy sets only there. Bevy
+  also turns some effects off, depth of field among them.
 
 ## Reference setup
 

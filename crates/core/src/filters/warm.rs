@@ -5,7 +5,7 @@
 //! Runs in `Startup`, once: every `add_react_filter`/`add_react_morph_filter`
 //! happens in some plugin's `build`, all of which precede `Startup`, so the
 //! registry is complete here. Loading the handles is also what kicks the
-//! custom `.wgsl` asset loads at startup; the pipeline cache waits for them
+//! custom `.wesl` asset loads at startup; the pipeline cache waits for them
 //! (and for the prelude they import) on its own.
 
 use bevy::prelude::*;

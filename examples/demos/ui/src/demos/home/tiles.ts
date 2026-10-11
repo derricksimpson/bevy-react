@@ -36,7 +36,7 @@ export const TILES: Tile[] = [
   {
     id: "filters",
     label: "Filters",
-    blurb: "Chains of WGSL passes over any subtree, composed and animatable.",
+    blurb: "Chains of shader passes over any subtree, composed and animatable.",
     vignette: FiltersVignette,
   },
   {

@@ -18,7 +18,7 @@
 //! the **filter output ping-pong** (what the quad actually samples), not the
 //! raw capture.
 //!
-//! Each downsample level is one fullscreen-triangle pass (`mip_blit.wgsl`)
+//! Each downsample level is one fullscreen-triangle pass (`mip_blit.wesl`)
 //! sampling level `i` into level `i + 1`: linear filtering into a half-size
 //! target is a standard 2×2 box downsample, correct on premultiplied content.
 
@@ -118,7 +118,7 @@ pub fn init_layer_blit_pipeline(
             min_filter: FilterMode::Linear,
             ..Default::default()
         }),
-        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "mip_blit.wgsl"),
+        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "mip_blit.wesl"),
         fullscreen: fullscreen.clone(),
     });
 }

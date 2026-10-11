@@ -133,7 +133,7 @@ impl FromWorld for RippleQuad {
     }
 }
 
-/// Draws one expanding ring (`assets/shaders/bounce_ripple.wgsl`). Both
+/// Draws one expanding ring (`assets/shaders/bounce_ripple.wesl`). Both
 /// fields share binding 0, so `AsBindGroup` combines them into the single
 /// uniform struct the shader declares.
 #[derive(Asset, AsBindGroup, Reflect, Clone, Default)]
@@ -147,7 +147,7 @@ struct RippleMaterial {
 
 impl Material for RippleMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/bounce_ripple.wgsl".into()
+        "shaders/bounce_ripple.wesl".into()
     }
 
     /// Additive: the ring only ever adds light, so overlapping ripples and the

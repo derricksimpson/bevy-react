@@ -894,7 +894,7 @@ mod tests {
     fn filter_transition_discrete_swaps_at_midpoint() {
         use crate::react_filter;
 
-        #[react_filter(shader = "shaders/step.wgsl")]
+        #[react_filter(shader = "shaders/step.wesl")]
         struct StepParams {
             amount: f32,
         }

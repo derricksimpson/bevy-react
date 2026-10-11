@@ -6,7 +6,7 @@
 //! 1. [`prepare_layer_backdrops`] (PrepareBindGroups, after
 //!    `prepare_layer_textures`) stages a snapshot **blit** (crop-sample the
 //!    camera main texture over the layer's capture rect —
-//!    `backdrop_blit.wgsl`) and a **filter run** over the snapshot, reusing
+//!    `backdrop_blit.wesl`) and a **filter run** over the snapshot, reusing
 //!    the content-filter pipeline wholesale: the snapshot is bound as the
 //!    pass-0 source AND as the binding-3 `capture_texture`, so every filter
 //!    shader works unchanged (the snapshot is opaque, which satisfies the
@@ -99,7 +99,7 @@ pub fn alloc_backdrop_slot(
 }
 
 /// The blit's per-layer uniforms: the snapshot rect mapped into the main
-/// texture's UV space. Mirrors `BlitUniforms` in `backdrop_blit.wgsl`.
+/// texture's UV space. Mirrors `BlitUniforms` in `backdrop_blit.wesl`.
 #[derive(Clone, Copy, ShaderType)]
 pub struct BackdropBlitUniforms {
     pub src_uv_min: Vec2,
@@ -145,7 +145,7 @@ pub fn init_backdrop_blit_pipeline(
             min_filter: FilterMode::Linear,
             ..Default::default()
         }),
-        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "backdrop_blit.wgsl"),
+        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "backdrop_blit.wesl"),
         fullscreen: fullscreen.clone(),
     });
 }

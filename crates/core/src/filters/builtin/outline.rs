@@ -31,7 +31,7 @@ use crate::protocol::units::Length;
 ///
 /// All three params take `{ animated }` bindings (`width`/`softness` scalar
 /// Length slots, `color` via `interpolateColor`). Quality bound (see
-/// `outline.wgsl`): the dilation is crisp up to a reach of ~12 physical px;
+/// `outline.wesl`): the dilation is crisp up to a reach of ~12 physical px;
 /// practical text outlines are 1–6 logical px.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
 #[serde(default, deny_unknown_fields)]
@@ -78,7 +78,7 @@ impl ReactFilter for OutlineParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "outline.wgsl")
+        load_embedded_asset!(assets, "outline.wesl")
     }
 
     fn identity_params() -> Option<Value> {

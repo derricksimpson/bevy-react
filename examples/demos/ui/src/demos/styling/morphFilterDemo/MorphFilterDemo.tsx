@@ -224,7 +224,7 @@ function CustomMorphsDemo() {
   onClick={swap}
 >`}
             rust={`// A two-input morph shader; params pack in declaration order.
-#[react_morph_filter(shader = "shaders/morphs/doorway.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/doorway.wesl")]
 struct Doorway {
     /// Floor-reflection strength.
     #[serde(default = "default_two_fifths")]

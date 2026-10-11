@@ -2,7 +2,7 @@
 //! model matrix and the screen-space clip rect (`transform3d` support).
 //!
 //! Every drawn composite quad gets one [`CompositeUniforms`] entry — identity
-//! matrix + open clip for untransformed layers — so `composite.wgsl` stays
+//! matrix + open clip for untransformed layers — so `composite.wesl` stays
 //! single-path. The lifecycle mirrors [`FilterUniforms`](super::FilterUniforms):
 //! a [`DynamicUniformBuffer`] staged in `prepare_layer_composites`, the
 //! per-quad offset riding [`LayerCompositeBatch`](super::LayerCompositeBatch),
@@ -19,7 +19,7 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::{BindGroup, BufferId, DynamicUniformBuffer, ShaderType};
 
 /// Per-quad composite params. Field order matches `CompositeParams` in
-/// `composite.wgsl` byte for byte (128 bytes; guarded by
+/// `composite.wesl` byte for byte (128 bytes; guarded by
 /// `composite_uniforms_match_the_documented_wgsl_layout`). Pad names are
 /// digit-free on purpose (the naga-namer constraint, see `FilterUniforms`).
 #[derive(Clone, Copy, PartialEq, ShaderType)]
@@ -136,7 +136,7 @@ mod tests {
         f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
     }
 
-    /// The WGSL `CompositeParams` struct in `composite.wgsl` documents a
+    /// The WGSL `CompositeParams` struct in `composite.wesl` documents a
     /// 128-byte uniform layout (mat4x4 + clip vec2s + feather + pads +
     /// corner radii + border box); the Rust mirror must match field for
     /// field.

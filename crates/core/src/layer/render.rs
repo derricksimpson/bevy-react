@@ -37,20 +37,18 @@
 //!    premultiplied blending (`One`/`OneMinusSrcAlpha`) and multiplies rgb
 //!    *and* alpha by the group alpha. 3D-transformed quads sample trilinear +
 //!    anisotropic over the mip chain (minification shimmer) and feather ~1px
-//!    of coverage at their silhouette (`composite.wgsl`'s edge AA — diagonal
+//!    of coverage at their silhouette (`composite.wesl`'s edge AA — diagonal
 //!    edges rasterize without MSAA).
 //!
 //! Re-verify on Bevy upgrades (spike checklist): `TransparentUi` field set,
 //! `SortedRenderPhase::{items, transient_items}` visibility, `prepare_uinodes`
 //! iterating all phases, `ViewSortedRenderPhases::prepare_for_new_frame`
 //! draining transients, straight `ALPHA_BLENDING` in `UiPipeline`, the
-//! `Queue → PhaseSort → PrepareBindGroups` schedule shape, naga_oil NOT
-//! re-exporting an import's entry points (the split-stage filter pipelines
-//! rely on pass shaders having no vertex entry of their own), naga's namer
-//! renaming digit-suffixed identifiers (the `pad_a`/`pad_b` constraint in
-//! composable WGSL modules), and wgpu accepting per-stage shader modules in
-//! `RenderPipelineDescriptor` (filter vertex stage = prelude module, fragment
-//! stage = pass module).
+//! `Queue → PhaseSort → PrepareBindGroups` schedule shape, WESL composition
+//! NOT importing a module's entry points (the split-stage filter pipelines
+//! rely on pass shaders having no vertex entry of their own), and wgpu
+//! accepting per-stage shader modules in `RenderPipelineDescriptor` (filter
+//! vertex stage = bevy's fullscreen shader, fragment stage = pass module).
 
 pub mod backdrop;
 pub mod cached;
@@ -969,7 +967,7 @@ pub fn redistribute_ui_layers(
 }
 
 /// One composite-quad vertex: physical screen position (2D — the quad lies in
-/// the UI plane, `composite.wgsl` flattens z anyway; the stock UI view
+/// the UI plane, `composite.wesl` flattens z anyway; the stock UI view
 /// projects it), capture UV, and the group alpha. Future composite params
 /// (per-rule) extend this struct — the pass stays rule-agnostic.
 #[repr(C)]
@@ -1521,7 +1519,7 @@ pub fn init_layer_composite_pipeline(
             anisotropy_clamp: 8,
             ..Default::default()
         }),
-        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "composite.wgsl"),
+        shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "composite.wesl"),
     });
 }
 
@@ -1633,13 +1631,10 @@ pub type DrawLayerComposite = (
 );
 
 /// The Rust mirror of the prelude's `FilterUniforms`
-/// (`layer/filter_prelude.wgsl`) — one entry per staged filter pass in
+/// (`layer/filter_prelude.wesl`) — one entry per staged filter pass in
 /// [`LayerFilterMeta::uniforms`]. The explicit pad fields reproduce the WGSL
 /// uniform-address-space layout byte for byte (176 bytes total; asserted by
-/// `filter_uniforms_match_the_documented_wgsl_layout`). The digit-free
-/// `pad_a`/`pad_b` names are load-bearing on the WGSL side: naga's namer
-/// appends `_` to identifiers ending in a digit, which naga_oil rejects in
-/// composable modules — and the mirror matches field for field.
+/// `filter_uniforms_match_the_documented_wgsl_layout`), field for field.
 #[derive(Clone, Copy, ShaderType)]
 pub struct FilterUniforms {
     /// Seconds since startup (render-world `Time`), for `USES_TIME` filters.
@@ -1671,7 +1666,7 @@ pub struct FilterUniforms {
 /// [`FilterUniforms`], and the layer's original capture (always bound, so any
 /// pass can sample the unfiltered input). The vertex stage of every filter
 /// pipeline is bevy's fullscreen triangle ([`FullscreenShader`]); the
-/// fragment entry (`fragment`) lives in each pass shader that `#import`s the
+/// fragment entry (`fragment`) lives in each pass shader that imports the
 /// prelude for bindings/helpers — the cross-stage interface is the prelude's
 /// `FullscreenVertexOutput`, bevy's own.
 #[derive(Resource)]
@@ -2307,7 +2302,7 @@ mod tests {
     }
 
     /// The Rust mirror must reproduce the prelude's documented 176-byte
-    /// uniform layout exactly (`layer/filter_prelude.wgsl`): time@0,
+    /// uniform layout exactly (`layer/filter_prelude.wesl`): time@0,
     /// resolution@8, texel_size@16, content_inset@24, from_image_size@32,
     /// pad_b@40, params@48 (stride 16), total 176.
     #[test]

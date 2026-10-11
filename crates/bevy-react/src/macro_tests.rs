@@ -21,13 +21,13 @@ struct Pong {
     count: u32,
 }
 
-#[react_filter(name = "testTint", shader = "tint.wgsl")]
+#[react_filter(name = "testTint", shader = "tint.wesl")]
 struct Tint {
     #[serde(default)]
     amount: f32,
 }
 
-#[react_morph_filter(name = "testFade", shader = "fade.wgsl")]
+#[react_morph_filter(name = "testFade", shader = "fade.wesl")]
 struct Fade {
     #[serde(default)]
     softness: f32,

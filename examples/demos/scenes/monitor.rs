@@ -21,10 +21,10 @@ use crate::scene::Scene;
 
 /// The screen material: the skinned [`StandardMaterial`] (React UI on base-color + emissive,
 /// model gloss maps on `Uv0`) extended with [`CrtExtension`] so the emissive image gets a CRT
-/// scanline + phosphor-mask treatment. See `assets/shaders/crt.wgsl`.
+/// scanline + phosphor-mask treatment. See `assets/shaders/crt.wesl`.
 type CrtMaterial = ExtendedMaterial<StandardMaterial, CrtExtension>;
 
-/// `StandardMaterial` extension that runs the CRT fragment shader (`shaders/crt.wgsl`),
+/// `StandardMaterial` extension that runs the CRT fragment shader (`shaders/crt.wesl`),
 /// applying scanlines + an RGB phosphor mask to the emissive channel. The single `vec4`
 /// uniform packs the CRT params: `x` = phosphor-mask column pitch (px), `y` = scanline count,
 /// `z` = scanline intensity, `w` = phosphor-mask intensity.
@@ -37,7 +37,7 @@ struct CrtExtension {
 
 impl MaterialExtension for CrtExtension {
     fn fragment_shader() -> ShaderRef {
-        "shaders/crt.wgsl".into()
+        "shaders/crt.wesl".into()
     }
 }
 
@@ -61,7 +61,7 @@ const SCREEN_PX: UVec2 = UVec2::new(760, 700);
 /// CRT params when the effect is ON, packed into the [`CrtExtension`] uniform:
 /// x = phosphor-mask column pitch (px), y = scanline count, z = scanline intensity,
 /// w = phosphor-mask intensity. Disabling the effect zeroes `z` & `w`, which makes the
-/// shader leave the emissive channel untouched (see `apply_set_crt` / `crt.wgsl`).
+/// shader leave the emissive channel untouched (see `apply_set_crt` / `crt.wesl`).
 const CRT_ON: Vec4 = Vec4::new(SCREEN_PX.x as f32, 200.0, 0.5, 0.85);
 
 pub struct MonitorScenePlugin;
@@ -93,7 +93,7 @@ struct SetCrt(bool);
 
 /// Turn the CRT scanline + phosphor-mask treatment on or off by rewriting the `z`/`w`
 /// intensity params of the skinned screen material's [`CrtExtension`] uniform (zeroed =
-/// off; see `crt.wgsl`). The query yields nothing when no monitor screen is skinned, so
+/// off; see `crt.wesl`). The query yields nothing when no monitor screen is skinned, so
 /// this is a safe no-op outside `Scene::Surface`.
 fn apply_set_crt(
     msg: On<SetCrt>,

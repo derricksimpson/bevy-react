@@ -279,11 +279,15 @@ impl ReactUiPlugin {
     }
 }
 
+/// The asset path the filter-pass prelude (`layer/filter_prelude.wesl`) is
+/// registered under. A WESL module's import path is its asset path, so this
+/// is what makes `import bevy_react::filter::{...};` resolve — embedded at
+/// its file location the module would be `bevy_react_core::layer::filter_prelude`.
+pub(crate) const FILTER_PRELUDE_PATH: &str = "embedded://bevy_react/filter.wesl";
+
 /// Register the layer/filter shader assets: the importable filter-pass
-/// prelude (`#import bevy_react::filter`, see `layer/filter_prelude.wgsl`)
-/// plus the embedded pass shaders. `load_shader_library!` both embeds the
-/// prelude and loads it as a `Shader`, which registers its
-/// `#define_import_path` with the shader composer.
+/// prelude (`import bevy_react::filter::{...};`, see
+/// `layer/filter_prelude.wesl`) plus the embedded pass shaders.
 ///
 /// Split out of [`Plugin::build`]'s render-gated block so asset-capable tests
 /// (see `filters/test_util.rs`) can register the shaders without the render
@@ -292,23 +296,33 @@ impl ReactUiPlugin {
 /// Each shader lives next to its loading code — the built-in pass shaders
 /// beside `filters/builtin`'s `ReactFilter::shader` impls, the prelude and
 /// composite beside `layer/render.rs`'s pipelines — and the embedded paths
-/// mirror that layout (this macro roots them at THIS file's directory).
+/// mirror that layout (`embedded_asset!` roots them at THIS file's directory).
 pub(crate) fn register_layer_shader_assets(app: &mut App) {
-    bevy::shader::load_shader_library!(app, "layer/filter_prelude.wgsl");
-    embedded_asset!(app, "layer/composite.wgsl");
-    embedded_asset!(app, "layer/render/mip_blit.wgsl");
-    embedded_asset!(app, "layer/render/backdrop_blit.wgsl");
-    embedded_asset!(app, "filters/builtin/color_matrix.wgsl");
-    embedded_asset!(app, "filters/builtin/blur.wgsl");
-    embedded_asset!(app, "filters/builtin/bloom.wgsl");
-    embedded_asset!(app, "filters/builtin/chromatic_aberration.wgsl");
-    embedded_asset!(app, "filters/builtin/gradient_map.wgsl");
-    embedded_asset!(app, "filters/builtin/outline.wgsl");
-    embedded_asset!(app, "filters/builtin/pinch.wgsl");
-    embedded_asset!(app, "filters/builtin/shadow.wgsl");
-    embedded_asset!(app, "filters/builtin/crossfade.wgsl");
-    embedded_asset!(app, "filters/builtin/linear_wipe.wgsl");
-    embedded_asset!(app, "filters/builtin/pixelize.wgsl");
+    let prelude = bevy::shader::Shader::from_wesl(
+        include_str!("layer/filter_prelude.wesl"),
+        FILTER_PRELUDE_PATH,
+    );
+    // Held for the app's lifetime (as `load_shader_library!` does): the
+    // shaders importing a library module compose only while it is loaded.
+    std::mem::forget(
+        app.world_mut()
+            .resource_mut::<Assets<bevy::shader::Shader>>()
+            .add(prelude),
+    );
+    embedded_asset!(app, "layer/composite.wesl");
+    embedded_asset!(app, "layer/render/mip_blit.wesl");
+    embedded_asset!(app, "layer/render/backdrop_blit.wesl");
+    embedded_asset!(app, "filters/builtin/color_matrix.wesl");
+    embedded_asset!(app, "filters/builtin/blur.wesl");
+    embedded_asset!(app, "filters/builtin/bloom.wesl");
+    embedded_asset!(app, "filters/builtin/chromatic_aberration.wesl");
+    embedded_asset!(app, "filters/builtin/gradient_map.wesl");
+    embedded_asset!(app, "filters/builtin/outline.wesl");
+    embedded_asset!(app, "filters/builtin/pinch.wesl");
+    embedded_asset!(app, "filters/builtin/shadow.wesl");
+    embedded_asset!(app, "filters/builtin/crossfade.wesl");
+    embedded_asset!(app, "filters/builtin/linear_wipe.wesl");
+    embedded_asset!(app, "filters/builtin/pixelize.wesl");
 }
 
 /// Schedule the render-target camera gate — the system that flips a

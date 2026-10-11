@@ -44,7 +44,7 @@ impl ReactFilter for BlurParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "blur.wgsl")
+        load_embedded_asset!(assets, "blur.wesl")
     }
 
     fn identity_params() -> Option<Value> {

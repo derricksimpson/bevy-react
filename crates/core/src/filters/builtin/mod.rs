@@ -218,153 +218,120 @@ mod tests {
         assert!(passes.iter().all(|p| p.params[1].y == 0.0));
     }
 
-    /// The filter-pass WGSL parses and validates as naga modules. naga has no
-    /// naga_oil composition, so the prelude is checked standalone (minus its
-    /// `#define_import_path`) and each pass shader gets a poor-man's compose:
-    /// its `#import` block textually replaced by the prelude body. Real
-    /// composition is exercised by the live filter pipeline
-    /// (`layer/render.rs`) on a real GPU.
+    /// The filter-pass shaders compose and validate: each is composed against
+    /// the prelude by bevy's own `ShaderCache` — the WESL linker the GPU
+    /// pipeline cache runs, here on the CPU — and the composed WGSL is parsed
+    /// and validated by naga. A shader that fails here gates its layer on
+    /// native and crashes the app on the web (wasm can't catch shader-module
+    /// errors), so this is the pre-ship guard. Covers the built-ins and every
+    /// example's prelude-importing `.wesl` (its filters and morphs).
     #[test]
-    fn filter_wgsl_parses_and_validates() {
-        /// Parse + validate, then assert the expected entry points exist.
-        /// The entry-point check is load-bearing: if `splice` ever mangles a
-        /// pass shader (e.g. an `#import` form its skip loop mis-parses), the
-        /// degenerate result is usually the prelude body alone — which still
-        /// validates — so without this assertion the test would go silently
-        /// green while never checking the pass's fragment shader.
-        fn validate(name: &str, source: &str, entry_points: &[&str]) {
-            let module = naga::front::wgsl::parse_str(source)
-                .unwrap_or_else(|e| panic!("{name} does not parse:\n{}", e.emit_to_string(source)));
+    fn filter_shaders_compose_and_validate() {
+        use bevy::asset::{AssetId, uuid::Uuid};
+        use bevy::shader::{Shader, ShaderCache, ShaderCacheSource};
+
+        const PRELUDE: &str = include_str!("../../layer/filter_prelude.wesl");
+
+        /// Compose `src` (registered at asset `path`) against the prelude,
+        /// parse + validate the result, and check its entry points (a pass
+        /// the linker dropped would otherwise validate as the prelude alone).
+        fn check(path: &str, src: &str, entry_points: &[&str]) {
+            let mut cache = ShaderCache::<String, ()>::new((), |_, source, _| match source {
+                ShaderCacheSource::Wgsl(wgsl) => Ok(wgsl),
+                ShaderCacheSource::SpirV(_) => unreachable!("WESL composes to WGSL"),
+            });
+            let prelude = AssetId::Uuid {
+                uuid: Uuid::from_u128(1),
+            };
+            cache.set_shader(
+                prelude,
+                Shader::from_wesl(PRELUDE, crate::plugin::FILTER_PRELUDE_PATH),
+            );
+            let id = AssetId::Uuid {
+                uuid: Uuid::from_u128(2),
+            };
+            cache.set_shader(id, Shader::from_wesl(src.to_owned(), path.to_owned()));
+            let composed = cache
+                .get(0, id, &[])
+                .unwrap_or_else(|e| panic!("{path} does not compose: {e}"));
+            let module = naga::front::wgsl::parse_str(&composed).unwrap_or_else(|e| {
+                panic!("{path} does not parse:\n{}", e.emit_to_string(&composed))
+            });
             naga::valid::Validator::new(
                 naga::valid::ValidationFlags::all(),
                 naga::valid::Capabilities::all(),
             )
             .validate(&module)
-            .unwrap_or_else(|e| panic!("{name} does not validate: {e:?}"));
+            .unwrap_or_else(|e| panic!("{path} does not validate: {e:?}"));
             for entry in entry_points {
                 assert!(
                     module.entry_points.iter().any(|e| e.name == *entry),
-                    "{name} is missing entry point `{entry}` — splice mangled?"
+                    "{path} is missing entry point `{entry}`"
                 );
             }
         }
 
-        /// Replace the (possibly multi-line) `#import ... }` block with the
-        /// prelude body.
-        fn splice(prelude_body: &str, src: &str) -> String {
-            let mut out = String::new();
-            let mut lines = src.lines();
-            while let Some(line) = lines.next() {
-                if line.trim_start().starts_with("#import") {
-                    out.push_str(prelude_body);
-                    out.push('\n');
-                    if !line.contains('}') {
-                        for rest in lines.by_ref() {
-                            if rest.trim() == "}" {
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    out.push_str(line);
-                    out.push('\n');
-                }
-            }
-            out
+        check(crate::plugin::FILTER_PRELUDE_PATH, PRELUDE, &[]);
+        for (name, src) in [
+            ("color_matrix.wesl", include_str!("color_matrix.wesl")),
+            ("blur.wesl", include_str!("blur.wesl")),
+            ("bloom.wesl", include_str!("bloom.wesl")),
+            (
+                "chromatic_aberration.wesl",
+                include_str!("chromatic_aberration.wesl"),
+            ),
+            ("gradient_map.wesl", include_str!("gradient_map.wesl")),
+            ("outline.wesl", include_str!("outline.wesl")),
+            ("shadow.wesl", include_str!("shadow.wesl")),
+            ("pinch.wesl", include_str!("pinch.wesl")),
+            ("crossfade.wesl", include_str!("crossfade.wesl")),
+            ("linear_wipe.wesl", include_str!("linear_wipe.wesl")),
+            ("pixelize.wesl", include_str!("pixelize.wesl")),
+        ] {
+            check(
+                &format!("embedded://bevy_react_core/filters/builtin/{name}"),
+                src,
+                &["fragment"],
+            );
         }
 
-        let prelude_body: String = include_str!("../../layer/filter_prelude.wgsl")
-            .lines()
-            .filter(|l| !l.trim_start().starts_with("#define_import_path"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        validate("filter_prelude.wgsl", &prelude_body, &[]);
-        validate(
-            "color_matrix.wgsl",
-            &splice(&prelude_body, include_str!("color_matrix.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "blur.wgsl",
-            &splice(&prelude_body, include_str!("blur.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "bloom.wgsl",
-            &splice(&prelude_body, include_str!("bloom.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "chromatic_aberration.wgsl",
-            &splice(&prelude_body, include_str!("chromatic_aberration.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "gradient_map.wgsl",
-            &splice(&prelude_body, include_str!("gradient_map.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "outline.wgsl",
-            &splice(&prelude_body, include_str!("outline.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "shadow.wgsl",
-            &splice(&prelude_body, include_str!("shadow.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "pinch.wgsl",
-            &splice(&prelude_body, include_str!("pinch.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "crossfade.wgsl",
-            &splice(&prelude_body, include_str!("crossfade.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "linear_wipe.wgsl",
-            &splice(&prelude_body, include_str!("linear_wipe.wgsl")),
-            &["fragment"],
-        );
-        validate(
-            "pixelize.wgsl",
-            &splice(&prelude_body, include_str!("pixelize.wgsl")),
-            &["fragment"],
-        );
-
-        // The demos' app-side passes (every `examples/demos/assets/shaders` WGSL
-        // that imports the prelude) get the same check — their only pre-GPU
-        // coverage: at runtime a broken pass only gates its layer and warns.
-        // Skipped when the examples tree isn't present (a packaged crate).
-        let examples = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../examples/demos/assets/shaders");
-        let mut dirs = vec![examples.clone()];
+        // Every example's app-side passes (each `assets/shaders` `.wesl` that
+        // imports the prelude) get the same check — their only pre-GPU
+        // coverage. Skipped when the examples tree isn't present (a packaged
+        // crate).
+        let examples = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
         let mut checked = 0;
-        while let Some(dir) = dirs.pop() {
-            for path in std::fs::read_dir(&dir)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .map(|e| e.path())
-            {
-                if path.is_dir() {
-                    dirs.push(path);
-                } else if path.extension().is_some_and(|e| e == "wgsl")
-                    && let Ok(src) = std::fs::read_to_string(&path)
-                    && src.contains("#import bevy_react::filter")
+        for assets in std::fs::read_dir(&examples)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path().join("assets"))
+        {
+            let mut dirs = vec![assets.join("shaders")];
+            while let Some(dir) = dirs.pop() {
+                for path in std::fs::read_dir(&dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|e| e.path())
                 {
-                    let name = path.display().to_string();
-                    validate(&name, &splice(&prelude_body, &src), &["fragment"]);
-                    checked += 1;
+                    if path.is_dir() {
+                        dirs.push(path);
+                    } else if path.extension().is_some_and(|e| e == "wesl")
+                        && let Ok(src) = std::fs::read_to_string(&path)
+                        && src.contains("import bevy_react::filter")
+                    {
+                        // The asset path, as `AssetServer::load` names it.
+                        let asset = path.strip_prefix(&assets).unwrap().to_string_lossy();
+                        check(&asset, &src, &["fragment"]);
+                        checked += 1;
+                    }
                 }
             }
         }
         assert!(
             !examples.is_dir() || checked >= 3,
-            "expected at least ripple/glitch/dissolve, checked {checked}"
+            "expected at least the demos' ripple/glitch/dissolve, checked {checked}"
         );
 
         // The prelude's params array must track `MAX_FILTER_PARAM_VECS`; a
@@ -372,9 +339,8 @@ mod tests {
         // live GPU (the filter-pass bind group in `layer/render.rs` vs. the
         // WGSL declaration).
         assert!(
-            include_str!("../../layer/filter_prelude.wgsl")
-                .contains(&format!("array<vec4<f32>, {MAX_FILTER_PARAM_VECS}>")),
-            "filter_prelude.wgsl params array size must equal MAX_FILTER_PARAM_VECS"
+            PRELUDE.contains(&format!("array<vec4<f32>, {MAX_FILTER_PARAM_VECS}>")),
+            "filter_prelude.wesl params array size must equal MAX_FILTER_PARAM_VECS"
         );
     }
 }

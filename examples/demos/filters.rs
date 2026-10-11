@@ -39,7 +39,7 @@ use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 /// derive from params — that would take a hand-written `ReactFilter` impl), so
 /// it is sized to cover the demo slider's max (12 px); cranking `amplitude`
 /// past it would clip the ripple at the layer edge.
-#[react_filter(shader = "shaders/ripple.wgsl", outset = 12.0, time = true)]
+#[react_filter(shader = "shaders/ripple.wesl", outset = 12.0, time = true)]
 struct Ripple {
     /// Peak displacement, in px.
     #[serde(default = "default_ripple_amplitude")]
@@ -68,7 +68,7 @@ fn default_ripple_speed() -> f32 {
 /// split. Fully procedural (hash of slice row × time) — no noise textures.
 ///
 /// Packing: `params[0].x` intensity.
-#[react_filter(shader = "shaders/glitch.wgsl", time = true)]
+#[react_filter(shader = "shaders/glitch.wesl", time = true)]
 struct Glitch {
     /// Overall strength, 0 (clean) ..= 1 (heavily corrupted).
     #[serde(default = "default_glitch_intensity")]
@@ -84,7 +84,7 @@ fn default_glitch_intensity() -> f32 {
 /// threshold. Not time-driven — the layer repaints only on a params change.
 ///
 /// Packing: `params[0].x` progress.
-#[react_filter(shader = "shaders/dissolve.wgsl")]
+#[react_filter(shader = "shaders/dissolve.wesl")]
 struct Dissolve {
     /// 0 = intact, 1 = fully dissolved.
     #[serde(default)]
@@ -95,7 +95,7 @@ struct Dissolve {
 // gl-transitions morph pack: ports of https://gl-transitions.com/gallery
 // transitions, all single-pass (= morph-capable) with user params within the
 // 6-vec4 morph cap. Shaders live in
-// `assets/shaders/morphs/*.wgsl`; each header carries the
+// `assets/shaders/morphs/*.wesl`; each header carries the
 // upstream URL, author, license, packing map, and premultiplied-alpha notes.
 // Every shader opens with the endpoint guards from the prelude's identity
 // contract (progress <= 0 → exact "from", >= 1 → exact "to").
@@ -111,7 +111,7 @@ fn black() -> FilterColor {
 }
 
 /// Vertical blinds: a soft left-to-right sweep sliced into repeating blinds.
-#[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/windowslice.wesl")]
 struct Windowslice {
     /// Number of blinds.
     #[serde(default = "default_ten")]
@@ -122,7 +122,7 @@ struct Windowslice {
 }
 
 /// Radial sweep wipe: the edge sweeps a full turn around the center.
-#[react_morph_filter(shader = "shaders/morphs/radial.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/radial.wesl")]
 struct Radial {
     /// Angular width of the soft edge (upstream: 1 radian).
     #[serde(default = "default_radial_smoothness")]
@@ -130,7 +130,7 @@ struct Radial {
 }
 
 /// Growing polka dots radiating from `center`.
-#[react_morph_filter(shader = "shaders/morphs/polka_dots_curtain.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/polka_dots_curtain.wesl")]
 struct PolkaDotsCurtain {
     /// Dot-grid frequency (cells across the box).
     #[serde(default = "default_twenty")]
@@ -142,7 +142,7 @@ struct PolkaDotsCurtain {
 
 /// A screen-circular crop shrinks the old image away, then grows the new one
 /// back, passing through a full-`color` frame at the midpoint.
-#[react_morph_filter(shader = "shaders/morphs/circle_crop.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/circle_crop.wesl")]
 struct CircleCrop {
     /// Backdrop color outside the circle (upstream `bgcolor`, opaque black
     /// there). Defaults to TRANSPARENT — correct for UI over arbitrary
@@ -154,7 +154,7 @@ struct CircleCrop {
 /// A soft band opens from the centerline outward (or closes inward with
 /// `close`), splitting horizontally or vertically. Merges the upstream
 /// HorizontalOpen / HorizontalClose / VerticalOpen family into one filter.
-#[react_morph_filter(shader = "shaders/morphs/curtain_open.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/curtain_open.wesl")]
 struct CurtainOpen {
     /// 0 = horizontal split (band grows along y), 1 = vertical.
     #[serde(default)]
@@ -165,7 +165,7 @@ struct CurtainOpen {
 }
 
 /// fbm-noise burn wipe with a glowing rim at the front.
-#[react_morph_filter(shader = "shaders/morphs/burn.wgsl", name = "burn0")]
+#[react_morph_filter(shader = "shaders/morphs/burn.wesl", name = "burn0")]
 struct Burn {
     /// Rim glow color (upstream `burnColor`), as a CSS color.
     #[serde(default = "default_burn_color")]
@@ -193,7 +193,7 @@ fn default_burn_color() -> FilterColor {
 }
 
 /// Tile grid card-flip on a staggered diagonal wave.
-#[react_morph_filter(shader = "shaders/morphs/tiles_wave.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/tiles_wave.wesl")]
 struct TilesWave {
     /// Tile count per axis (upstream ivec2 `tileCount`).
     #[serde(default = "default_eight_by_eight")]
@@ -207,7 +207,7 @@ struct TilesWave {
 }
 
 /// Per-cell randomized card flips behind fading grid dividers.
-#[react_morph_filter(shader = "shaders/morphs/grid_flip.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/grid_flip.wesl")]
 struct GridFlip {
     /// Cells per axis (upstream ivec2).
     #[serde(default = "default_four_by_four")]
@@ -228,7 +228,7 @@ struct GridFlip {
 
 /// Door halves slide outward with perspective; the new image zooms up from
 /// the depths over a faint floor reflection.
-#[react_morph_filter(shader = "shaders/morphs/doorway.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/doorway.wesl")]
 struct Doorway {
     /// Floor-reflection strength.
     #[serde(default = "default_two_fifths")]
@@ -242,12 +242,12 @@ struct Doorway {
 }
 
 /// Page flip around the vertical center spine.
-#[react_morph_filter(shader = "shaders/morphs/book_flip.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/book_flip.wesl")]
 struct BookFlip {}
 
 /// Rotating kaleidoscope folding through wedge reflections, undistorted at
 /// both ends.
-#[react_morph_filter(shader = "shaders/morphs/power_kaleido.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/power_kaleido.wesl")]
 struct PowerKaleido {
     /// Wedge offset scale (upstream `dist = scale / 10`).
     #[serde(default = "default_two")]
@@ -307,7 +307,7 @@ fn default_four_by_four() -> Vec2 {
 /// VHS/datamosh glitch: hash-driven bar/slit tears, RGB splits, scanlines,
 /// and strobes peaking mid-transition. The pattern re-rolls 30 times over
 /// the morph (frame-quantized progress — no wall-clock time).
-#[react_morph_filter(shader = "shaders/morphs/strip_datamosh_glitch.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/strip_datamosh_glitch.wesl")]
 struct StripDatamoshGlitch {
     /// Overall glitch intensity.
     #[serde(default = "default_one")]
@@ -342,7 +342,7 @@ struct StripDatamoshGlitch {
 /// crossfade, peaking mid-transition. COST: the blur loop takes ~100 texture
 /// samples per pixel on every in-flight frame (the upstream's faithful
 /// 50-iteration ring) — fine for brief morphs, not a filter to idle on.
-#[react_morph_filter(shader = "shaders/morphs/film_burn.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/film_burn.wesl")]
 struct FilmBurn {
     /// Flare pattern seed (upstream `Seed`).
     #[serde(default = "default_seed")]
@@ -352,7 +352,7 @@ struct FilmBurn {
 /// Page curl around a moving diagonal cylinder, with a grayscale backside
 /// and cast shadows (the classic HP/webvfx page-curl, BSD-3 — the shader
 /// header retains the license block).
-#[react_morph_filter(shader = "shaders/morphs/inverted_page_curl.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/inverted_page_curl.wesl")]
 struct InvertedPageCurl {}
 
 fn default_bars() -> f32 {
@@ -395,7 +395,7 @@ fn default_seed() -> f32 {
 /// the front the old image shatters into wind-borne dust grains that swirl
 /// away and fade, while the new image condenses out of incoming dust and
 /// settles into place.
-#[react_morph_filter(shader = "shaders/morphs/dustify.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/dustify.wesl")]
 struct Dustify {
     /// Sweep direction of the dissolve front, clockwise from +X in screen
     /// space (y down): 0 = left-to-right, 90 = top-to-bottom. Wire numbers
@@ -460,7 +460,7 @@ fn default_dustify_raggedness() -> f32 {
 
 /// A soft band of light sweeps across the box, leaving the new image in its
 /// wake — the gallery's page switch, swept in the direction the nav moved.
-#[react_morph_filter(shader = "shaders/morphs/light_sweep.wgsl")]
+#[react_morph_filter(shader = "shaders/morphs/light_sweep.wesl")]
 struct LightSweep {
     /// Travel direction, the gradient convention: `0` toward the top,
     /// clockwise (`180` sweeps downward).

@@ -17,7 +17,7 @@ import type {
 // surface it sits on.
 
 export const Colors = {
-  // Surfaces, deepest first. The backdrop (ambient.wgsl) sits below `stage`.
+  // Surfaces, deepest first. The backdrop (ambient.wesl) sits below `stage`.
   stage: "#0b0c10aa",
   card: "#111218",
   raised: "#171820",

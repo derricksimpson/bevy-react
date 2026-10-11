@@ -13,7 +13,7 @@ use crate::filters::params::{FilterColor, ParamSlot, length_logical_px, static_l
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
 use crate::protocol::units::Length;
 
-/// Silhouette-prep mode marker in `params[0].w` (see `shadow.wgsl`).
+/// Silhouette-prep mode marker in `params[0].w` (see `shadow.wesl`).
 const MODE_PREP: f32 = 0.0;
 /// Combine mode marker in `params[0].w`.
 const MODE_COMBINE: f32 = 1.0;
@@ -26,9 +26,9 @@ const MODE_COMBINE: f32 = 1.0;
 /// `color: "transparent"`.
 ///
 /// Resolves to **four** passes, bloom's exact structure: silhouette-prep
-/// (`shadow.wgsl` — offset + tint), blur H + V (literally `blur.wgsl`,
+/// (`shadow.wesl` — offset + tint), blur H + V (literally `blur.wesl`,
 /// sharing the plain blur's pipeline — `spread` sits in blur's radius slot),
-/// and a combine (`shadow.wgsl`) layering the original capture over the
+/// and a combine (`shadow.wesl`) layering the original capture over the
 /// blurred shadow through the prelude's always-bound `capture_texture`. Like
 /// bloom, the combine reads the ORIGINAL capture — chain `shadow` first (or
 /// alone) when combining with color ops. All named params ride every pass in
@@ -85,7 +85,7 @@ impl ReactFilter for ShadowParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "shadow.wgsl")
+        load_embedded_asset!(assets, "shadow.wesl")
     }
 
     fn identity_params() -> Option<Value> {

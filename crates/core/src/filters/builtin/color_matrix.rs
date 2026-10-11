@@ -19,7 +19,7 @@ use crate::protocol::units::Angle;
 /// and identity elsewhere, so any color op can be evaluated by the same
 /// shader.
 fn color_matrix_shader(assets: &AssetServer) -> Handle<Shader> {
-    load_embedded_asset!(assets, "color_matrix.wgsl")
+    load_embedded_asset!(assets, "color_matrix.wesl")
 }
 
 /// The identity color-matrix packing (each op overwrites its own slot).

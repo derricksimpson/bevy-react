@@ -2,7 +2,7 @@
 //!
 //! Both blend the frozen "from" snapshot into the live "to" content via the
 //! prelude's morph helpers (`morph_sample_from` / `morph_sample_to` /
-//! `morph_progress` — see `layer/filter_prelude.wgsl` for the reserved-param
+//! `morph_progress` — see `layer/filter_prelude.wesl` for the reserved-param
 //! and progress-1 identity contracts). Single-pass by construction (the morph
 //! resolver rejects multi-pass entries), zero outset (neither paints outside
 //! the box), premultiplied-direct blending (a lerp of premultiplied colors is
@@ -72,7 +72,7 @@ impl ReactFilter for CrossfadeParams {
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "crossfade.wgsl")
+        load_embedded_asset!(assets, "crossfade.wesl")
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
@@ -135,7 +135,7 @@ impl ReactFilter for LinearWipeParams {
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "linear_wipe.wgsl")
+        load_embedded_asset!(assets, "linear_wipe.wesl")
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {

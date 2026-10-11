@@ -16,7 +16,7 @@ use crate::protocol::units::Length;
 pub const MAX_FILTER_PARAM_VECS: usize = 8;
 
 /// Defensive cap on a chain's summed outset, physical px per side. Far beyond
-/// any sane blur (quality is bounded well before this — see `blur.wgsl`'s
+/// any sane blur (quality is bounded well before this — see `blur.wesl`'s
 /// MAX_HALF note), it bounds the inflation math: `2 * outset` adds at most
 /// 2048 texels to the capture, leaving real headroom under wgpu's default
 /// 8192 `max_texture_dimension_2d` for the content itself. (Texture-limit

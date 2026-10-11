@@ -13,7 +13,7 @@ use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
 use crate::protocol::units::Length;
 
-/// Bright-pass mode marker in `params[0].w` (see `bloom.wgsl`).
+/// Bright-pass mode marker in `params[0].w` (see `bloom.wesl`).
 const MODE_BRIGHT: f32 = 0.0;
 /// Combine mode marker in `params[0].w`.
 const MODE_COMBINE: f32 = 1.0;
@@ -27,9 +27,9 @@ const MODE_COMBINE: f32 = 1.0;
 /// how bright the color *looks*, not its linear energy); `1` blooms nothing,
 /// `0` blooms everything.
 ///
-/// Resolves to **four** passes: bright-pass (`bloom.wgsl`), blur H + V
-/// (literally `blur.wgsl`, sharing the plain blur's pipeline), and a combine
-/// (`bloom.wgsl`) that reads the original capture through the prelude's
+/// Resolves to **four** passes: bright-pass (`bloom.wesl`), blur H + V
+/// (literally `blur.wesl`, sharing the plain blur's pipeline), and a combine
+/// (`bloom.wesl`) that reads the original capture through the prelude's
 /// always-bound `capture_texture`. All three named params ride every pass in
 /// the same slots, so length rewriting and per-param animation bindings
 /// (which write all passes of a wire entry) stay uniform; the mode switch is
@@ -67,7 +67,7 @@ impl ReactFilter for BloomParams {
     const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "bloom.wgsl")
+        load_embedded_asset!(assets, "bloom.wesl")
     }
 
     fn identity_params() -> Option<Value> {

@@ -23,6 +23,8 @@ const LANG_ALIASES: Record<string, string> = {
   ts: "tsx",
   typescript: "tsx",
   rs: "rust",
+  // WESL is WGSL plus imports and `@if`: WGSL's grammar highlights it.
+  wesl: "wgsl",
 };
 const TAB_LABELS: Record<string, string> = { tsx: "TSX", rust: "Rust" };
 

@@ -40,7 +40,7 @@ impl Plugin for CameraPlugin {
 fn setup_camera_and_light(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
-        // The backdrop's own base (`STUDIO_TOP` in ambient.wgsl), so the
+        // The backdrop's own base (`STUDIO_TOP` in ambient.wesl), so the
         // frames before its shader compiles don't flash Bevy's default gray.
         Camera {
             clear_color: ClearColorConfig::Custom(Color::srgb_u8(9, 10, 13)),

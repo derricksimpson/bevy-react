@@ -195,9 +195,9 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `name = "..."` (optional) — the wire name; defaults to the struct ident
 ///   with its first letter lowercased (`Glow` → `"glow"`).
-/// - `shader = "path/to.wgsl"` (required) — loaded with `AssetServer::load`,
-///   so a plain asset path relative to your assets dir; `embedded://` paths
-///   also work verbatim.
+/// - `shader = "path/to.wesl"` (required) — a WESL shader, loaded with
+///   `AssetServer::load`, so a plain asset path relative to your assets dir;
+///   `embedded://` paths also work verbatim.
 /// - `outset = <number>` (optional, default `0.0`) — extra *logical* px the
 ///   effect bleeds outside the node's rect.
 /// - `time = <bool>` (optional, default `false`) — a time-driven effect
@@ -208,8 +208,8 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// pack into at most `MAX_FILTER_PARAM_VECS` (8) vec4s, enforced at resolve
 /// time — an over-cap filter is rejected at runtime with a devtools warning,
 /// not a compile error. Shader-side, the packed array is `uniforms.params`
-/// via `#import bevy_react::filter` (see
-/// `crates/core/src/layer/filter_prelude.wgsl` for the full binding
+/// via `import bevy_react::filter::uniforms;` (see
+/// `crates/core/src/layer/filter_prelude.wesl` for the full binding
 /// contract).
 ///
 /// | field type           | packs as                          | components |
@@ -227,7 +227,7 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// field and listing the supported types.
 ///
 /// ```ignore
-/// #[react_filter(name = "glow", shader = "shaders/glow.wgsl", outset = 4.0)]
+/// #[react_filter(name = "glow", shader = "shaders/glow.wesl", outset = 4.0)]
 /// struct GlowParams {
 ///     intensity: f32,          // params[0].x
 ///     direction: Vec2,         // params[0].yz
@@ -300,10 +300,10 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `name = "..."` (optional) — the wire name; defaults to the struct ident
 ///   with its first letter lowercased.
-/// - `shader = "path/to.wgsl"` (required) — the single blend pass. It must
+/// - `shader = "path/to.wesl"` (required) — the single blend pass. It must
 ///   resolve to exactly ONE pass with user params within the morph cap of 6
 ///   vec4s (`params[6..8]` are engine-reserved), and follow the MORPH
-///   CONTRACT in `crates/core/src/layer/filter_prelude.wgsl` — sample via
+///   CONTRACT in `crates/core/src/layer/filter_prelude.wesl` — sample via
 ///   `morph_sample_from()`/`morph_sample_to()`/`morph_progress()` and output
 ///   exactly the live sample at progress 1.0 (the identity contract).
 #[proc_macro_attribute]
@@ -352,7 +352,7 @@ fn expand_react_filter(
     let Some(shader) = shader else {
         return syn::Error::new(
             proc_macro2::Span::call_site(),
-            format!("`{macro_name}` requires a `shader = \"path/to.wgsl\"` argument"),
+            format!("`{macro_name}` requires a `shader = \"path/to.wesl\"` argument"),
         )
         .to_compile_error()
         .into();

@@ -50,7 +50,7 @@ impl ReactFilter for PixelizeParams {
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
-        load_embedded_asset!(assets, "pixelize.wgsl")
+        load_embedded_asset!(assets, "pixelize.wesl")
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
