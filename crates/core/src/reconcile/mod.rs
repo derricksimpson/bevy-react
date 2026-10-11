@@ -9,8 +9,8 @@
 //! `SystemParam` bundles), `events` (click/scroll collectors + shared
 //! utilities), `picking` (pointer state from bevy_picking), `pointer` (drags),
 //! `hover` (enter/leave/hover), `interaction` (the hover/press/focus
-//! restyle). Submodules are private; everything is re-exported here, so
-//! `crate::reconcile::X` is the one path.
+//! restyle), `text_cascade` (text style inheritance). Submodules are private;
+//! everything is re-exported here, so `crate::reconcile::X` is the one path.
 
 mod apply;
 mod create;
@@ -21,6 +21,7 @@ pub(crate) mod picking;
 mod pointer;
 pub(crate) mod stamps;
 mod stats;
+pub(crate) mod text_cascade;
 mod update;
 
 #[cfg(test)]

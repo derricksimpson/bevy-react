@@ -498,6 +498,16 @@ mod tests {
         assert_eq!(g.stops[1].point, Val::Px(150.0));
     }
 
+    /// `rem`/`em` leaves lerp in their own unit (bevy's `Val` interpolation
+    /// covers them) and snap across units like every other pair.
+    #[test]
+    fn font_relative_vals_lerp_in_their_unit() {
+        assert_eq!(lerp_val(Val::Rem(1.0), Val::Rem(3.0), 0.5), Val::Rem(2.0));
+        assert_eq!(lerp_val(Val::Em(1.0), Val::Em(3.0), 0.5), Val::Em(2.0));
+        assert_eq!(lerp_val(Val::Em(1.0), Val::Rem(3.0), 0.5), Val::Rem(3.0));
+        assert_eq!(lerp_val(Val::Px(10.0), Val::Rem(3.0), 0.5), Val::Rem(3.0));
+    }
+
     #[test]
     fn position_unit_mismatch_snaps_to_target_mid_ease() {
         let from = [linear(

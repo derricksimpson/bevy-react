@@ -71,6 +71,8 @@ pub fn length_to_val(length: Length) -> Val {
         Length::Vh(v) => Val::Vh(v),
         Length::VMin(v) => Val::VMin(v),
         Length::VMax(v) => Val::VMax(v),
+        Length::Em(v) => Val::Em(v),
+        Length::Rem(v) => Val::Rem(v),
     }
 }
 

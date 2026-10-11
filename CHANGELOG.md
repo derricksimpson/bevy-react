@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`em` and `rem` lengths.** Every length (sizes, insets, margins, padding,
+  borders, radii, gaps, grid tracks, translations, shadows, outlines,
+  gradient stops) takes `"2rem"`, a multiple of Bevy's `RemSize` resource
+  (20px by default), and `"1.5em"`, a multiple of the element's font size:
+  its own `fontSize` on `<text>` and `<editableText>`, the root size
+  elsewhere. Transitions ease between values of the same unit. Change
+  `RemSize` and the UI follows on the same frame.
+- **`fontSize` in `em`.** On a nested `<text>` it is a multiple of the
+  enclosing text's size (`"1em"` takes the parent's size); on a block, of
+  the root size.
 - **`onPointerHover`.** Fires on each frame the pointer moved while over the
   element (between its `onPointerEnter` and `onPointerLeave`), a button held
   or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only
@@ -91,6 +101,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or scaled clipping node clips its children along its transformed box (Bevy
   0.20), composited layers included. With `transition: { layout }` the clip
   eases with the box, so a clipping wrapper can reveal auto-height content.
+- **`letterSpacing: "…em"` is a multiple of the text's font size**, as in
+  CSS. It was a multiple of `RemSize`; write `"…rem"` for that.
+- **An unset `fontSize` is `1rem`** (Bevy 0.20's default): 20px as before,
+  but it now follows `RemSize`.
+- **`Length` gained `Em` and `Rem` variants, `FontSize` gained `Em`**
+  (`bevy_react::protocol::units`; breaking for Rust code that matches them
+  exhaustively, such as a hand-written filter `pack`).
 - **`add_react_handler` and `add_react_request_handler` take one generic
   parameter less** (breaking). Bevy's observers dropped their `Bundle`
   parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.

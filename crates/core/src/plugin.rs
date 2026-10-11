@@ -1029,6 +1029,13 @@ impl Plugin for ReactUiPlugin {
             PostUpdate,
             crate::svg::stamp_svg_measures.in_set(crate::ext::MeasureStampSet),
         );
+        // `em` on a fontless element is the root size. `PostUpdate` so a
+        // `RemSize` written by any `Update` system lands this frame; before
+        // layout, which re-converts a node whose `EmSize` changed.
+        app.add_systems(
+            PostUpdate,
+            crate::em_size::sync_em_size_to_rem.before(bevy::ui::UiSystems::Layout),
+        );
         // The built-in requests and rumble messages (their payload types are
         // registered by `register_builtin_bindings`). `bevy.gamepad.getAll()`
         // is the pull companion to `gamepadConnected` for late-mounted

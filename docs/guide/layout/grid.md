@@ -48,6 +48,7 @@ every item lands in implicit ones.
 | Token            | Track size                                         |
 | ---------------- | -------------------------------------------------- |
 | `100px`          | Fixed, in logical pixels                           |
+| `10rem`, `2em`   | Fixed, in multiples of the root font size          |
 | `25%`            | A percentage of the container's content box        |
 | `1fr`            | A share of the free space, never below the content |
 | `1flex`          | A share of the free space that may go below it     |

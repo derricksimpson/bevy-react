@@ -51,9 +51,10 @@ A nested `<text>` is a span: a styled run inside its block. It takes
 `style`, `name`, `sharedTag` and `key`.
 
 - **Spans don't inherit.** A span's unset properties take the defaults
-  (white, 20px, the default font), not the parent's values. Restate
+  (white, `1rem`, the default font), not the parent's values. Restate
   `fontSize` and `fontFamily` on every span, for example by spreading a
-  shared style object.
+  shared style object, or size the span relative to the text around it with
+  `fontSize: "1em"`.
 - Bare strings do inherit: a string run takes the style of the `<text>`
   directly around it, block or span.
 - On a span, `color`, `fontSize`, `fontWeight`, `fontFamily`, `lineHeight`,
@@ -76,17 +77,17 @@ const body: BevyStyle = { fontSize: 16, fontFamily: "Inter" };
 
 ## Text styles
 
-| Property        | Value                                                                    | Default          | Applies to  |
-| --------------- | ------------------------------------------------------------------------ | ---------------- | ----------- |
-| `color`         | CSS color, or an `{ animated }` color binding                            | white            | block, span |
-| `fontSize`      | px number, or `"px"`, `"vw"`, `"vh"`, `"vmin"`, `"vmax"`, `"rem"` string | 20px             | block, span |
-| `fontWeight`    | keyword, or a numeric string `"1"` to `"1000"`                           | `"normal"` (400) | block, span |
-| `fontFamily`    | a registered family name                                                 | the default font | block, span |
-| `lineHeight`    | multiple of the font size, px string, or `{ px }`                        | `1.2`            | block, span |
-| `letterSpacing` | px number, `"px"`/`"rem"`/`"em"` string, or `{ rem }`                    | `0`              | block, span |
-| `textAlign`     | `"left"`, `"center"`, `"right"`, `"justify"`, `"start"`, `"end"`         | `"left"`         | block       |
-| `lineBreak`     | `"wordBoundary"`, `"anyCharacter"`, `"wordOrCharacter"`, `"noWrap"`      | `"wordBoundary"` | block       |
-| `textShadow`    | `{ color?, offsetX?, offsetY? }`                                         | none             | block       |
+| Property        | Value                                                                     | Default          | Applies to  |
+| --------------- | ------------------------------------------------------------------------- | ---------------- | ----------- |
+| `color`         | CSS color, or an `{ animated }` color binding                             | white            | block, span |
+| `fontSize`      | px number, or `"px"`, `"rem"`, `"em"`, `"vw"`, `"vh"`, `"vmin"`, `"vmax"` | `1rem` (20px)    | block, span |
+| `fontWeight`    | keyword, or a numeric string `"1"` to `"1000"`                            | `"normal"` (400) | block, span |
+| `fontFamily`    | a registered family name                                                  | the default font | block, span |
+| `lineHeight`    | multiple of the font size, px string, or `{ px }`                         | `1.2`            | block, span |
+| `letterSpacing` | px number, `"px"`/`"rem"`/`"em"` string, or `{ rem }`                     | `0`              | block, span |
+| `textAlign`     | `"left"`, `"center"`, `"right"`, `"justify"`, `"start"`, `"end"`          | `"left"`         | block       |
+| `lineBreak`     | `"wordBoundary"`, `"anyCharacter"`, `"wordOrCharacter"`, `"noWrap"`       | `"wordBoundary"` | block       |
+| `textShadow`    | `{ color?, offsetX?, offsetY? }`                                          | none             | block       |
 
 `<editableText>` uses the same `color` and font properties.
 
@@ -111,10 +112,16 @@ const t = useSharedValue(0);
 
 ### Size and weight
 
-- `fontSize`: a bare number is logical pixels. `"rem"` is relative to Bevy's
+- `fontSize`: a bare number is logical pixels. `"rem"` is a multiple of
+  [the root font size](../styling/units.md#the-root-font-size), Bevy's
   `RemSize` resource (20px by default); viewport units follow the window
-  size. CSS `em` is not supported. An unparsable string becomes `0` (the text
-  disappears) and reports a `fontSize` warning.
+  size. `"em"` is a multiple of the size the text inherits: the enclosing
+  text's on a span (`"0.5em"` in a 30px block is 15px, and `"1em"` is how a
+  span takes its parent's size), the root font size on a block. An
+  unparsable string becomes `0` (the text disappears) and reports a
+  `fontSize` warning.
+- `"em"` lengths on the text's own box are multiples of its `fontSize`, so
+  a badge with `padding: "0.25em 0.5em"` keeps its proportions at any size.
 - `fontWeight`: `"thin"` (100), `"light"` (300), `"normal"` (400),
   `"medium"` (500), `"semibold"` (600), `"bold"` (700), `"black"` (900), or
   any weight as a string, such as `"800"`. A JSON number is rejected, which
@@ -131,9 +138,12 @@ const t = useSharedValue(0);
   font size. `{ px: 24 }` is absolute. An invalid string falls back to `1.2`
   with a `lineHeight` warning.
 - `letterSpacing`: a number, a numeric string or a `"px"` string is logical
-  pixels. `"rem"`, `"em"` and `{ rem }` are multiples of Bevy's `RemSize`
-  (20px by default), not of the font size. `"normal"` is `0`. An invalid
-  string falls back to `0` with a `letterSpacing` warning.
+  pixels. `"em"` is a multiple of the text's own font size, as in CSS:
+  `"0.1em"` on 40px text is 4px. `"rem"` and `{ rem }` are multiples of the
+  root font size. `"normal"` is `0`. An invalid string falls back to `0`
+  with a `letterSpacing` warning. With a font size in viewport units, `"em"`
+  spacing has no exact form: it reads as `"rem"` and reports a
+  `letterSpacing` warning.
 
 ### Alignment and wrapping
 

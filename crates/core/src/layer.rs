@@ -528,29 +528,26 @@ fn reapply_text_fold(
     entity: Entity,
     promoted: bool,
 ) {
-    if !bridge.text_styles.contains_key(&id) {
+    let style = bridge.props_cache.get(&id).and_then(|p| p.style.as_ref());
+    let Some(entry) = bridge.text_styles.get_mut(&id) else {
         return;
-    }
-    let style = bridge.props_cache.get(&id).and_then(|p| p.style.clone());
-    let resolved = crate::ui_map::resolved_text_style(style.as_ref(), fonts, promoted);
-    bridge.text_styles.insert(id, resolved.clone());
+    };
     // Only the opacity fold (the color half) depends on promotion; writing
     // the color half alone leaves the shaping components untouched, so a
     // promotion flip never re-shapes the block.
+    entry.0 = crate::ui_map::resolve_text_color(style, promoted);
+    let resolved = entry.clone();
     crate::ui_map::apply_resolved_text_style(&mut commands.entity(entity), &resolved, true, false);
-    let kids: Vec<NodeId> = bridge.children_of(id).collect();
-    for kid in kids {
-        if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
-            && let Some(&kid_entity) = bridge.nodes.get(&kid)
-        {
-            crate::ui_map::apply_resolved_text_style(
-                &mut commands.entity(kid_entity),
-                &resolved,
-                true,
-                false,
-            );
-        }
-    }
+    crate::reconcile::text_cascade::cascade(
+        commands,
+        bridge,
+        fonts,
+        id,
+        &resolved,
+        true,
+        false,
+        &mut Vec::new(),
+    );
 }
 
 /// Rebuild-trigger signals for [`sync_layer_geometry`]: when ALL are quiet, the
@@ -1096,6 +1093,8 @@ pub fn resolve_layer_repaints(
     revealed: Query<Entity, Changed<InheritedVisibility>>,
     focused_inputs: Query<(Entity, &crate::bridge::FocusState), With<bevy::text::EditableText>>,
     alphas: Query<&LayerGroupAlpha>,
+    // `Option`: the unit tests run this system in bare worlds.
+    rem: Option<Res<bevy::text::RemSize>>,
 ) {
     let state = &mut *state;
     state.dirty.clear();
@@ -1153,6 +1152,12 @@ pub fn resolve_layer_repaints(
         if meta.cache_policy == crate::style::props::LayerCache::Never {
             state.dirty.insert(meta.entity);
         }
+    }
+    // 6b. A root font size change repaints every layer: `rem`/`em` paint
+    //     values (border widths, radii, outlines, shadows, gradient stops)
+    //     resolve at extraction and sit outside the geometry hash.
+    if rem.is_some_and(|r| r.is_changed()) {
+        state.dirty.extend(membership.enclosing.keys());
     }
     // 7. Propagate outward: a dirty inner layer's composite quad re-draws
     //    inside its enclosing captures, so every outer layer re-captures too.
@@ -1993,6 +1998,36 @@ mod tests {
         assert_eq!(registry.layers[&2].repaints, 2);
         assert!(!registry.layers[&2].cached);
         assert!(registry.layers[&3].cached);
+    }
+
+    /// A `RemSize` change repaints every layer that frame (a `rem` border
+    /// width on a fixed-size box changes no hashed geometry), and only then.
+    #[test]
+    fn root_size_change_repaints_cached_layers() {
+        use bevy::text::RemSize;
+        let mut world = World::new();
+        world.init_resource::<LayerContentDirt>();
+        world.init_resource::<LayerRepaintState>();
+        world.init_resource::<LayersRegistry>();
+        let root = world.spawn_empty().id();
+        let mut membership = LayerMembership::default();
+        membership.node_to_layer.insert(root, root);
+        membership.enclosing.insert(root, None);
+        world.insert_resource(membership);
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(resolve_layer_repaints);
+        let mut run = |world: &mut World| {
+            schedule.run(world);
+            world.resource::<LayerRepaintState>().dirty.clone()
+        };
+        assert!(run(&mut world).is_empty(), "no root size, no dirt");
+        world.insert_resource(RemSize(24.0));
+        assert!(run(&mut world).contains(&root), "first sight repaints");
+        assert!(run(&mut world).is_empty(), "then cached");
+        world.resource_mut::<RemSize>().0 = 16.0;
+        assert!(run(&mut world).contains(&root), "a change repaints");
+        assert!(run(&mut world).is_empty(), "and only that frame");
     }
 
     /// The geometry fold cancels a uniform translation of root + members

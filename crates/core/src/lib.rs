@@ -54,6 +54,7 @@ pub mod diag;
 // the only knob (`ReactUiPlugin::devtools`).
 #[cfg(feature = "devtools")]
 mod devtools;
+mod em_size;
 mod event;
 // The extension contract (feature-facing components, sets, registries).
 pub mod element;

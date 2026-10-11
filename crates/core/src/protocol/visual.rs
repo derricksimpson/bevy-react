@@ -58,8 +58,9 @@ pub enum LineHeightSpec {
 }
 
 /// Letter spacing for a `<text>`. A bare number is logical pixels; a string carries
-/// a unit (`"2px"`, `"0.1rem"`/`"0.1em"` for a font-size multiple, or `"normal"`);
-/// `{ "rem": n }` is a multiple of the font size (legacy object form).
+/// a unit (`"2px"`, `"0.1em"` for a font-size multiple, `"0.1rem"` for a root-size
+/// one, or `"normal"`); `{ "rem": n }` is a multiple of the root size (legacy
+/// object form).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum LetterSpacingSpec {

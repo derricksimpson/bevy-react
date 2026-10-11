@@ -14,7 +14,7 @@ use super::stamps::{
     apply_animated, apply_pointer_handlers, apply_scroll_listener, apply_scroll_step,
     apply_style_variants_delta, apply_wheel_listener, update_controlled_scroll, variant_keys,
 };
-use crate::bridge::{JsBridge, ReactNode, SpanKind, StyleVariants};
+use crate::bridge::{JsBridge, StyleVariants};
 use crate::element::{AttrDirty, Common};
 use crate::ext::TextRole;
 use crate::plugin::Fonts;
@@ -23,7 +23,8 @@ use crate::style::props::OPACITY;
 use crate::style::{Invalidation, NodeCtx, Style, WriterCtx};
 use crate::transition::ScrollTransitionState;
 use crate::ui_map::{
-    apply_resolved_text_style, apply_style_masked, resolve_text_color, resolve_text_font,
+    ROOT_FONT_SIZE, apply_resolved_text_style, apply_style_masked, resolve_text_color,
+    resolve_text_font_in,
 };
 
 /// Apply one `Op::Update`: merge the delta into the retained props and
@@ -34,8 +35,6 @@ pub(super) fn apply_update(
     bridge: &mut JsBridge,
     assets: &AssetServer,
     fonts: &Fonts,
-    children: &Query<&Children>,
-    rnodes: &Query<&ReactNode>,
     scroll_query: &mut Query<(
         &mut ScrollPosition,
         &ComputedNode,
@@ -145,13 +144,23 @@ pub(super) fn apply_update(
     let font_half = is_text_block && global.intersects(styles.masks.text_font);
     let resolved = (color_half || font_half)
         .then(|| {
+            // An `em` font size is a multiple of the inherited one: a span's
+            // text parent's, the root size for a block.
+            let inherited = if font_half && flags.text == TextRole::Span {
+                let parent = bridge.parent_of.get(&id);
+                parent
+                    .and_then(|p| bridge.text_styles.get(p))
+                    .map_or(ROOT_FONT_SIZE, |s| s.1.font_size)
+            } else {
+                ROOT_FONT_SIZE
+            };
             let entry = bridge.text_styles.get_mut(&id)?;
             if color_half {
                 entry.0 = resolve_text_color(style.as_ref(), text_promoted);
             }
             if font_half {
-                let (font, line, spacing) = resolve_text_font(style.as_ref(), fonts);
-                (entry.1, entry.2, entry.3) = (font, line, spacing);
+                (entry.1, entry.2, entry.3) =
+                    resolve_text_font_in(style.as_ref(), fonts, inherited);
             }
             Some(entry.clone())
         })
@@ -183,6 +192,15 @@ pub(super) fn apply_update(
     };
     let mut ec = commands.entity(e);
     apply_style_masked(&mut ec, style, global, own, &wctx, invalidation);
+    // The font writer has no parent to ask: it just queued an `em` span's
+    // size root-relative. Land the real one behind it, in the same buffer.
+    if font_half
+        && flags.text == TextRole::Span
+        && super::text_cascade::em_sized(style.as_ref())
+        && let Some(resolved) = &resolved
+    {
+        apply_resolved_text_style(&mut ec, resolved, false, true);
+    }
     // The common prop stamps, per the element's groups.
     let common = info.decl.common;
     if common.contains(Common::VARIANTS) {
@@ -232,23 +250,21 @@ pub(super) fn apply_update(
             ev.scroll_top,
         );
     }
-    // Re-propagate the resolved text style to any bare-string children that
-    // inherit it.
-    if let Some(resolved) = resolved
-        && let Ok(kids) = children.get(e)
-    {
-        for child in kids.iter() {
-            if let Ok(rnode) = rnodes.get(child)
-                && bridge.spans.get(&rnode.0) == Some(&SpanKind::RawInherited)
-            {
-                apply_resolved_text_style(
-                    &mut commands.entity(child),
-                    &resolved,
-                    color_half,
-                    font_half,
-                );
-            }
-        }
+    // Re-propagate the resolved text style to what inherits it: bare-string
+    // children, and nested `<text>`s sized in `em`.
+    if let Some(resolved) = resolved {
+        let mut rebased = Vec::new();
+        super::text_cascade::cascade(
+            commands,
+            bridge,
+            fonts,
+            id,
+            &resolved,
+            color_half,
+            font_half,
+            &mut rebased,
+        );
+        bridge.text_styles.extend(rebased);
     }
     // Retain the merged props for the next delta (see above).
     bridge.props_cache.insert(id, props);

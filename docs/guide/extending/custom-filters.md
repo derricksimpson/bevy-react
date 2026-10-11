@@ -111,8 +111,8 @@ from `bevy_react::filters`. Any other field type is a compile error.
   `#[serde(default)]` or `#[serde(default = "…")]`. Omitting a field that
   has no default rejects the whole entry with a `filterParams` warning, as do
   unknown param keys and values of the wrong type.
-- **Units.** A `Length` accepts px only; `"50%"` or `"2vw"` rejects the
-  entry. It arrives in the shader already multiplied by the display's scale
+- **Units.** A `Length` accepts px only; `"50%"`, `"2vw"` or `"1rem"`
+  rejects the entry. It arrives in the shader already multiplied by the display's scale
   factor, matching `resolution`. A plain `f32` arrives unscaled.
 - **Built-in names.** A custom filter registered under a built-in's name
   replaces the built-in, in the app and in the generated typing alike.

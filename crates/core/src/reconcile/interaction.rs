@@ -167,19 +167,19 @@ pub fn apply_interaction_styles(
         {
             let resolved =
                 crate::ui_map::resolved_text_style(style.as_ref(), fonts, promoted.is_some());
-            let kids: Vec<_> = bridge.children_of(rnode.0).collect();
-            for kid in kids {
-                if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
-                    && let Some(&kid_entity) = bridge.nodes.get(&kid)
-                {
-                    crate::ui_map::apply_resolved_text_style(
-                        &mut commands.entity(kid_entity),
-                        &resolved,
-                        color_half,
-                        font_half,
-                    );
-                }
-            }
+            // `em` spans re-size with the merged font size; the text style
+            // cache keeps the base style's, so what they resolve to here is
+            // not written back.
+            super::text_cascade::cascade(
+                &mut commands,
+                bridge,
+                fonts,
+                rnode.0,
+                &resolved,
+                color_half,
+                font_half,
+                &mut Vec::new(),
+            );
         }
     }
 }

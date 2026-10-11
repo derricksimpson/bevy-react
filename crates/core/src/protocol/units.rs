@@ -19,6 +19,11 @@ pub enum Length {
     Vh(f32),
     VMin(f32),
     VMax(f32),
+    /// A multiple of the element's font size (bevy's `EmSize`): its own
+    /// `fontSize` on a text element, the root size on every other one.
+    Em(f32),
+    /// A multiple of the root font size (bevy's `RemSize` resource).
+    Rem(f32),
 }
 
 impl Default for Length {
@@ -27,7 +32,8 @@ impl Default for Length {
     }
 }
 
-/// Parse a CSS-ish length token (`"auto"`, `"10px"`, `"50%"`, `"100vw"`, `"5"`).
+/// Parse a CSS-ish length token (`"auto"`, `"10px"`, `"50%"`, `"100vw"`,
+/// `"2rem"`, `"1.5em"`, `"5"`).
 fn parse_length(s: &str) -> Result<Length, String> {
     if s.trim().eq_ignore_ascii_case("auto") {
         return Ok(Length::Auto);
@@ -41,6 +47,8 @@ fn parse_length(s: &str) -> Result<Length, String> {
             ("vmax", Length::VMax),
             ("vw", Length::Vw),
             ("vh", Length::Vh),
+            ("rem", Length::Rem),
+            ("em", Length::Em),
             ("%", Length::Percent),
         ],
         Length::Px,
@@ -52,7 +60,7 @@ type UnitCtor<T> = fn(f32) -> T;
 
 /// Parse a number with one of `units`' suffixes (tried in order, so a
 /// suffix another one ends with must come after it — `grad` before `rad`,
-/// `ms` before `s`), or a bare number through `bare`.
+/// `ms` before `s`, `rem` before `em`), or a bare number through `bare`.
 fn parse_suffixed<T>(
     s: &str,
     kind: &str,
@@ -225,8 +233,8 @@ impl<'de> Deserialize<'de> for Time {
 
 /// A font size mirroring `bevy_text::FontSize`, parsed from the wire as a number
 /// (logical pixels) or a unit string (`"24px"`, `"100vw"`/`vh`/`vmin`/`vmax`,
-/// `"1.5rem"`). `rem` is relative to bevy's `RemSize` resource (default 20px).
-/// (CSS `em` has no `bevy_text` equivalent, so it is not accepted.)
+/// `"1.5rem"`, `"1.2em"`). `rem` is relative to bevy's `RemSize` resource
+/// (default 20px).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FontSize {
     Px(f32),
@@ -235,10 +243,14 @@ pub enum FontSize {
     VMin(f32),
     VMax(f32),
     Rem(f32),
+    /// A multiple of the inherited font size: the enclosing text's on a
+    /// nested `<text>`, the root size on a block. `bevy_text` has no such
+    /// unit; it resolves to the inherited size's own unit at op time.
+    Em(f32),
 }
 
-/// Parse a font-size token (`"24px"`, `"100vw"`, `"1.5rem"`, or a bare number read
-/// as pixels).
+/// Parse a font-size token (`"24px"`, `"100vw"`, `"1.5rem"`, `"1.2em"`, or a
+/// bare number read as pixels).
 fn parse_font_size(s: &str) -> Result<FontSize, String> {
     parse_suffixed(
         s,
@@ -246,6 +258,7 @@ fn parse_font_size(s: &str) -> Result<FontSize, String> {
         &[
             ("px", FontSize::Px),
             ("rem", FontSize::Rem),
+            ("em", FontSize::Em),
             ("vmin", FontSize::VMin),
             ("vmax", FontSize::VMax),
             ("vw", FontSize::Vw),
@@ -487,6 +500,34 @@ mod tests {
         let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
             .expect("bad value-count must not abort");
         assert_eq!(s.get(&PADDING).copied(), Some(Rect::default()));
+    }
+
+    /// `rem` and `em` lengths (alone and inside a rect shorthand) and font
+    /// sizes. `"1.5rem"` also ends in `"em"`, so the suffix order is part of
+    /// the contract.
+    #[test]
+    fn length_em_rem() {
+        let len = |v: &str| serde_json::from_value::<Length>(serde_json::json!(v)).unwrap();
+        assert_eq!(len("1.5rem"), Length::Rem(1.5));
+        assert_eq!(len("2em"), Length::Em(2.0));
+        assert_eq!(len("0.5 em"), Length::Em(0.5));
+        // No number: warns and falls back like any bad length.
+        assert_eq!(len("rem"), Length::default());
+
+        let size = |v: &str| serde_json::from_value::<FontSize>(serde_json::json!(v)).unwrap();
+        assert_eq!(size("1.2rem"), FontSize::Rem(1.2));
+        assert_eq!(size("1.2em"), FontSize::Em(1.2));
+
+        let s: Style = serde_json::from_str(r#"{ "padding": "1rem 2em" }"#).unwrap();
+        assert_eq!(
+            s.get(&PADDING).copied(),
+            Some(Rect {
+                top: Length::Rem(1.0),
+                bottom: Length::Rem(1.0),
+                right: Length::Em(2.0),
+                left: Length::Em(2.0),
+            })
+        );
     }
 
     /// The axis form: `horizontal` sets left + right, `vertical` sets top +

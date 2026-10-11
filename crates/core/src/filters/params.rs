@@ -89,7 +89,9 @@ pub(super) fn check_param_cap(name: &str, vecs: usize) -> Result<(), String> {
 
 /// A [`Length`] filter param's logical-px value. Only `Px` has a fixed
 /// logical size here — percent/viewport units have no basis for a filter
-/// param — so any other unit is rejected with a message naming it, instead of
+/// param, and `em`/`rem` would need the node and the root size, which a
+/// chain resolved once per style change has neither of — so any other unit
+/// is rejected with a message naming it, instead of
 /// silently resolving to `0.0`. Bare wire numbers decode as `Px` and stay
 /// accepted.
 ///
@@ -104,6 +106,8 @@ pub fn length_logical_px(filter: &str, param: &str, len: Length) -> Result<f32, 
         Length::Vh(_) => "vh",
         Length::VMin(_) => "vmin",
         Length::VMax(_) => "vmax",
+        Length::Em(_) => "em",
+        Length::Rem(_) => "rem",
     };
     Err(format!(
         "filter {filter:?} {param} must be in px (a bare number or \"px\"), got a {unit:?} length"

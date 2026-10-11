@@ -522,6 +522,24 @@ mod tests {
         assert_eq!(seed.scale_current(), 1.0);
     }
 
+    /// A static outgoing node's translation seeds in whatever unit it was
+    /// authored in — `rem` here; anything but `auto` carries over.
+    #[test]
+    fn static_outgoing_node_seeds_its_translation_unit() {
+        use crate::protocol::units::Length;
+        use bevy::ui::Val2;
+        let mut world = World::new();
+        let old = world
+            .spawn((
+                ComputedNode::default(),
+                UiGlobalTransform::default(),
+                UiTransform::from_translation(Val2::new(Val::Rem(2.0), Val::Auto)),
+            ))
+            .id();
+        let seed = crate::transition::shared::snapshot(&world, old).expect("seed");
+        assert_eq!(seed.translate_x_current(), Length::Rem(2.0));
+    }
+
     /// An incoming node that dies within the same batch leaves no parked
     /// seed behind; a `Reset` clears the parked seeds too.
     #[test]

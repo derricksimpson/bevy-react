@@ -600,6 +600,8 @@ impl Lerp for Length {
             (Vh(x), Vh(y)) => Vh(lerp(x, y)),
             (VMin(x), VMin(y)) => VMin(lerp(x, y)),
             (VMax(x), VMax(y)) => VMax(lerp(x, y)),
+            (Em(x), Em(y)) => Em(lerp(x, y)),
+            (Rem(x), Rem(y)) => Rem(lerp(x, y)),
             _ => other,
         }
     }

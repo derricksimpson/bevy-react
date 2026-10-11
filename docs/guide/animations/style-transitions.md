@@ -118,8 +118,8 @@ Rules that are easy to trip over:
 How values move:
 
 - Lengths (translations, sizes, corner radii) ease between values of the
-  same unit: px to px, `%` to `%`, `vw` to `vw`. A change of unit, or to or
-  from `"auto"`, snaps.
+  same unit: px to px, `%` to `%`, `vw` to `vw`, `rem` to `rem`. A change of
+  unit (`em` to `rem` included), or to or from `"auto"`, snaps.
 - `rotate` eases numerically, so 350 to 10 degrees turns the long way
   through 180.
 - Unsetting `borderRadius` eases to square corners, and a corner that

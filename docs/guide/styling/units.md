@@ -18,6 +18,7 @@ are parsed once, when the style crosses to Bevy.
     width: 240, // logical px
     height: "50vh", // half the window's height
     padding: "8px 16px", // vertical, horizontal
+    gap: "1rem", // the root font size
     transform: { rotate: "0.25turn" },
     transition: { transform: { duration: "0.3s" } },
   }}
@@ -35,6 +36,8 @@ shadow offsets are lengths:
 | `"50%"`                | A percentage of a reference size (see below)   |
 | `"10vw"`, `"10vh"`     | 10% of the viewport's width or height          |
 | `"10vmin"`, `"10vmax"` | 10% of the viewport's smaller or larger side   |
+| `"2rem"`               | 2 × the root font size, 20px by default        |
+| `"1.5em"`              | 1.5 × the element's font size                  |
 | `"auto"`               | Left to layout, where the property supports it |
 
 - A logical pixel is multiplied by the window's scale factor and Bevy's
@@ -43,13 +46,20 @@ shadow offsets are lengths:
 - The viewport is the target the UI draws into: the window for your app's
   UI, the texture for UI inside a [`<surface>`](../elements/surface.md).
   Viewport units follow it when it resizes and ignore `UiScale`.
+- `"rem"` is a multiple of [the root font size](#the-root-font-size).
+  `"em"` is a multiple of the element's own font size: its `fontSize` on a
+  [`<text>`](../elements/text.md) or an
+  [`<editableText>`](../elements/editable-text.md), and the root font size
+  on every other element, where `"1em"` equals `"1rem"` (a `<node>` has no
+  font size, and a text does not inherit one through it). Both are scaled
+  by the scale factor and `UiScale`, like pixels.
 - `"auto"` sizes from content on `width`, `height`, the min and max sizes
   and `flexBasis`; means "not set" on the insets; absorbs free space on
   `margin`; and is `0` on `padding`, `border` and the gaps.
 - A numeric string without a unit (`"16"`) is pixels. Units are lowercase,
   except that `"auto"` matches in any case.
-- Anything else (`"1em"`, `"2rem"`, `"calc(…)"`, `"16pt"`) becomes `0` and
-  reports a `length` devtools warning. The rest of the style still applies.
+- Anything else (`"calc(…)"`, `"16pt"`, `"2ch"`) becomes `0` and reports a
+  `length` devtools warning. The rest of the style still applies.
 
 An `{ animated }` binding on a length property is driven in logical pixels,
 whatever unit the static value used. See
@@ -121,17 +131,65 @@ duration becomes `0` and reports a `time` devtools warning. See
 
 ## Font sizes
 
-`fontSize` takes a number (logical pixels), `"px"`, the viewport units, or
-`"rem"`: a multiple of Bevy's `RemSize` resource, 20px by default, which
-makes it the knob for scaling all `rem` text at once. It does not accept
-percentages or `em`. An invalid value becomes `0` and reports a `fontSize`
-devtools warning. See [`<text>`](../elements/text.md).
+`fontSize` takes a number (logical pixels), `"px"`, the viewport units,
+`"rem"` or `"em"`:
+
+- `"rem"` is a multiple of [the root font size](#the-root-font-size). An
+  unset `fontSize` is `"1rem"`.
+- `"em"` is a multiple of the font size the text inherits. On a `<text>`
+  block that is the root font size, so `"1.2em"` equals `"1.2rem"`. On a
+  `<text>` nested in another it is the enclosing text's size, in that
+  text's unit: `"0.5em"` inside a 30px text is 15px, inside a `"4vw"` text
+  it is `"2vw"`.
+
+It does not accept percentages. An invalid value becomes `0` and reports a
+`fontSize` devtools warning. See [`<text>`](../elements/text.md).
+
+## The root font size
+
+`rem` values are multiples of Bevy's `RemSize` resource, 20 logical pixels
+by default. bevy-react adds no API over it: insert the resource when you
+build the app, or write it from any system.
+
+```rust
+app.insert_resource(RemSize(16.0));
+```
+
+Everything sized from it follows a change on the same frame: `rem` lengths
+and font sizes, text with no `fontSize`, and `em` values wherever they
+resolve to the root font size. To set it from React, add a
+[message](../communication/react-to-bevy.md):
+
+```tsx
+import { bevy } from "./bevy";
+
+<button onClick={() => bevy.settings.setTextSize(24)}>
+  <text>Large text</text>
+</button>;
+```
+
+```rust
+#[react_message(name = "settings.setTextSize")]
+struct SetTextSize(f32);
+
+fn set_text_size(on: On<SetTextSize>, mut rem: ResMut<RemSize>) {
+    rem.0 = on.event().0.clamp(8.0, 48.0);
+}
+
+app.add_react_handler(set_text_size);
+```
+
+A change lays the whole UI out again, reshapes the text that follows it and
+re-renders every [composited layer](layers.md). That suits a settings
+control. Don't drive `RemSize` from an animation.
 
 ## Limits
 
-- No `calc()`, `em`, or unit arithmetic. Compute mixed values in
-  JavaScript, for example from the window size (see
-  [Window](../events/window.md)).
+- No `calc()` or unit arithmetic. Compute mixed values in JavaScript, for
+  example from the window size (see [Window](../events/window.md)).
+- Filter params and `transform3d`'s `origin` take neither `em` nor `rem`.
+- Inside a `scrollbar` style, `"em"` is 20px whatever the root font size.
+  Use `"rem"` there.
 - Colors are strings of their own; see [Colors](colors.md).
 
 Every style property's accepted type is listed in the

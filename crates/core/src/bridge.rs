@@ -49,7 +49,8 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 ///
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
 ///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`, `Visibility`,
-///   `UiTransform`, `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
+///   `UiTransform`, `EmSize` (the root size, `RemSize`, on an element with no
+///   font), `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
 ///   `TextLayout`, `ScrollPosition`, `FocusPolicy`/`Pickable` (the
 ///   `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
 ///   `Children`/`ChildOf`, plus this crate's own markers and state

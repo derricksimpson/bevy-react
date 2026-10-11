@@ -33,6 +33,7 @@ mod scene;
 mod scenes;
 mod sparkle;
 mod spotlight;
+mod units;
 // Framebuffer capture (`--shoot`) drives Bevy's `Screenshot` + `save_to_disk`, both
 // native-only; the whole module is excluded on web.
 #[cfg(not(target_arch = "wasm32"))]
@@ -312,9 +313,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     app.add_systems(Startup, register_host_textures);
 
     // Each scene's plugin registers its own bindings in `build` (as does
-    // `ScenePlugin`); only the debug-navigation + clipboard handlers are left
-    // to register here.
+    // `ScenePlugin`); only the debug-navigation, clipboard and root-font-size
+    // handlers are left to register here.
     clipboard::register_bindings(&mut app);
+    units::register_bindings(&mut app);
     filters::register_bindings(&mut app);
     // Screenshot navigation rides a `#[react_event]`; native-only (the module is too).
     #[cfg(not(target_arch = "wasm32"))]
@@ -348,6 +350,7 @@ fn register_react_bindings(app: &mut App) {
     screenshot::register_bindings(app);
     filters::register_bindings(app);
     clipboard::register_bindings(app);
+    units::register_bindings(app);
     // `scenes::named_pins` is intentionally absent: it registers no bindings
     // (it reaches React entities via `ReactNodes`).
     scenes::ambient::register_bindings(app);

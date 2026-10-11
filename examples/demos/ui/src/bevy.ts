@@ -398,6 +398,7 @@ export type SepiaParams = { amount: number, };
 export type SetCount = number;
 export type SetCrt = boolean;
 export type SetFollowMode = boolean;
+export type SetRemSize = number;
 export type ShadowParams = { color: string, offsetX: number | string, offsetY: number | string, spread: number | string, };
 export type Sparkle = { 
 /**
@@ -506,6 +507,7 @@ export interface ReactMessages {
   "nebula.burst": NebulaBurst;
   selectScene: SelectScene;
   "surfaceDemo.setCrt": SetCrt;
+  "units.setRemSize": SetRemSize;
 }
 
 /** Every `request` name and its request/response types. */
@@ -835,6 +837,9 @@ export const bevy = {
   selectScene(value: SelectScene): void { emit("selectScene", value); },
   surfaceDemo: {
     setCrt(value: SetCrt): void { emit("surfaceDemo.setCrt", value); },
+  },
+  units: {
+    setRemSize(value: SetRemSize): void { emit("units.setRemSize", value); },
   },
   window: {
     size(): Promise<WindowSize> { return request("window.size", null); },

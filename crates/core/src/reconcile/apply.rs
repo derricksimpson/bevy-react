@@ -248,7 +248,7 @@ pub fn apply_js_ops(
                         // relationship hooks.
                         commands.entity(p).add_child(c);
                     }
-                    inherit_text_style(&mut commands, &bridge, parent, child, c);
+                    inherit_text_style(&mut commands, &mut bridge, &fonts, parent, child, c);
                 }
             }
             Op::Insert {
@@ -301,7 +301,7 @@ pub fn apply_js_ops(
                             }
                         }
                     }
-                    inherit_text_style(&mut commands, &bridge, parent, child, c);
+                    inherit_text_style(&mut commands, &mut bridge, &fonts, parent, child, c);
                 }
             }
             Op::Remove { parent, child } => {
@@ -368,8 +368,6 @@ pub fn apply_js_ops(
                     &mut bridge,
                     &assets,
                     &fonts,
-                    &children,
-                    &rnodes,
                     &mut scroll_query,
                     id,
                     props,
@@ -571,25 +569,42 @@ impl ParentDirt {
     }
 }
 
-/// When a bare-string run is appended into a `<text>`, copy the parent's text
-/// style onto it (Bevy has no text-style inheritance, and the parent's freshly
-/// queued components aren't yet visible to an ECS query this frame).
-// TODO(review): this hand-rolled CSS-style text inheritance (here + the O(children)
-// re-propagation loop in the `<text>` branch of `update::apply_update`) is a complexity
-// hotspot. It's likely unavoidable until Bevy grows real text-style inheritance, but
-// worth watching as the text model grows.
+/// A text run attached into a `<text>` takes what it inherits (Bevy has no
+/// text-style inheritance, and the parent's freshly queued components aren't
+/// yet visible to an ECS query this frame): a bare-string run copies the
+/// parent's whole resolved style; a nested `<text>` sized in `em` resolves
+/// against the parent's font size — React attaches a span's own children
+/// before the span, so that cascades on to what copied its placeholder.
 fn inherit_text_style(
     commands: &mut Commands,
-    bridge: &JsBridge,
+    bridge: &mut JsBridge,
+    fonts: &Fonts,
     parent: NodeId,
     child: NodeId,
     child_entity: Entity,
 ) {
-    if bridge.spans.get(&child) != Some(&SpanKind::RawInherited) {
+    let Some(&kind) = bridge.spans.get(&child) else {
         return;
-    }
-    if let Some(style) = bridge.text_styles.get(&parent).cloned() {
-        commands.entity(child_entity).insert(style);
+    };
+    let Some(style) = bridge.text_styles.get(&parent) else {
+        return;
+    };
+    match kind {
+        SpanKind::RawInherited => {
+            commands.entity(child_entity).insert(style.clone());
+        }
+        SpanKind::InlineStyled => {
+            let mut rebased = Vec::new();
+            super::text_cascade::rebase(
+                commands,
+                bridge,
+                fonts,
+                child,
+                style.1.font_size,
+                &mut rebased,
+            );
+            bridge.text_styles.extend(rebased);
+        }
     }
 }
 

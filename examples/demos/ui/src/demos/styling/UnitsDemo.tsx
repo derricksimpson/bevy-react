@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Caption,
   InlineCode,
@@ -7,8 +7,19 @@ import {
   List,
 } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Box, DemoRow, Example, Figure, Row, Stage, stage } from "@/components";
-import { Code } from "@/components/docs";
+import {
+  Box,
+  ControlColumn,
+  DemoRow,
+  Example,
+  Figure,
+  Row,
+  Slider,
+  Stage,
+  stage,
+} from "@/components";
+import { Code, CodeTabs } from "@/components/docs";
+import { bevy } from "@/bevy";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
 
@@ -24,12 +35,14 @@ const PAGE: ExplanationData = {
       <Code lang="tsx">{`width: 80            // px
 width: "50%"         // of the parent
 width: "10vw"        // of the viewport
-fontSize: "1.5rem"   // of Bevy's RemSize (default 20px)
+width: "12rem"       // of the root font size
+padding: "0.5em"     // of the font size
+fontSize: "1.5rem"   // of Bevy's RemSize
 rotate: "0.25turn"   // deg / rad / turn / grad
 duration: "0.3s"     // ms / s`}</Code>
       <List>
-        <ListItem>Lengths: px, %, vw/vh/vmin/vmax, auto.</ListItem>
-        <ListItem>fontSize adds rem.</ListItem>
+        <ListItem>Lengths: px, %, vw/vh/vmin/vmax, rem, em, auto.</ListItem>
+        <ListItem>fontSize takes px, viewport units, rem and em.</ListItem>
         <ListItem>Angles: deg (bare-number default), rad, turn, grad.</ListItem>
         <ListItem>Time: ms (bare-number default), s.</ListItem>
       </List>
@@ -49,11 +62,14 @@ export function UnitsDemo() {
         <AngleDemo />
         <TimeDemo />
       </DemoRow>
+      <DemoRow>
+        <RootSizeDemo />
+      </DemoRow>
     </>
   );
 }
 
-const LENGTHS = ["80px", "50%", "10vw"];
+const LENGTHS = ["80px", "50%", "10vw", "6rem"];
 
 function LengthDemo() {
   return (
@@ -64,13 +80,15 @@ function LengthDemo() {
           <Paragraph>
             A bare number is px; strings carry a unit.{" "}
             <InlineCode>%</InlineCode> is relative to the parent,{" "}
-            <InlineCode>vw/vh/vmin/vmax</InlineCode> to the viewport, plus{" "}
+            <InlineCode>vw/vh/vmin/vmax</InlineCode> to the viewport,{" "}
+            <InlineCode>rem</InlineCode> to the root font size, plus{" "}
             <InlineCode>auto</InlineCode>. Resize the window and the vw bar
             follows it.
           </Paragraph>
           <Code lang="tsx">{`<node style={{ width: "80px" }} />
 <node style={{ width: "50%" }} />
-<node style={{ width: "10vw" }} />`}</Code>
+<node style={{ width: "10vw" }} />
+<node style={{ width: "6rem" }} />`}</Code>
         </>
       }
       demo={LengthCard}
@@ -98,7 +116,7 @@ function LengthCard() {
   );
 }
 
-const FONT_SIZES = ["14px", "1.5rem", "2vw"];
+const FONT_SIZES = ["14px", "1.5rem", "1.2em", "2vw"];
 
 function FontSizeDemo() {
   return (
@@ -109,10 +127,14 @@ function FontSizeDemo() {
           <Paragraph>
             Font size takes px, viewport units, or <InlineCode>rem</InlineCode>{" "}
             — relative to Bevy's <InlineCode>RemSize</InlineCode> resource
-            (default 20px), the knob for app-wide text scaling.
+            (default 20px), the knob for app-wide text scaling.{" "}
+            <InlineCode>em</InlineCode> is relative to the size the text
+            inherits: the root size here, the enclosing text's on a nested{" "}
+            <InlineCode>{"<text>"}</InlineCode>.
           </Paragraph>
           <Code lang="tsx">{`<text style={{ fontSize: "14px" }} />
 <text style={{ fontSize: "1.5rem" }} />
+<text style={{ fontSize: "1.2em" }} />
 <text style={{ fontSize: "2vw" }} />`}</Code>
         </>
       }
@@ -146,6 +168,120 @@ function FontSizeCard() {
     </node>
   );
 }
+
+function RootSizeDemo() {
+  return (
+    <Example
+      title="Root font size"
+      info={
+        <>
+          <Paragraph>
+            <InlineCode>rem</InlineCode> is a multiple of Bevy's{" "}
+            <InlineCode>RemSize</InlineCode> resource.{" "}
+            <InlineCode>em</InlineCode> is a multiple of the element's own font
+            size: its <InlineCode>fontSize</InlineCode> on a text, the root size
+            on a node. Drag the slider: the bar, the rem text and the node chip
+            follow, the text chip keeps the padding of its own 28px. An{" "}
+            <InlineCode>em</InlineCode> font size on a nested text is a multiple
+            of the text around it.
+          </Paragraph>
+          <CodeTabs
+            tsx={`<node style={{ width: "8rem" }} />
+<text style={{ fontSize: "1rem" }} />
+
+const chip = {
+  padding: "0.5em",
+  borderRadius: "0.25em",
+};
+const big = { ...chip, fontSize: 28 };
+
+// em = the text's own 28px
+<text style={big}>text</text>
+// em = the root font size
+<node style={chip}>…</node>
+
+// half of the enclosing text
+<text style={{ fontSize: 28 }}>
+  Big
+  <text style={{ fontSize: "0.5em" }}>
+    half
+  </text>
+</text>`}
+            rust={`#[react_message(
+    name = "units.setRemSize"
+)]
+pub struct SetRemSize(pub f32);
+
+fn set_rem_size(
+    on: On<SetRemSize>,
+    mut rem: ResMut<RemSize>,
+) {
+    rem.0 = on.event().0;
+}
+
+app.add_react_handler(set_rem_size);`}
+          />
+        </>
+      }
+      demo={RootSizeCard}
+    />
+  );
+}
+
+const DEFAULT_REM = 20;
+
+function RootSizeCard() {
+  const [rem, setRem] = useState(DEFAULT_REM);
+  // The root size belongs to the whole app: give it back with the page.
+  useEffect(() => () => bevy.units.setRemSize(DEFAULT_REM), []);
+  const change = (value: number) => {
+    const px = Math.round(value);
+    setRem(px);
+    bevy.units.setRemSize(px);
+  };
+
+  return (
+    <ControlColumn>
+      <node style={{ flexDirection: "column", gap: 10, width: "100%" }}>
+        <node style={{ ...remBar, width: "8rem" }} />
+        <text style={{ fontSize: "1rem", color: Colors.text }}>1rem text</text>
+        <Row>
+          <text style={{ ...chip, fontSize: 28 }}>text</text>
+          <node style={chip}>
+            <text style={{ fontSize: 28, color: Colors.ink }}>node</text>
+          </node>
+        </Row>
+        <text style={{ fontSize: 28, color: Colors.text }}>
+          Big{" "}
+          <text style={{ fontSize: "0.5em", color: Colors.cyan }}>half</text>
+        </text>
+      </node>
+      <Slider
+        value={rem}
+        min={12}
+        max={32}
+        onChange={change}
+        name="RemSize"
+        unit="px"
+      />
+    </ControlColumn>
+  );
+}
+
+const remBar: BevyStyle = {
+  height: 28,
+  borderRadius: 6,
+  backgroundColor: Colors.cyan,
+};
+
+// The same em values on a text (its own font size) and on a node (the root
+// size).
+const chip: BevyStyle = {
+  padding: "0.5em",
+  borderRadius: "0.25em",
+  backgroundColor: Colors.mint,
+  color: Colors.ink,
+};
 
 const ANGLES = ["45deg", "0.785rad", "0.125turn", "50grad"];
 

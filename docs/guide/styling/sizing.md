@@ -31,7 +31,8 @@ All the size keys take lengths (see [Units](units.md)) and default to
 ## Width and height
 
 - A number or `"px"` value is a fixed size in logical pixels; `"50%"` is of
-  the parent's content box; viewport units follow the window.
+  the parent's content box; viewport units follow the window; `"rem"` and
+  `"em"` follow the font size (see [Units](units.md)).
 - `"auto"` (the default) sizes from the content, then lets the layout
   adjust: in a flex container the item can grow or shrink along the main
   axis (`flexGrow`, `flexShrink`) and stretches across it (`alignItems`

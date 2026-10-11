@@ -14,7 +14,10 @@ pub static COLOR: StyleProperty<Animatable<String>> = StyleProperty {
     invalidate: Invalidate::Fixed(PAINT),
     ..StyleProperty::with_codec("color", Codec::serde_as("Animatable<Color>"))
 };
-/// Font size: logical px or a unit string (`"24px"`, `"2vw"`, `"1.5rem"`).
+/// Font size: logical px or a unit string (`"24px"`, `"2vw"`, `"1.5rem"`,
+/// `"1.2em"`). `em` is a multiple of the inherited size: the enclosing
+/// text's on a nested `<text>`, the root size (`RemSize`) on a block. Unset
+/// → `1rem`.
 pub static FONT_SIZE: StyleProperty<FontSize> = StyleProperty {
     invalidate: Invalidate::Fixed(SHAPING),
     ..StyleProperty::with_codec("fontSize", Codec::serde_as("FontSize"))
@@ -53,8 +56,8 @@ pub static LINE_HEIGHT: StyleProperty<LineHeightSpec> = StyleProperty {
     )
 };
 /// Letter spacing: a bare number is logical px; a string carries a unit
-/// (`"2px"`, `"0.1rem"`/`"0.1em"`, `"normal"`); `{ rem }` is a font-size
-/// multiple.
+/// (`"2px"`, `"0.1rem"`, `"0.1em"`, `"normal"`). `em` is a multiple of the
+/// text's font size, `rem` and `{ rem }` of the root size (`RemSize`).
 pub static LETTER_SPACING: StyleProperty<LetterSpacingSpec> = StyleProperty {
     invalidate: Invalidate::Fixed(SHAPING),
     ..StyleProperty::with_codec(

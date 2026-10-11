@@ -21,7 +21,9 @@ const PAGE: ExplanationData = {
         an <Bold>inline span</Bold> of the parent's run — that is how you color
         or bold part of a sentence. Spans do not inherit the parent's font
         settings: restate <InlineCode>fontSize</InlineCode> /{" "}
-        <InlineCode>fontFamily</InlineCode> on the span if they should match.
+        <InlineCode>fontFamily</InlineCode> on the span if they should match, or
+        size it relative to the text around it with a font size in{" "}
+        <InlineCode>em</InlineCode>.
       </Paragraph>
       <Code lang="tsx">{`<text style={{ fontSize: 18 }}>
   Nested <text style={{ color: "#5cd9ff", fontSize: 18 }}>spans</text> restyle
@@ -74,8 +76,9 @@ function FontSizeDemo() {
         <>
           <Paragraph>
             <InlineCode>fontSize</InlineCode> takes a number of logical pixels
-            (or a unit string like <InlineCode>"2vw"</InlineCode> /{" "}
-            <InlineCode>"1.5rem"</InlineCode>).{" "}
+            (or a unit string like <InlineCode>"2vw"</InlineCode>,{" "}
+            <InlineCode>"1.5rem"</InlineCode> or, relative to the enclosing
+            text, <InlineCode>"0.8em"</InlineCode>).{" "}
             <InlineCode>fontWeight</InlineCode> picks a named weight from{" "}
             <InlineCode>thin</InlineCode> to <InlineCode>black</InlineCode> —
             with a variable font, every step renders true.

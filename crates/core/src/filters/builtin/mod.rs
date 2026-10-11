@@ -141,6 +141,17 @@ mod tests {
         assert_eq!(s.color.0, [0.0, 0.0, 0.0, 0.6]);
     }
 
+    /// A filter length is px only: `em`/`rem` are rejected by name like the
+    /// other units (there is no node or root size to resolve them against).
+    #[test]
+    fn font_relative_lengths_are_rejected() {
+        use crate::filters::length_logical_px;
+        for (len, unit) in [(Length::Rem(1.0), "\"rem\""), (Length::Em(1.0), "\"em\"")] {
+            let err = length_logical_px("blur", "radius", len).unwrap_err();
+            assert!(err.contains(unit), "{err}");
+        }
+    }
+
     /// Unknown param keys are rejected (deny-unknown-fields), both at the
     /// typed layer and through the registry's baked resolve fn.
     #[test]

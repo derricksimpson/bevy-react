@@ -248,6 +248,9 @@ impl SharedSeed {
     pub(crate) fn scale_current(&self) -> f32 {
         self.state.scale.current
     }
+    pub(crate) fn translate_x_current(&self) -> Length {
+        self.state.translate_x.current
+    }
 }
 
 /// Seeds taken this batch, keyed by the incoming node id, between the
@@ -283,10 +286,17 @@ pub(crate) fn snapshot(world: &World, outgoing: Entity) -> Option<SharedSeed> {
             // its `UiTransform`.
             let mut s = TransitionState::at_identity();
             if let Some(t) = entity.get::<UiTransform>() {
+                // Exhaustive, so a new `Val` unit can't be dropped silently.
                 let len = |v: Val| match v {
+                    Val::Auto => None,
                     Val::Px(x) => Some(Length::Px(x)),
                     Val::Percent(x) => Some(Length::Percent(x)),
-                    _ => None,
+                    Val::Vw(x) => Some(Length::Vw(x)),
+                    Val::Vh(x) => Some(Length::Vh(x)),
+                    Val::VMin(x) => Some(Length::VMin(x)),
+                    Val::VMax(x) => Some(Length::VMax(x)),
+                    Val::Em(x) => Some(Length::Em(x)),
+                    Val::Rem(x) => Some(Length::Rem(x)),
                 };
                 if let Some(x) = len(t.translation.x) {
                     s.translate_x.init(x);

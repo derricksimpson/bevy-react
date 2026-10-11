@@ -78,7 +78,8 @@ Re-renders the layer:
   `<anchor>` that stays hidden until its first layout);
 - animations and transitions of nodes inside it;
 - a focused `editableText` inside it, every frame while its caret blinks;
-- a change in a nested layer, which re-renders every layer around it.
+- a change in a nested layer, which re-renders every layer around it;
+- a change of the root font size (`RemSize`), which re-renders every layer.
 
 Does not re-render the layer, because it is applied when the texture is
 drawn:

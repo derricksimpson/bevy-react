@@ -657,6 +657,21 @@ fn lerp_length_same_unit_else_snaps() {
         Length::Px(0.0).lerp(Length::Percent(10.0), 0.5),
         Length::Percent(10.0)
     );
+    // Font-relative units ease in their own unit; `em` ↔ `rem` is a unit
+    // change like any other (they differ on a text element).
+    assert_eq!(
+        Length::Rem(1.0).lerp(Length::Rem(3.0), 0.5),
+        Length::Rem(2.0)
+    );
+    assert_eq!(Length::Em(1.0).lerp(Length::Em(3.0), 0.5), Length::Em(2.0));
+    assert_eq!(
+        Length::Em(1.0).lerp(Length::Rem(3.0), 0.5),
+        Length::Rem(3.0)
+    );
+    assert_eq!(
+        Length::Px(10.0).lerp(Length::Rem(1.0), 0.5),
+        Length::Rem(1.0)
+    );
 }
 
 fn px(l: Length) -> f32 {
@@ -891,6 +906,17 @@ fn lerp_rect_eases_per_corner_and_snaps_mixed_units() {
     assert_eq!(m.right, Px(15.0));
     assert_eq!(m.bottom, Px(50.0), "unit change snaps that corner");
     assert_eq!(m.left, Percent(50.0), "unit change snaps that corner");
+
+    // `rem` corners follow the same rule.
+    let a = WireRect { top: Rem(1.0), ..a };
+    let b = WireRect {
+        top: Rem(3.0),
+        right: Rem(1.0),
+        ..b
+    };
+    let m = a.lerp(b, 0.5);
+    assert_eq!(m.top, Rem(2.0));
+    assert_eq!(m.right, Rem(1.0), "px to rem snaps that corner");
 }
 
 /// `transition: { borderRadius }` eases `Node.border_radius` toward the

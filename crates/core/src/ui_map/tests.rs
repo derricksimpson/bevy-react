@@ -334,6 +334,16 @@ fn length_units() {
         length_to_val(s.get(&MIN_HEIGHT).static_val().unwrap()),
         Val::Px(24.0)
     );
+    // Font-relative units map one-to-one: bevy resolves them per node.
+    let s = style(serde_json::json!({ "width": "2rem", "height": "1.5em" }));
+    assert_eq!(
+        length_to_val(s.get(&WIDTH).static_val().unwrap()),
+        Val::Rem(2.0)
+    );
+    assert_eq!(
+        length_to_val(s.get(&HEIGHT).static_val().unwrap()),
+        Val::Em(1.5)
+    );
 }
 
 #[test]
@@ -612,25 +622,70 @@ fn line_height_px_vs_relative() {
     );
 }
 
+/// `letterSpacing` against the run's font size.
+fn spacing(v: serde_json::Value, font_size: BevyFontSize) -> LetterSpacing {
+    letter_spacing(
+        style(serde_json::json!({ "letterSpacing": v }))
+            .get(&LETTER_SPACING)
+            .as_ref()
+            .unwrap(),
+        font_size,
+    )
+}
+
 #[test]
 fn letter_spacing_px_vs_rem() {
-    let ls = |v: serde_json::Value| {
-        letter_spacing(
-            style(serde_json::json!({ "letterSpacing": v }))
-                .get(&LETTER_SPACING)
-                .as_ref()
-                .unwrap(),
-        )
-    };
+    // Everything but `em` ignores the font size.
+    let ls = |v: serde_json::Value| spacing(v, BevyFontSize::Px(30.0));
     assert_eq!(ls(serde_json::json!(2)), LetterSpacing::Px(2.0));
     assert_eq!(
         ls(serde_json::json!({ "rem": 0.1 })),
         LetterSpacing::Rem(0.1)
     );
-    // string forms: `px`, `rem`/`em`, and `normal`.
+    // string forms: `px`, `rem`, and `normal`.
     assert_eq!(ls(serde_json::json!("2px")), LetterSpacing::Px(2.0));
     assert_eq!(ls(serde_json::json!("0.1rem")), LetterSpacing::Rem(0.1));
     assert_eq!(ls(serde_json::json!("normal")), LetterSpacing::default());
+}
+
+/// `em` spacing is a multiple of the run's own font size, kept in that
+/// size's unit: exact for px and rem fonts.
+#[test]
+fn letter_spacing_em_follows_the_font_size() {
+    let em = |font_size| spacing(serde_json::json!("0.5em"), font_size);
+    assert_eq!(em(BevyFontSize::Px(30.0)), LetterSpacing::Px(15.0));
+    assert_eq!(em(BevyFontSize::Rem(1.5)), LetterSpacing::Rem(0.75));
+    // Through the resolver: the font size lands before the spacing reads
+    // it, and an unset one is `1rem`.
+    let resolve = |v: serde_json::Value| resolve_text_font(Some(&style(v)), &Fonts::default()).2;
+    assert_eq!(
+        resolve(serde_json::json!({ "fontSize": 40, "letterSpacing": "0.5em" })),
+        LetterSpacing::Px(20.0)
+    );
+    assert_eq!(
+        resolve(serde_json::json!({ "letterSpacing": "0.5em" })),
+        LetterSpacing::Rem(0.5)
+    );
+}
+
+/// bevy has no letter spacing in viewport units: `em` on a viewport font
+/// size reads as rem and warns (the sink is process-global — serialize, and
+/// filter by this test's own value).
+#[cfg(all(feature = "devtools", debug_assertions))]
+#[test]
+fn letter_spacing_em_on_a_viewport_font_warns() {
+    let _lock = crate::diag::test_lock();
+    crate::diag::arm_runtime();
+    let _ = crate::diag::take_runtime_warnings();
+    assert_eq!(
+        spacing(serde_json::json!("0.375em"), BevyFontSize::Vw(2.0)),
+        LetterSpacing::Rem(0.375)
+    );
+    let warned = crate::diag::take_runtime_warnings()
+        .into_iter()
+        .filter(|w| w.kind == "letterSpacing" && w.value == "0.375em")
+        .count();
+    assert_eq!(warned, 1);
 }
 
 #[test]
@@ -831,6 +886,20 @@ fn font_size_units() {
     // viewport + rem units map one-to-one onto bevy's `FontSize`.
     assert_eq!(fs(serde_json::json!("2vw")), BevyFontSize::Vw(2.0));
     assert_eq!(fs(serde_json::json!("1.5rem")), BevyFontSize::Rem(1.5));
+    // `em` on a block is a multiple of the root size…
+    assert_eq!(fs(serde_json::json!("1.5em")), BevyFontSize::Rem(1.5));
+    // …and inside another run, of that run's size, in its unit.
+    let within = |inherited| {
+        resolve_text_font_in(
+            Some(&style(serde_json::json!({ "fontSize": "0.5em" }))),
+            &Fonts::default(),
+            inherited,
+        )
+        .0
+        .font_size
+    };
+    assert_eq!(within(BevyFontSize::Px(30.0)), BevyFontSize::Px(15.0));
+    assert_eq!(within(BevyFontSize::Vw(2.0)), BevyFontSize::Vw(1.0));
 }
 
 /// Decoded text enums flow through to the `TextLayout` (keyword parsing

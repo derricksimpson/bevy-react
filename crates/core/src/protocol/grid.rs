@@ -38,8 +38,9 @@ fn split_tracks(s: &str) -> Vec<String> {
     out
 }
 
-/// Parse one sizing token (`"1fr"`, `"100px"`, `"50%"`, `"auto"`,
-/// `"min-content"`, `"max-content"`, `"2flex"`) into a `GridTrack`.
+/// Parse one sizing token (`"1fr"`, `"100px"`, `"10rem"`, `"2em"`, `"50%"`,
+/// `"auto"`, `"min-content"`, `"max-content"`, `"2flex"`) into a `GridTrack`.
+/// `em` is the grid container's font size (the root size on a `<node>`).
 fn single_track(token: &str) -> Option<GridTrack> {
     let t = token.trim();
     match t {
@@ -55,6 +56,11 @@ fn single_track(token: &str) -> Option<GridTrack> {
         Some(GridTrack::flex(v))
     } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
         Some(GridTrack::px(v))
+    } else if let Some(v) = t.strip_suffix("rem").and_then(parse) {
+        // Before `em`: `"10rem"` also ends in it.
+        Some(GridTrack::rem(v))
+    } else if let Some(v) = t.strip_suffix("em").and_then(parse) {
+        Some(GridTrack::em(v))
     } else {
         t.strip_suffix('%').and_then(parse).map(GridTrack::percent)
     }
@@ -254,6 +260,36 @@ mod tests {
         assert_eq!(placed("-1"), expect(GridPlacement::start(-1)));
         assert_eq!(placed("2 / auto"), expect(GridPlacement::start(2)));
         assert_eq!(placed("auto / 3"), expect(GridPlacement::end(3)));
+    }
+
+    /// `rem` and `em` tracks, alone and inside `repeat()`.
+    #[test]
+    fn font_relative_tracks_decode() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "gridTemplateColumns": "2em 10rem 1fr",
+            "gridTemplateRows": "repeat(3, 10rem)",
+            "gridAutoRows": "1.5em",
+        }))
+        .expect("grid template decodes");
+        let columns: Vec<RepeatedGridTrack> =
+            vec![GridTrack::em(2.0), GridTrack::rem(10.0), GridTrack::fr(1.0)];
+        assert_eq!(
+            format!("{:?}", s.get(&GRID_TEMPLATE_COLUMNS).unwrap()),
+            format!("{columns:?}")
+        );
+        let rows: Vec<RepeatedGridTrack> = vec![RepeatedGridTrack::repeat_many(
+            GridTrackRepetition::Count(3),
+            [GridTrack::rem::<GridTrack>(10.0)],
+        )];
+        assert_eq!(
+            format!("{:?}", s.get(&GRID_TEMPLATE_ROWS).unwrap()),
+            format!("{rows:?}")
+        );
+        let auto: Vec<GridTrack> = vec![GridTrack::em(1.5)];
+        assert_eq!(
+            format!("{:?}", s.get(&GRID_AUTO_ROWS).unwrap()),
+            format!("{auto:?}")
+        );
     }
 
     /// A zero grid line/span is invalid CSS and panics `GridPlacement`'s

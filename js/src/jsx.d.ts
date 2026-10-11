@@ -59,7 +59,10 @@ export interface BevyAttributes extends BevyKeyProps {
 }
 
 /** A length: a bare number is logical pixels; a string carries a unit
- *  (`"50%"`, `"100vw"`, `"100vh"`, `"50vmin"`, `"50vmax"`, `"10px"`, `"auto"`). */
+ *  (`"50%"`, `"100vw"`, `"100vh"`, `"50vmin"`, `"50vmax"`, `"10px"`, `"auto"`,
+ *  `"2rem"`, `"1.5em"`). `rem` is a multiple of the root font size (Bevy's
+ *  `RemSize`, default 20px); `em` of the element's own font size — its
+ *  `fontSize` on a `<text>`/`<editableText>`, the root size elsewhere. */
 export type Length = number | string;
 
 /** A CSS color string. Accepts hex (`"#f00"`, `"#1e1e2e"`, `"#1e1e2eaa"`), a
@@ -78,8 +81,9 @@ export type Angle = number | string;
 export type Time = number | string;
 
 /** A font size: a bare number is logical pixels, or a unit string — `"24px"`,
- *  `"2vw"`/`"2vh"`/`"2vmin"`/`"2vmax"`, or `"1.5rem"` (relative to Bevy's `RemSize`,
- *  default 20px). CSS `em` is not supported (no Bevy equivalent). */
+ *  `"2vw"`/`"2vh"`/`"2vmin"`/`"2vmax"`, `"1.5rem"` (relative to Bevy's `RemSize`,
+ *  default 20px), or `"1.2em"` (relative to the enclosing text's size on a
+ *  nested `<text>`, to the root size on a block). */
 export type FontSize = number | string;
 
 /** Four sides/corners: a number (uniform), a CSS shorthand string

@@ -2,9 +2,15 @@
 
 use super::*;
 
+/// The font size a `<text>` block inherits: nothing above it carries one.
+pub(crate) const ROOT_FONT_SIZE: BevyFontSize = BevyFontSize::Rem(1.0);
+
 /// Convert a wire [`FontSize`] into bevy's `FontSize` (the `TextFont` field type),
-/// mapping each unit one-to-one (`Rem` resolves against bevy's `RemSize` resource).
-fn font_size_to_bevy(size: FontSize) -> BevyFontSize {
+/// mapping each unit one-to-one (`Rem` resolves against bevy's `RemSize`
+/// resource) — but `Em`, which bevy lacks: a multiple of `inherited`, kept in
+/// that size's own unit (so an `em` of a `rem` or viewport size stays
+/// responsive).
+fn font_size_to_bevy(size: FontSize, inherited: BevyFontSize) -> BevyFontSize {
     match size {
         FontSize::Px(v) => BevyFontSize::Px(v),
         FontSize::Vw(v) => BevyFontSize::Vw(v),
@@ -12,6 +18,7 @@ fn font_size_to_bevy(size: FontSize) -> BevyFontSize {
         FontSize::VMin(v) => BevyFontSize::VMin(v),
         FontSize::VMax(v) => BevyFontSize::VMax(v),
         FontSize::Rem(v) => BevyFontSize::Rem(v),
+        FontSize::Em(v) => inherited * v,
     }
 }
 
@@ -46,9 +53,10 @@ pub(super) fn line_height(spec: &LineHeightSpec) -> LineHeight {
 }
 
 /// Map a [`LetterSpacingSpec`] to bevy's [`LetterSpacing`]: a bare number is
-/// logical pixels, `{ rem }` is a multiple of the font size, and a string carries a
-/// unit (`"2px"`, `"0.1rem"`, or `"normal"`).
-pub(super) fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
+/// logical pixels, `{ rem }` is a multiple of the root size, and a string
+/// carries a unit (`"2px"`, `"0.1rem"`, `"0.1em"`, or `"normal"`). `em` is a
+/// multiple of the run's own `font_size`, as in CSS.
+pub(super) fn letter_spacing(spec: &LetterSpacingSpec, font_size: BevyFontSize) -> LetterSpacing {
     match spec {
         LetterSpacingSpec::Px(px) => LetterSpacing::Px(*px),
         LetterSpacingSpec::Rem { rem } => LetterSpacing::Rem(*rem),
@@ -61,9 +69,25 @@ pub(super) fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
                 if let Ok(v) = n.trim().parse() {
                     return LetterSpacing::Px(v);
                 }
-            } else if let Some(n) = s.strip_suffix("rem").or_else(|| s.strip_suffix("em")) {
+            } else if let Some(n) = s.strip_suffix("rem") {
                 if let Ok(v) = n.trim().parse() {
                     return LetterSpacing::Rem(v);
+                }
+            } else if let Some(n) = s.strip_suffix("em") {
+                if let Ok(v) = n.trim().parse::<f32>() {
+                    return match font_size {
+                        BevyFontSize::Px(px) => LetterSpacing::Px(v * px),
+                        BevyFontSize::Rem(rem) => LetterSpacing::Rem(v * rem),
+                        // bevy has no letter spacing in viewport units.
+                        _ => {
+                            let msg = format!(
+                                "letterSpacing {s:?} on a viewport-unit fontSize \
+                                 reads as rem (use px or rem spacing)"
+                            );
+                            crate::diag::report("letterSpacing", s, &msg);
+                            LetterSpacing::Rem(v)
+                        }
+                    };
                 }
             } else if let Ok(v) = s.parse() {
                 return LetterSpacing::Px(v); // bare numeric string → logical pixels
@@ -128,10 +152,21 @@ pub(crate) fn resolve_text_color(style: Option<&Style>, promoted: bool) -> TextC
 
 /// The shaping half of the resolved text style: `TextFont` (size, weight,
 /// family — the configured default face when unset) + `LineHeight` +
-/// `LetterSpacing`.
+/// `LetterSpacing`. An `em` font size is root-relative here — right for a
+/// block; a run inside another resolves through [`resolve_text_font_in`].
 pub(crate) fn resolve_text_font(
     style: Option<&Style>,
     fonts: &Fonts,
+) -> (TextFont, LineHeight, LetterSpacing) {
+    resolve_text_font_in(style, fonts, ROOT_FONT_SIZE)
+}
+
+/// [`resolve_text_font`] for a run inside another: an `em` font size is a
+/// multiple of `inherited`, the enclosing run's resolved size.
+pub(crate) fn resolve_text_font_in(
+    style: Option<&Style>,
+    fonts: &Fonts,
+    inherited: BevyFontSize,
 ) -> (TextFont, LineHeight, LetterSpacing) {
     let mut font = TextFont::default();
     let mut line = LineHeight::default();
@@ -143,7 +178,7 @@ pub(crate) fn resolve_text_font(
     }
     if let Some(s) = style {
         if let Some(size) = s.get(&FONT_SIZE).copied() {
-            font.font_size = font_size_to_bevy(size);
+            font.font_size = font_size_to_bevy(size, inherited);
         }
         if let Some(w) = s.get(&FONT_WEIGHT).copied() {
             font.weight = w;
@@ -161,7 +196,8 @@ pub(crate) fn resolve_text_font(
             line = line_height(lh);
         }
         if let Some(ls) = s.get(&LETTER_SPACING) {
-            spacing = letter_spacing(ls);
+            // After `fontSize`: `em` spacing is a multiple of it.
+            spacing = letter_spacing(ls, font.font_size);
         }
     }
     (font, line, spacing)
