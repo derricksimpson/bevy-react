@@ -55,7 +55,7 @@ app without losing the count.
 ## Showcase
 
 [**Arcana**](https://github.com/tulustul/bevy-react/tree/main/examples/arcana)
-opens packs of living tarot cards: holographic foil that is a WGSL shader running
+opens packs of living tarot cards: holographic foil that is a WESL shader running
 over React components, card art that is a live 3D scene, glass buttons that refract
 the world behind them, and a card that leaves the UI to become a real 3D object you
 can turn over — still React, still clickable.

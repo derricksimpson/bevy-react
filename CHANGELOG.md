@@ -101,7 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a list. The CSS generic keywords (`sans-serif`, `monospace`, `system-ui`,
   …) map to Bevy's generic families, which need its `system_font_discovery`
   feature. A single name behaves as before.
-
 - **Devtools paint flashing.** The panel's new **paint** toggle flashes
   every node Bevy re-extracts for rendering, like a browser's paint
   flashing: a green box that fades out. It shows what a state change, a
@@ -119,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `import bevy_react::filter::{FullscreenVertexOutput, sample_source, uniforms};`
   in place of `#import bevy_react::filter::{…}`. Rename the files, update
   each `shader = "…"` path, and turn `#ifdef` blocks into `@if(…)`. The
-  prelude's module path and functions are unchanged. Your app's own material
+  prelude's module path and functions are unchanged, and a `shader` path
+  that still ends in `.wgsl` is a build error. Your app's own material
   shaders need the same port (Bevy's change), for example
   `@group(constants::MATERIAL_BIND_GROUP)` in place of
   `@group(#{MATERIAL_BIND_GROUP})`.
@@ -250,6 +250,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `ref` object on an element (`useRef`) no longer crosses to Bevy: under
   React 19 `ref` is an ordinary prop, so it was serialized into the element's
   create op and reported as an unknown attribute.
+- A dev bundle on a Rust build without the `devtools` feature (or a release
+  build) logged two `no handler registered` errors at startup for the
+  devtools tables.
 
 ## [0.7.0] - 2026-10-05
 
