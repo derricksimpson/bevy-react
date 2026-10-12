@@ -1,7 +1,8 @@
 //! The map's geometry, built on the CPU as flat-shaded triangle soup with
 //! vertex colors: one mesh for the land (tiles, woods, mountains, towns),
-//! one for the water, one for the borders, and the hex rings that mark
-//! the hovered and the selected tile.
+//! one for the water, one for the borders, the hex rings that mark the
+//! hovered and the selected tile, and the flat map the minimap shows. Only
+//! explored tiles are built: the rest is the starry floor under them.
 
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, TAU};
 
@@ -19,7 +20,9 @@ pub const LAND: f32 = 0.1;
 const HILL: f32 = 0.42;
 const COAST: f32 = -0.08;
 const OCEAN: f32 = -0.18;
-const PARCHMENT: f32 = 0.02;
+/// The floor the explored world stands on, below its deepest water: what
+/// shows where no tile is (unexplored tiles, and beyond the map's edge).
+pub const UNEXPLORED: f32 = -0.24;
 /// How much of its hex a tile's top covers: the sliver left shows the
 /// walls, a faint grid.
 const INSET: f32 = 0.97;
@@ -27,7 +30,7 @@ const INSET: f32 = 0.97;
 /// The height of a tile's rim, where it meets its neighbors.
 pub fn rim(tile: &Tile) -> f32 {
     match tile.terrain {
-        _ if !tile.revealed => PARCHMENT,
+        _ if !tile.revealed => UNEXPLORED,
         Terrain::Coast => COAST,
         Terrain::Ocean => OCEAN,
         _ => LAND,
@@ -147,10 +150,10 @@ impl Soup {
     }
 }
 
-/// A tile's top color; under the political lens, its owner's color shows.
+/// An explored tile's top color; under the political lens, its owner's
+/// color shows.
 fn top_color(world: &World, t: IVec2, tile: &Tile, lens: bool) -> LinearRgba {
     let base = match (tile.terrain, tile.relief) {
-        _ if !tile.revealed => srgb(0xd9c8a0),
         (_, Relief::Mountains) => srgb(0x7f766a),
         (Terrain::Grassland, _) => srgb(0x679837),
         (Terrain::Plains, _) => srgb(0x9a9a44),
@@ -165,7 +168,7 @@ fn top_color(world: &World, t: IVec2, tile: &Tile, lens: bool) -> LinearRgba {
         color = srgb(0xc2b08c);
     }
     match world.owner(t) {
-        Some(civ) if lens && tile.revealed => {
+        Some(civ) if lens => {
             let tint = civ_color(civ).to_linear();
             color.mix(&tint, 0.6)
         }
@@ -190,34 +193,18 @@ fn peak(world: &World, t: IVec2, tile: &Tile) -> f32 {
     }
 }
 
-/// Every land and parchment tile, with the woods, mountains and towns on
-/// them; the political `lens` paints territory in its owner's color.
+/// Every explored land tile, with the woods, mountains and towns on them;
+/// the political `lens` paints territory in its owner's color.
 pub fn land(world: &World, lens: bool) -> Mesh {
     let mut soup = Soup::default();
     for t in World::coords() {
         let tile = world.tile(t).unwrap();
-        if tile.revealed && tile.terrain.is_water() {
+        if !tile.revealed || tile.terrain.is_water() {
             continue;
         }
         let c = center(t);
         let top = top_color(world, t, tile, lens);
-        let wall = if tile.revealed {
-            shade(top, 0.5)
-        } else {
-            srgb(0x8a7550)
-        };
-        if !tile.revealed {
-            soup.prism(
-                c,
-                RADIUS * INSET,
-                6,
-                -30f32.to_radians(),
-                (BASE, PARCHMENT),
-                top,
-                wall,
-            );
-            continue;
-        }
+        let wall = shade(top, 0.5);
         // A low hexagonal pyramid: flat tiles barely rise, hills bulge.
         let apex = Vec3::new(c.x, peak(world, t, tile), c.y);
         let corners: Vec<Vec3> = (0..6)
@@ -427,6 +414,27 @@ pub fn water(world: &World) -> Mesh {
             top,
             shade(top, 0.6),
         );
+    }
+    soup.into_mesh()
+}
+
+/// The world as the minimap shows it: one flat hexagon a tile in the tile's
+/// color (its owner's under the political `lens`), black where unexplored.
+pub fn minimap(world: &World, lens: bool) -> Mesh {
+    let mut soup = Soup::default();
+    for t in World::coords() {
+        let tile = world.tile(t).unwrap();
+        let color = if tile.revealed {
+            top_color(world, t, tile, lens)
+        } else {
+            LinearRgba::BLACK
+        };
+        let c = center(t);
+        let apex = Vec3::new(c.x, 0.0, c.y);
+        let rim = Soup::ring(c, RADIUS, 6, -30f32.to_radians(), 0.0);
+        for i in 0..6 {
+            soup.tri(apex, rim[(i + 1) % 6], rim[i], color);
+        }
     }
     soup.into_mesh()
 }

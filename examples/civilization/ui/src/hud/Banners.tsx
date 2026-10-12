@@ -1,3 +1,4 @@
+import { AnchorScaling } from "bevy-react";
 import type { CityInfo, CivInfo, TileInfo, UnitInfo, WorldInfo } from "../bevy";
 import { item, turnsLeft, type Game } from "../game";
 import { C, Fonts, YIELDS, fmt, panel, tone } from "../theme";
@@ -6,6 +7,13 @@ import { conic, radial } from "../ui/kit";
 import { UNITS } from "./UnitPanel";
 
 export type Selection = { kind: "city" | "unit"; id: string } | null;
+
+const ANCHOR_SCALING: AnchorScaling = {
+  baseDistance: 20,
+  factor: 1.1,
+  min: 0.7,
+  max: 1,
+};
 
 /** The city banners and unit flags: screen-space React pinned to points of
  *  the 3D map with `<anchor>`, following it as the camera moves. */
@@ -68,15 +76,16 @@ function CityBanner({
   return (
     <anchor
       entity={city.entity}
-      style={{ flexDirection: "row", alignItems: "center", height: 28 }}
+      style={{ flexDirection: "row", alignItems: "center", height: 42 }}
+      scale={ANCHOR_SCALING}
     >
       <node
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          padding: 3,
-          margin: { right: -8 },
+          width: 46,
+          height: 46,
+          borderRadius: 23,
+          padding: 4,
+          margin: { right: -12 },
           backgroundGradient: conic(growth, C.food),
           zIndex: 1,
         }}
@@ -84,13 +93,13 @@ function CityBanner({
         <node
           style={{
             flexGrow: 1,
-            borderRadius: 12,
+            borderRadius: 19,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: C.ink,
           }}
         >
-          <text style={{ fontSize: 13, fontWeight: "bold", color: C.text }}>
+          <text style={{ fontSize: 20, fontWeight: "bold", color: C.text }}>
             {`${city.population}`}
           </text>
         </node>
@@ -98,12 +107,12 @@ function CityBanner({
       <button
         onClick={onClick}
         style={{
-          height: 24,
+          height: 36,
           flexDirection: "row",
           alignItems: "center",
-          gap: 5,
-          padding: { left: 14, right: it ? 14 : 10 },
-          borderRadius: 3,
+          gap: 8,
+          padding: { left: 21, right: it ? 21 : 15 },
+          borderRadius: 4,
           border: 1,
           borderColor: selected ? C.goldHi : tone(civ.color, 1.45),
           backgroundGradient: {
@@ -115,18 +124,18 @@ function CityBanner({
             ],
           },
           boxShadow: selected
-            ? { color: "rgba(246, 228, 168, 0.7)", blurRadius: 10 }
-            : { color: "rgba(0, 0, 0, 0.55)", blurRadius: 6, yOffset: 2 },
+            ? { color: "rgba(246, 228, 168, 0.7)", blurRadius: 15 }
+            : { color: "rgba(0, 0, 0, 0.55)", blurRadius: 9, yOffset: 3 },
         }}
         hoverStyle={{ borderColor: C.goldHi }}
       >
-        {city.capital && <Icon name="star" size={12} color={C.goldHi} />}
+        {city.capital && <Icon name="star" size={18} color={C.goldHi} />}
         <text
           style={{
             fontFamily: Fonts.display,
             fontWeight: "bold",
-            fontSize: 12,
-            letterSpacing: 1,
+            fontSize: 18,
+            letterSpacing: 1.5,
             color: "#ffffff",
             textShadow: { color: "rgba(0, 0, 0, 0.7)", offsetX: 0, offsetY: 1 },
           }}
@@ -139,15 +148,15 @@ function CityBanner({
           style={{
             flexDirection: "column",
             alignItems: "center",
-            margin: { left: -8 },
+            margin: { left: -12 },
           }}
         >
           <node
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: 14,
-              padding: 3,
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              padding: 4,
               backgroundGradient: conic(
                 producing.progress / it.cost,
                 C.production,
@@ -157,25 +166,25 @@ function CityBanner({
             <node
               style={{
                 flexGrow: 1,
-                borderRadius: 11,
+                borderRadius: 17,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: C.ink,
               }}
             >
-              <Icon name={it.icon} size={13} color={C.production} />
+              <Icon name={it.icon} size={20} color={C.production} />
             </node>
           </node>
           <node
             style={{
               positionType: "absolute",
-              top: 28,
-              padding: { horizontal: 4 },
-              borderRadius: 3,
+              top: 42,
+              padding: { horizontal: 6 },
+              borderRadius: 4,
               backgroundColor: "rgba(6, 13, 21, 0.85)",
             }}
           >
-            <text style={{ fontSize: 10, color: C.production }}>
+            <text style={{ fontSize: 15, color: C.production }}>
               {`${turnsLeft(it.cost, producing.progress, city.yields.production)}`}
             </text>
           </node>
@@ -197,16 +206,16 @@ function UnitFlag({
   onClick: () => void;
 }) {
   return (
-    <anchor entity={unit.entity} offset={[0, 1.0, 0]}>
+    <anchor entity={unit.entity} offset={[0, 1.0, 0]} scale={ANCHOR_SCALING}>
       <button
         onClick={onClick}
         style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
+          width: 42,
+          height: 42,
+          borderRadius: 21,
           alignItems: "center",
           justifyContent: "center",
-          border: 2,
+          border: 3,
           borderColor: selected ? C.goldHi : "rgba(255, 255, 255, 0.75)",
           backgroundGradient: radial(
             tone(civ.color, 1.2),
@@ -214,13 +223,13 @@ function UnitFlag({
           ),
           boxShadow: {
             color: "rgba(0, 0, 0, 0.55)",
-            blurRadius: 5,
-            yOffset: 2,
+            blurRadius: 8,
+            yOffset: 3,
           },
         }}
         hoverStyle={{ transform: { scale: 1.12 } }}
       >
-        <Icon name={UNITS[unit.kind].icon} size={15} color="#ffffff" />
+        <Icon name={UNITS[unit.kind].icon} size={22} color="#ffffff" />
       </button>
     </anchor>
   );

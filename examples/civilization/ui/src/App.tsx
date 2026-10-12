@@ -126,7 +126,8 @@ function Civilization({
   useDebug("turn", () => dispatch({ type: "turn" }));
   useDebug("lens", toggleLens);
 
-  const boxW = Math.min(1280, width - 60);
+  // The tech tree is wider than any window: its screen spans this one.
+  const boxW = screen === "tech" ? width - 60 : Math.min(1280, width - 60);
   const boxH = height - 32 - 40;
   const label = busy
     ? "PLEASE WAIT"

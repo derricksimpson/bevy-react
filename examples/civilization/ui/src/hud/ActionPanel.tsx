@@ -44,7 +44,7 @@ export function ActionPanel({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          margin: { bottom: -18, right: 8 },
+          margin: { bottom: 8, right: 8 },
         }}
       >
         <node
@@ -53,7 +53,7 @@ export function ActionPanel({
             height: 34,
             padding: { left: 16, right: 30 },
             margin: { right: -22 },
-            justifyContent: "center",
+            alignItems: "center",
             borderRadius: 17,
           }}
           hoverStyle={OWNS_POINTER}

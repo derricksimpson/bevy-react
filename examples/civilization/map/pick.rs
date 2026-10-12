@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::hex;
-use super::mesh::{LAND, rim};
+use super::mesh::rim;
 use super::world::{CIVS, Feature, Relief, World, Yields};
 use super::{city_id, unit_id};
-use crate::camera::MainCamera;
+use crate::camera::{MainCamera, ground_at};
 
 /// A click that moves the pointer further than this is a drag (it pans).
 const CLICK_SLOP: f32 = 6.0;
@@ -35,7 +35,7 @@ pub struct TilePos {
 pub struct TileInfo {
     pub col: i32,
     pub row: i32,
-    /// Still parchment: nothing else is known.
+    /// Explored: of an unexplored tile, nothing else is known.
     pub revealed: bool,
     pub terrain: String,
     pub hills: bool,
@@ -138,12 +138,8 @@ pub fn track_pointer(
     let (camera, eye) = *camera;
     let over_map = cursor
         .filter(|_| !capture.is_captured())
-        .and_then(|p| camera.viewport_to_world(eye, p).ok())
-        .and_then(|ray| {
-            let d = ray.intersect_plane(Vec3::Y * LAND, InfinitePlane3d::new(Vec3::Y))?;
-            let p = ray.get_point(d);
-            Some(hex::tile_at(Vec2::new(p.x, p.z)))
-        })
+        .and_then(|p| ground_at(camera, eye, p))
+        .map(hex::tile_at)
         .filter(|&t| World::in_bounds(t));
     let tile = pointer.pinned.unwrap_or(over_map);
 

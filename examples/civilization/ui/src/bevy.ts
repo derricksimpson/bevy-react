@@ -218,7 +218,7 @@ export type SepiaParams = { amount: number, };
 export type ShadowParams = { color: string, offsetX: number | string, offsetY: number | string, spread: number | string, };
 export type TileInfo = { col: number, row: number, 
 /**
- * Still parchment: nothing else is known.
+ * Explored: of an unexplored tile, nothing else is known.
  */
 revealed: boolean, terrain: string, hills: boolean, mountains: boolean, 
 /**
@@ -244,7 +244,7 @@ export type UnitInfo = { id: string, kind: string, civ: string, col: number, row
  */
 entity: number, 
 /**
- * Out in the parchment, unseen.
+ * Out in the unexplored, unseen.
  */
 hidden: boolean, };
 export type WindowSize = { width: number, height: number, };

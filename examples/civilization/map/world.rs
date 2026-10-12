@@ -63,7 +63,7 @@ pub struct Tile {
     pub feature: Feature,
     /// The city whose territory this is.
     pub city: Option<usize>,
-    /// Explored by the player; the rest of the world is still parchment.
+    /// Explored by the player; the rest of the world is a starry blank.
     pub revealed: bool,
 }
 

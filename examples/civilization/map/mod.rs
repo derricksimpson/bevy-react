@@ -7,14 +7,19 @@ pub mod mesh;
 pub mod pick;
 pub mod world;
 
+use bevy::camera::visibility::RenderLayers;
 use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
+use bevy::render::render_resource::AsBindGroup;
+use bevy::shader::ShaderRef;
 use bevy_react::{ReactAppExt, Request, react_message, react_request};
 use serde::Serialize;
 use ts_rs::TS;
 
-use mesh::{LAND, civ_color};
+use mesh::{LAND, UNEXPLORED, civ_color};
 use world::{CIVS, UnitKind, World, Yields};
+
+use crate::camera::MINIMAP_LAYER;
 
 #[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +59,7 @@ pub struct UnitInfo {
     pub row: i32,
     /// The figure its flag is pinned to (`Entity::to_bits`).
     pub entity: f64,
-    /// Out in the parchment, unseen.
+    /// Out in the unexplored, unseen.
     pub hidden: bool,
 }
 
@@ -88,8 +93,12 @@ pub struct Pins {
     pub cursor: Entity,
 }
 
+/// The meshes the political lens repaints.
 #[derive(Resource)]
-struct LandMesh(Handle<Mesh>);
+struct LensMeshes {
+    land: Handle<Mesh>,
+    minimap: Handle<Mesh>,
+}
 
 pub fn city_id(world: &World, i: usize) -> String {
     world.cities[i].name.to_lowercase().replace(' ', "-")
@@ -99,12 +108,25 @@ pub fn unit_id(world: &World, i: usize) -> String {
     format!("{}-{i}", world.units[i].kind.id())
 }
 
+/// The floor under the map, seen wherever no tile is explored and beyond
+/// the map's edge: black, with blinking stars (`shaders/unexplored.wesl` —
+/// all of it is the shader's).
+#[derive(Asset, AsBindGroup, Reflect, Clone)]
+struct StarsMaterial {}
+
+impl Material for StarsMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/unexplored.wesl".into()
+    }
+}
+
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
-        app.insert_resource(World::generate())
+        app.add_plugins(MaterialPlugin::<StarsMaterial>::default())
+            .insert_resource(World::generate())
             .init_resource::<pick::Pointer>()
             .add_systems(Startup, spawn_map)
             .add_systems(
@@ -127,9 +149,30 @@ fn spawn_map(
     world: Res<World>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut stars: ResMut<Assets<StarsMaterial>>,
 ) {
+    // Far wider than any window can see past the map's edge.
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(2000.0, 2000.0))),
+        MeshMaterial3d(stars.add(StarsMaterial {})),
+        Transform::from_xyz(0.0, UNEXPLORED, 0.0),
+        NotShadowCaster,
+    ));
     let land = meshes.add(mesh::land(&world, false));
-    commands.insert_resource(LandMesh(land.clone()));
+    let minimap = meshes.add(mesh::minimap(&world, false));
+    commands.insert_resource(LensMeshes {
+        land: land.clone(),
+        minimap: minimap.clone(),
+    });
+    let unlit = materials.add(StandardMaterial {
+        unlit: true,
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(minimap),
+        MeshMaterial3d(unlit),
+        RenderLayers::layer(MINIMAP_LAYER),
+    ));
     commands.spawn((
         Mesh3d(land),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -313,8 +356,9 @@ fn on_world(req: On<Request<GetWorld>>, world: Res<World>, pins: Option<Res<Pins
 fn on_lens(
     lens: On<Lens>,
     world: Res<World>,
-    land: Res<LandMesh>,
+    lensed: Res<LensMeshes>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    let _ = meshes.insert(&land.0, mesh::land(&world, lens.political));
+    let _ = meshes.insert(&lensed.land, mesh::land(&world, lens.political));
+    let _ = meshes.insert(&lensed.minimap, mesh::minimap(&world, lens.political));
 }
