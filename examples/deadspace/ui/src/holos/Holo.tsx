@@ -7,7 +7,7 @@ import {
 } from "bevy-react";
 import { onGlitch } from "../game/act";
 import { useGame } from "../game/store";
-import { openHolos } from "./open";
+import { isLive, openHolos } from "./open";
 import type { SurfaceName } from "./surfaces";
 
 /** A folded hologram keeps its content this long (its fold-away runs
@@ -15,10 +15,25 @@ import type { SurfaceName } from "./surfaces";
  *  hologram — no layout, no portal camera. */
 const LINGER_MS = 400;
 
+/** Whether hologram `name` is live (see `isLive`): what costs frames only
+ *  while someone is near — a turntable's camera, a pulse — asks this. */
+export function useLive(name: SurfaceName): boolean {
+  return useGame((g) => isLive(g, name));
+}
+
+/** Whether the camera is locked on hologram `name`: he is using it. */
+export function useHeld(name: SurfaceName): boolean {
+  return useGame((g) => g.here.screen === name);
+}
+
 /** One hologram: a `<surface>` whose content wears the projector's noise,
  *  glitches when `glitch(name)` fires (a hit, a refused action) and, given
  *  a `page`, sweeps a scan line across every page change. Everything inside
- *  composites on the surface's own camera. */
+ *  composites on the surface's own camera.
+ *
+ *  A panel nobody stands near is dead: Bevy draws it grey
+ *  (`hologram.wesl`). Nothing points at it either: the only pointer is the
+ *  cursor of the screen that holds the camera. */
 export function Holo({
   name,
   page,

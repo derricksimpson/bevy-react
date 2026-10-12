@@ -11,6 +11,10 @@
 //   2 hazard  diagonal warning stripes `scale` m wide in `tint`, worn
 //             through to the steel where feet and hands go.
 //   3 worn    scuffs and scratches over the UVs: suit plates, weapons.
+//
+// The seams, slots and stripes are drawn through `pulse`, filtered to the
+// pixel's footprint: drawn hard-edged, anything finer than a pixel (the
+// grating across the room, every seam at a distance) breaks up into moiré.
 
 import bevy_pbr::render::{
     pbr_fragment::pbr_input_from_standard_material,
@@ -65,11 +69,27 @@ fn plane_uv(p: vec3<f32>, n: vec3<f32>) -> vec2<f32> {
     return vec2<f32>(p.x, p.y);
 }
 
-/// 0 on a seam, 1 a few cm away.
-fn seams(uv: vec2<f32>, cell: vec2<f32>, width: f32) -> f32 {
-    let f = abs(fract(uv / cell) - 0.5) * cell;
-    let d = min(cell.x * 0.5 - f.x, cell.y * 0.5 - f.y);
-    return smoothstep(0.0, width, d);
+/// How much of a box `w` wide around `x` lies in the stretch `a..b` of each
+/// unit period: a train of pulses averaged over the pixel. Seen close it has
+/// edges `w` soft; once a pixel spans periods it settles on their average.
+fn pulse(x: f32, a: f32, b: f32, w: f32) -> f32 {
+    let lo = x - 0.5 * w;
+    let hi = x + 0.5 * w;
+    // (The train's integral from 0, at either end of the box.)
+    let to_hi = floor(hi) * (b - a) + clamp(fract(hi), a, b) - a;
+    let to_lo = floor(lo) * (b - a) + clamp(fract(lo), a, b) - a;
+    return (to_hi - to_lo) / w;
+}
+
+/// 0 on a seam `width` m wide between cells, 1 off it; `fw` is how much of
+/// `uv` a pixel covers.
+fn seams(uv: vec2<f32>, cell: vec2<f32>, width: f32, fw: vec2<f32>) -> f32 {
+    let t = uv / cell;
+    let line = width / cell;
+    let w = max(fw / cell, line * 0.6);
+    let across = pulse(t.x + line.x * 0.5, 0.0, line.x, w.x);
+    let along = pulse(t.y + line.y * 0.5, 0.0, line.y, w.y);
+    return 1.0 - max(across, along);
 }
 
 @fragment
@@ -92,6 +112,8 @@ fn fragment(
     var base = pbr_input.material.base_color.rgb;
     var rough = pbr_input.material.perceptual_roughness;
     let uv2 = plane_uv(pos, n) + seed * 13.1;
+    // How much of the pattern's plane this pixel covers (meters).
+    let fw = fwidth(uv2);
 
     switch u32(mode.x + 0.5) {
         case 0u: {
@@ -99,7 +121,7 @@ fn fragment(
             let cell = vec2<f32>(scale, scale * 1.6);
             let id = floor(uv2 / cell);
             base *= 0.82 + 0.3 * hash12(id + seed);
-            let s = seams(uv2, cell, 0.018);
+            let s = seams(uv2, cell, 0.018, fw);
             base *= mix(0.25, 1.0, s);
             // Rust and soot run down from each seam and pool near the floor.
             let run = fbm(vec2<f32>(uv2.x * 9.0, uv2.y * 0.7)) * (1.0 - fract(uv2.y / cell.y));
@@ -109,12 +131,12 @@ fn fragment(
             rough = clamp(rough + dirt * 0.3 - (1.0 - s) * 0.1, 0.05, 1.0);
         }
         case 1u: {
-            let tile = fract(uv2 / scale);
-            let border = smoothstep(0.0, 0.03, min(min(tile.x, 1.0 - tile.x), min(tile.y, 1.0 - tile.y)));
-            // Slots: 3 cm bars, 1.5 cm gaps, across the tile.
-            let bar = fract(uv2.x * 22.0);
-            let slot = smoothstep(0.62, 0.68, bar) * (1.0 - smoothstep(0.92, 0.98, bar));
-            let in_tile = smoothstep(0.06, 0.08, tile.y) * (1.0 - smoothstep(0.92, 0.94, tile.y));
+            // Tiles `scale` m across, a dark border between them.
+            let border = seams(uv2, vec2<f32>(scale), 0.03 * scale, fw);
+            // Slots: 3 cm bars, 1.5 cm gaps, across the tile, stopping
+            // short of its border.
+            let slot = pulse(uv2.x * 22.0, 0.65, 0.95, max(fw.x * 22.0, 0.06));
+            let in_tile = pulse(uv2.y / scale, 0.07, 0.93, max(fw.y / scale, 0.02));
             let hole = slot * in_tile;
             base *= mix(1.0, 0.08, hole) * mix(0.35, 1.0, border);
             // The walkway down the middle is worn bright, the edges filthy.
@@ -125,8 +147,9 @@ fn fragment(
             rough = clamp(rough + dirt * 0.25 + hole * 0.4 - walk * 0.15, 0.05, 1.0);
         }
         case 2u: {
+            // Half of every period, centered on its start.
             let d = (uv2.x + uv2.y) / scale;
-            let stripe = smoothstep(0.45, 0.5, abs(fract(d) - 0.5) * 2.0);
+            let stripe = pulse(d + 0.2375, 0.0, 0.475, max((fw.x + fw.y) / scale, 0.025));
             let wear = smoothstep(0.55, 0.75, fbm(uv2 * 6.0 + seed));
             let paint = mix(tint.rgb, base, wear);
             base = mix(base, paint, stripe);

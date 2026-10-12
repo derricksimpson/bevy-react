@@ -13,7 +13,7 @@ const WALL: f32 = 0.3;
 /// the side walls and across the ceiling.
 const RIBS: [f32; 5] = [-3.75, -1.25, 1.25, 3.75, 6.1];
 /// Rib z values cut short on a side wall (x sign) because a fixture stands
-/// there: the kiosk and the bench (z −1.25), the title alcove (z 3.75).
+/// there: the kiosk and the bench (z −1.25), the terminal's alcove (z 3.75).
 const SHORT_RIBS: [(f32, f32); 3] = [(-1.0, -1.25), (1.0, -1.25), (-1.0, 3.75)];
 /// The two ceiling light strips (z) and their diffuser segments (x).
 const STRIPS: [f32; 2] = [-2.6, 3.2];

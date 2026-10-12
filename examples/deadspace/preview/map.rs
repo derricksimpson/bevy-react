@@ -1,6 +1,6 @@
 //! The deck miniature for the suit menu's MAP tab: the room's outline, its
-//! fixtures and the engineer drawn as glowing lines over a dark plate, the
-//! objective marked by an amber beam. The camera orbits it: React's drags
+//! fixtures and the engineer (an arrow that walks with him) drawn as
+//! glowing lines over a dark plate, the objective marked by an amber beam. The camera orbits it: React's drags
 //! turn it (`map.orbit`), the wheel zooms (`map.zoom`).
 //!
 //! Built 1:1 from `layout.rs`, far below the deck (see the module above).
@@ -24,6 +24,10 @@ pub(super) struct MapCamera {
 /// The objective's beam.
 #[derive(Component)]
 pub(super) struct Marker;
+
+/// The arrow that is you.
+#[derive(Component)]
+pub(super) struct You;
 
 /// The bulkhead's block, and the material it takes once unlocked.
 #[derive(Component)]
@@ -199,10 +203,9 @@ pub(super) fn spawn_map(
     commands.spawn((
         Mesh3d(meshes.add(Cone::new(0.55, 1.2))),
         MeshMaterial3d(white.clone()),
-        Transform::from_translation(MAP_AT + layout::ENGINEER + Vec3::Y * 0.3)
-            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
-            .with_scale(Vec3::new(1.0, 1.0, 0.3)),
+        Transform::from_scale(Vec3::new(1.0, 1.0, 0.3)),
         layers.clone(),
+        You,
     ));
     // The objective's beam, hidden until React marks one.
     commands.spawn((
@@ -263,6 +266,20 @@ pub(super) fn orbit_camera(mut cameras: Query<(&MapCamera, &mut Transform), Chan
     for (cam, mut transform) in &mut cameras {
         let (eye, look) = orbit(cam);
         *transform = Transform::from_translation(eye).looking_at(look, Vec3::Y);
+    }
+}
+
+/// The arrow stands where he stands and points the way he faces.
+pub(super) fn place_you(
+    player: Res<crate::player::Player>,
+    mut you: Single<&mut Transform, With<You>>,
+) {
+    let turn =
+        Quat::from_rotation_y(player.yaw) * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+    let at = MAP_AT + player.at + Vec3::Y * 0.3;
+    if you.translation != at || you.rotation != turn {
+        you.translation = at;
+        you.rotation = turn;
     }
 }
 

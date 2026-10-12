@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`SurfacePointerRay`: point at `<surface>` UI with your own ray.** The
+  in-world pointer follows the window cursor by default; an app that locks
+  or hides the cursor (a crosshair, a gamepad reticle) writes a world-space
+  ray to the `SurfacePointerRay` resource each frame and the mouse buttons
+  and the wheel act where it lands. Written in `PreUpdate` before the new
+  `SurfacePointerSet`, the ray acts in the same frame.
 - **Inline images in text.** An `<image>` written inside a `<text>` or a
   span flows with the glyphs as an inline box (Bevy 0.20's `InlineImage`).
   It takes `src`, `tint`, `flipX`, `flipY`, `opacity` and a `width`/`height`
@@ -205,6 +211,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A live `<surface>` idles once its meshes leave view, also in a scene
+  near the origin.** A surface's own UI camera counted the scene's meshes as
+  visible (its frustum is the texture's size in world units), so every
+  surface with a `SurfacePointer` mesh inside that box rendered every frame
+  whether a real camera saw the mesh or not. Surface cameras are now on no
+  render layer.
 - A node with `width: "100%"` and `maxWidth` (or a content-sized one with
   `maxWidth`, in a row) reserved the height its wrapped text or `flexWrap`
   children take at the unclamped width, so the content spilled over what

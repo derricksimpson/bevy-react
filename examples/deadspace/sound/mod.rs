@@ -28,8 +28,8 @@ use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
 
 use crate::engineer::SuitVacuum;
+use crate::player::MainCamera;
 use crate::station::Noise;
-use crate::tour::MainCamera;
 use crate::weapons::Equip;
 use kit::RATE;
 use sfx::SFX;

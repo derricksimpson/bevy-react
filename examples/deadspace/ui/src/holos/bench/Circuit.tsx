@@ -9,6 +9,7 @@ import {
   type NodeKind,
 } from "../../game/bench";
 import { C, F } from "../../theme";
+import { useLive } from "../Holo";
 
 /** The board's size and a grid cell's (6 × 3 cells). */
 export const BOARD = { width: 780, height: 450 };
@@ -65,15 +66,17 @@ export function Circuit({
 }) {
   const nodes = CIRCUITS[target];
   const powered = (id: string) => id === "start" || installed.includes(id);
-  const pulse = useSharedValue(0.25);
+  // Only while he is at the bench: each frame of the pulse re-rasters the
+  // board.
+  const live = useLive("bench");
+  const pulse = useSharedValue(0.6);
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 700, easing: "easeInOut" }),
-      {
-        reverse: true,
-      },
-    );
-  }, [pulse]);
+    pulse.value = live
+      ? withRepeat(withTiming(1, { duration: 700, easing: "easeInOut" }), {
+          reverse: true,
+        })
+      : withTiming(0.6, { duration: 200 });
+  }, [pulse, live]);
 
   // Each link once (the board lists them both ways).
   const links = nodes.flatMap((n) =>

@@ -4,7 +4,7 @@
 //! render mode, [`retire_surface_cameras`] despawns the cameras of removed
 //! surfaces before bevy's shadow-cascade build.
 
-use bevy::camera::visibility::ViewVisibility;
+use bevy::camera::visibility::{RenderLayers, ViewVisibility};
 use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
@@ -210,6 +210,12 @@ pub fn bind_surfaces(
                     handle: entry.handle.clone(),
                     scale_factor: entry.scale_factor,
                 }),
+                // It draws UI only (bound by `UiTargetCamera`, whatever the
+                // layers). On a layer, its frustum — the texture's size in
+                // world units — would see the scene's meshes, the tagged
+                // ones included, and a surface seen by any surface camera
+                // would never idle.
+                RenderLayers::none(),
                 SurfaceCamera(name.clone()),
             ))
             .id();

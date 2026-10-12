@@ -12,9 +12,11 @@
 //!     `weapons/`);
 //!   * the holograms: where each one hangs, how it unfolds and the WESL that
 //!     draws it (`holo/`);
-//!   * the camera tour (`tour.rs`), the doors and the elevator (`doors.rs`),
-//!     the locator line (`locator.rs`), the item preview and the map
-//!     (`preview/`), the synthesized sound (`sound/`).
+//!   * you: walking him, the camera over his shoulder, the pointer in the
+//!     middle of the screen (`player/`);
+//!   * the doors and the elevator (`doors/`), the locator line
+//!     (`locator.rs`), the item preview and the map (`preview/`), the
+//!     synthesized sound (`sound/`).
 //!
 //! Run (from the repo root):
 //!
@@ -27,23 +29,18 @@ mod filters;
 mod holo;
 mod layout;
 mod locator;
+mod player;
 mod preview;
 mod shoot;
 mod sound;
 mod station;
-mod tour;
 mod weapons;
 
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use bevy::window::{PresentMode, PrimaryWindow, WindowResolution};
+use bevy::window::{PresentMode, WindowResolution};
 use bevy_react::prelude::*;
-
-/// The flat UI (the beat strip) is laid out in 1080p logical pixels whatever
-/// the window size: the window's scale factor follows its height
-/// (`fit_ui_to_1080p`).
-pub const UI_HEIGHT: f32 = 1080.0;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -65,16 +62,22 @@ fn main() {
     let shoot = shoot::parse(&args);
     let mut window = Window {
         title: "COLDWAKE · bevy-react".into(),
-        // Starts at the scale `fit_ui_to_1080p` keeps (no first-frame jump).
-        resolution: WindowResolution::new(1600, 900).with_scale_factor_override(900.0 / UI_HEIGHT),
+        resolution: WindowResolution::new(1600, 900),
         // The web build's canvas fills the page (`ui/index.html`).
         fit_canvas_to_parent: true,
+        // No vsync: the cursor on a locked screen is drawn by the app, and
+        // a frame held for the display's refresh is a frame it trails the
+        // mouse (it costs a GPU running flat out, and tearing where the
+        // system doesn't composite). It also lets `--shoot`'s frame-time
+        // report measure the work.
+        present_mode: PresentMode::AutoNoVsync,
+        // Where the system keeps vsync anyway, one frame queued for the
+        // display, not wgpu's two.
+        desired_maximum_frame_latency: std::num::NonZero::new(1),
         ..default()
     };
     if let Some(cfg) = &shoot {
         window.resolution = WindowResolution::new(cfg.size.0, cfg.size.1);
-        // Uncapped, so the frame-time report measures the work, not vsync.
-        window.present_mode = PresentMode::AutoNoVsync;
     }
     let mut app = build_app(window, shoot.is_none());
     if let Some(cfg) = shoot {
@@ -105,15 +108,13 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         engineer::EngineerPlugin,
         weapons::WeaponsPlugin,
         holo::HoloPlugin,
-        tour::TourPlugin,
+        player::PlayerPlugin,
         doors::DoorsPlugin,
         locator::LocatorPlugin,
         preview::PreviewPlugin,
         sound::SoundPlugin,
-    ))
-    .add_systems(Update, fit_ui_to_1080p);
+    ));
     filters::register_bindings(&mut app);
-    register_app_bindings(&mut app);
     app
 }
 
@@ -123,46 +124,13 @@ fn build_app(window: Window, hot_reload: bool) -> App {
 fn register_bindings(app: &mut App) {
     ReactPlugins::register_bindings(app);
     filters::register_bindings(app);
-    register_app_bindings(app);
     engineer::register_bindings(app);
     weapons::register_bindings(app);
     holo::register_bindings(app);
-    tour::register_bindings(app);
+    player::register_bindings(app);
     doors::register_bindings(app);
     locator::register_bindings(app);
     preview::register_bindings(app);
     sound::register_bindings(app);
     shoot::register_bindings(app);
-}
-
-/// React → Bevy: QUIT on the title terminal.
-#[react_message(name = "app.quit")]
-pub struct Quit;
-
-fn register_app_bindings(app: &mut App) {
-    app.add_react_handler(quit);
-}
-
-fn quit(_: On<Quit>, mut exit: MessageWriter<AppExit>) {
-    exit.write(AppExit::Success);
-}
-
-/// Keep the window's logical height at [`UI_HEIGHT`] (see cyberpunk's
-/// twin): the flat UI keeps its proportions at any resolution.
-/// Compare-before-write, so a settled window is never touched.
-fn fit_ui_to_1080p(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
-    for mut window in &mut windows {
-        let height = window.resolution.physical_height();
-        if height == 0 {
-            continue;
-        }
-        let scale = height as f32 / UI_HEIGHT;
-        if window
-            .resolution
-            .scale_factor_override()
-            .is_none_or(|s| (s - scale).abs() > 1e-4)
-        {
-            window.resolution.set_scale_factor_override(Some(scale));
-        }
-    }
 }

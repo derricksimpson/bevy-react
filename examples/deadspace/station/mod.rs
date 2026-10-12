@@ -41,8 +41,9 @@ pub struct Flicker {
 }
 
 /// Something in the world made a noise worth a sound (the sound module
-/// listens): `"bulkheadOpen"`, `"elevatorDoors"`, `"elevatorMove"`,
-/// `"elevatorArrive"`, `"impact"`, `"stasisHit"`, at a place. (A shocked hack
+/// listens): `"step"`, `"bulkheadOpen"`, `"elevatorDoors"`,
+/// `"elevatorMove"`, `"elevatorArrive"`, `"impact"`, `"stasisHit"`, at a
+/// place. (A shocked hack
 /// panel's crackle is React's `shock` cue.)
 #[derive(Message, Clone, Copy)]
 pub struct Noise(pub &'static str, pub Vec3);

@@ -22,7 +22,7 @@ const TABS = BENCH_TARGETS.map((id) => ({
   label: id === "rig" ? "RIG" : ITEMS[id].name.toUpperCase(),
 }));
 
-/** The upgrade bench (beat 5): pick a weapon or the suit, power circuit
+/** The upgrade bench: pick a weapon or the suit, power circuit
  *  nodes with power cells (one each, next to a powered node), watch the
  *  stats move. Hovering a node previews what it would do. */
 export function Bench() {

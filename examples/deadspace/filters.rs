@@ -9,8 +9,6 @@
 //!   * `glitch` — the signal breaking up when the suit is hit or an action
 //!     is refused: torn slices and split channels. React arms it for a
 //!     moment (`intensity`).
-//!   * `holoStatic` — the dip between two fixtures: an empty full-screen
-//!     node whose pass writes a screen of hologram static.
 //!   * `scanSwap` (morph) — every tab and page change inside a hologram: a
 //!     scan line sweeps down, the new page drawn above it.
 //!
@@ -63,16 +61,6 @@ struct Glitch {
     seed: f32,
 }
 
-/// Packing: `params[0]` = tint (straight linear RGBA; alpha = coverage).
-///
-/// Sits on an empty full-screen node: the pass writes static over the frame,
-/// opaque by default — the camera cuts under it.
-#[react_filter(shader = "shaders/holo_static.wesl", time = true)]
-struct HoloStatic {
-    #[serde(default = "opaque_cyan")]
-    tint: FilterColor,
-}
-
 /// Packing: `params[0].x` = softness (0..1 of the height),
 /// `params[1]` = tint (straight linear RGBA; alpha = how bright the line).
 #[react_morph_filter(shader = "shaders/scan_swap.wesl")]
@@ -115,15 +103,10 @@ fn cyan() -> FilterColor {
     FilterColor([0.5, 0.89, 1.0, 0.8])
 }
 
-fn opaque_cyan() -> FilterColor {
-    FilterColor([0.5, 0.89, 1.0, 1.0])
-}
-
 /// Register the filters — in the running app and the exporter alike, so the
 /// generated typing matches what resolves at runtime.
 pub fn register_bindings(app: &mut App) {
     app.add_react_filter::<HoloNoise>()
         .add_react_filter::<Glitch>()
-        .add_react_filter::<HoloStatic>()
         .add_react_morph_filter::<ScanSwap>();
 }

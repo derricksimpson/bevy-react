@@ -49,6 +49,7 @@ export type DoorOpened = null;
 export type ElevatorArrived = { floor: number, };
 export type Equip = { weapon: string, };
 export type Fire = null;
+export type FireShot = null;
 export type GamepadAxisChange = { gamepad: number, axis: GamepadAxisName, value: number, };
 export type GamepadAxisName = "leftStickX" | "leftStickY" | "leftZ" | "rightStickX" | "rightStickY" | "rightZ" | { "other": number };
 export type GamepadButtonChange = { gamepad: number, button: GamepadButtonName, 
@@ -131,6 +132,7 @@ export type GradientMapParams = { angle: number | string, stops: Array<GradientM
 export type GradientMapStop = { color: string, position?: number, };
 export type GrayscaleParams = { amount: number, };
 export type HackShock = null;
+export type HoloActive = { surface: string, active: boolean, };
 export type HoloNoise = { 
 /**
  * How visible the grain is, 0..1.
@@ -148,7 +150,6 @@ jitter: number | string,
  * Decorrelates holograms side by side.
  */
 seed: number, };
-export type HoloStatic = { tint: string, };
 export type HueRotateParams = { angle: number | string, };
 export type InvertParams = { amount: number, };
 export type KeyDown = KeyboardEventData;
@@ -242,27 +243,26 @@ squaresMin: [number, number],
  * Discrete cell-size levels; `<= 0` for a continuous ramp.
  */
 steps: number, };
-export type Quit = null;
 export type Reload = null;
 export type Resize = WindowSize;
 export type SaturateParams = { amount: number, };
 export type ScanSwap = { softness: number, tint: string, };
 export type SepiaParams = { amount: number, };
 export type ShadowParams = { color: string, offsetX: number | string, offsetY: number | string, spread: number | string, };
-export type ShowBeat = { beat: number, };
 export type ShowItem = { item: string, };
 export type ShowLocator = { to: string, };
+export type StanceChanged = { aiming: boolean, mouse: boolean, screen: string | null, offer: string | null, };
 export type SuitHeal = null;
 export type SuitHit = null;
 export type SuitStasis = null;
 export type SuitVacuum = { on: boolean, };
+export type Sync = null;
 export type UnlockDoor = null;
 export type WindowSize = { width: number, height: number, };
 export type ZoomMap = { delta: number, };
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
-  "app.quit": Quit;
   "door.unlock": UnlockDoor;
   "elevator.call": CallElevator;
   "gamepad.rumble": GamepadRumble;
@@ -273,13 +273,13 @@ export interface ReactMessages {
   "map.mark": MarkMap;
   "map.orbit": OrbitMap;
   "map.zoom": ZoomMap;
+  "player.sync": Sync;
   "preview.show": ShowItem;
   "sound.cue": Cue;
   "suit.heal": SuitHeal;
   "suit.hit": SuitHit;
   "suit.stasis": SuitStasis;
   "suit.vacuum": SuitVacuum;
-  "tour.beat": ShowBeat;
   "weapon.equip": Equip;
   "weapon.fire": Fire;
   "weapon.reload": Reload;
@@ -299,8 +299,11 @@ export interface ReactEvents {
   gamepadConnected: GamepadConnected;
   gamepadDisconnected: GamepadDisconnected;
   gamepadInput: GamepadInputEvent;
+  "holo.active": HoloActive;
   keyDown: KeyDown;
   keyUp: KeyUp;
+  "player.fire": FireShot;
+  "player.stance": StanceChanged;
   resize: Resize;
 }
 
@@ -320,7 +323,6 @@ declare module "bevy-react" {
     gradientMap: GradientMapParams;
     grayscale: GrayscaleParams;
     holoNoise: HoloNoise;
-    holoStatic: HoloStatic;
     hueRotate: HueRotateParams;
     invert: InvertParams;
     outline: OutlineParams;
@@ -548,9 +550,6 @@ export const bevy = {
   on,
   addEventListener: on,
   removeEventListener,
-  app: {
-    quit(value: Quit): void { emit("app.quit", value); },
-  },
   door: {
     unlock(value: UnlockDoor): void { emit("door.unlock", value); },
   },
@@ -576,6 +575,9 @@ export const bevy = {
     orbit(value: OrbitMap): void { emit("map.orbit", value); },
     zoom(value: ZoomMap): void { emit("map.zoom", value); },
   },
+  player: {
+    sync(value: Sync): void { emit("player.sync", value); },
+  },
   preview: {
     show(value: ShowItem): void { emit("preview.show", value); },
   },
@@ -587,9 +589,6 @@ export const bevy = {
     hit(value: SuitHit): void { emit("suit.hit", value); },
     stasis(value: SuitStasis): void { emit("suit.stasis", value); },
     vacuum(value: SuitVacuum): void { emit("suit.vacuum", value); },
-  },
-  tour: {
-    beat(value: ShowBeat): void { emit("tour.beat", value); },
   },
   weapon: {
     equip(value: Equip): void { emit("weapon.equip", value); },

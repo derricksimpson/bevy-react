@@ -5,9 +5,11 @@ built with bevy-react. There is no HUD: the engineer's health runs down his
 spine, the stasis gauge sits on his shoulder blade, the ammo count floats
 over his gun, and the suit menu, the store, the upgrade bench, the doors and
 the hack panel are holograms projected into the room. Every one of them is a
-React `<surface>` on a mesh, clickable and scrollable in 3D.
+React `<surface>` on a mesh. You walk him around the deck with the camera
+over his shoulder; face a screen and press F, and the camera locks on it, he
+steps aside, and the mouse becomes its cursor.
 
-![The suit menu projected into the room beside the engineer's armored shoulder: a grid of item icons, a glowing stasis pack turning in the preview, vitals, power cells and credits along the top, the locked bulkhead behind.](../../screenshots/deadspace-menu.webp)
+![The suit menu projected into the room, the camera locked on it: a grid of item icons with the cursor on a stasis pack, the pack turning in the preview, vitals, power cells and credits along the top, the engineer's back and stasis gauge at the left edge.](../../screenshots/deadspace-menu.webp)
 
 ```sh
 npm install                   # once, from the repo root
@@ -25,79 +27,98 @@ serves the result; see [Web builds](../../docs/guide/tooling/web.md)).
 
 ## Try
 
-![The title terminal in its alcove: the COLDWAKE wordmark over EURYDICE STATION · HALDEN ICE & ORE, and a BEGIN / CONTROLS / QUIT menu on dark glass.](../../screenshots/deadspace-title.webp)
+![The terminal in the alcove, the camera locked on it: the COLDWAKE wordmark over five groups of key caps — move, screens (F uses one, F or a step leaves it), weapon, test rig, suit — and the engineer's shoulder at the left edge.](../../screenshots/deadspace-terminal.webp)
 
-The tour is a strip of beats along the bottom of the screen: ← and → walk
-it, 1–8 jump, a click on a beat goes there. Beats at the same spot glide;
-moving to another fixture cuts through a burst of hologram static. The world
-never pauses, and what you do in one beat shows in the others.
+You start in front of the terminal that lists the controls; F reads it. The
+app takes the mouse at once (in the browser, on your first click); Escape
+gives it back, a click takes it again.
 
-- **Title**: the terminal in the alcove. Enter or a click on BEGIN.
-- **Suit**: over the shoulder. H takes a hit (the spine drains and
-  glitches), M uses a medpack, S fires the stasis module, V vents the room:
-  the air hologram counts down and the sound drops to your breathing.
-- **Weapon**: F or a click fires, R reloads, Q swaps to the next weapon you
-  own. The ammo count rides the gun.
-- **Suit menu**: the RIG menu in front of him. Tab cycles inventory, map,
-  objectives and logs; click items to see them turn, drag the map to orbit
-  it and wheel to zoom, scroll the logs, play the audio logs.
+- **Walk**: W A S D, Shift to hurry. The mouse turns the camera and he
+  turns with it.
+- **Panels wake when he comes near.** Across the room the store, the bench,
+  the save station, the lift's call panel and the bypass dial are grey; a
+  few steps away they take their color.
+- **F uses the screen he faces.** In front of a live panel, looking at it,
+  the prompt beside his arm offers it; F takes the camera off his shoulder
+  and frames the panel head-on while he steps to a post beside it. The mouse
+  now moves a cursor over the panel: the left button presses, the wheel
+  scrolls. F again, or a step in any direction, gives the camera back.
+- **Suit menu**: Tab projects the RIG menu beside him and locks the camera
+  on it the same way (he turns his back to a wall that is in the way; Tab, F
+  or a step folds it). Inventory, map, objectives, logs: click items to see
+  them turn, drag the map to orbit it and wheel to zoom, scroll the logs,
+  play the audio logs.
+- **Weapon**: hold the right button to aim (the ammo count unfolds over the
+  gun, the sight lights), the left one fires. R reloads, Q draws the next
+  weapon he owns.
+- **Suit**: M uses a medpack, C fires the stasis module, L traces the
+  locator line from his feet to where the objective leads (Shift+L picks the
+  next destination). H takes a hit and V vents the room, since nothing here
+  will do either for you: the spine drains and glitches, the air hologram
+  counts down and the sound drops to his breathing.
 - **Store**: buy, sell, and move things to the safe. Buy the Pulse Driver
-  and it is yours in the weapon beat.
-- **Bench**: spend power cells on circuit nodes; hover a node to see what it
-  changes.
-- **Doors**: save and load at the save station, call the elevator from its
-  panel.
-- **Hack**: turn the dial with the mouse or A and D, try a tumbler with E or
-  a click. Three tumblers open the bulkhead.
-- **Locator**: L traces the line to where the current objective leads,
-  Shift+L picks the next destination and traces that.
+  and Q draws it.
+- **Bench**: spend power cells on circuit nodes; put the cursor on a node to
+  see what it changes.
+- **Far wall**: save and load at the save station, call the lift from its
+  panel, and turn the bypass dial by moving the cursor around it; a click
+  tries a tumbler. Three of them open the bulkhead, and the corridor behind
+  it.
+
+![The deck from its middle, over his shoulder: the controls terminal, the store and the save station across the room, all three grey and dim; only the suit's own readouts are lit.](../../screenshots/deadspace-deck.webp)
 
 ## What you're looking at
 
-| On screen                     | How                                                                                                                                                                                                                                                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every hologram                | A `<surface>` (thirteen of them, `holo/mod.rs` has the table) on a quad drawn by one material, `hologram.wesl`: the UI composited premultiplied, raised past 1.0 so the HDR camera blooms it, with scanlines, a shimmer, and an unfold from a line of light. React opens them (`bevy.holo.open`); Rust animates them. |
-| Clicking and scrolling them   | `SurfacePointer` on every quad: the cursor's ray hits the mesh, its UV becomes a pointer on the surface, and clicks, hover styles and the wheel work inside, as on screen.                                                                                                                                            |
-| The noise, glitches and swaps | Composited layers inside the surfaces: `holoNoise` (time-driven grain and a rolling band) and `glitch` (bursts on a hit or a refused action) on every hologram, and the `scanSwap` morph sweeping each tab change (`filters.rs`, `assets/shaders/`).                                                                  |
-| The turning items and the map | `<portal>`s inside the menu and the store: a turntable, a deck miniature you orbit (`bevy.map.orbit`, `bevy.map.zoom`), and every inventory icon filmed once into a snapshot target (`preview/`).                                                                                                                     |
-| The waveform, dial and gauges | `<canvas>` for the audio-log waveform, `<svg>` for the bench's circuit, the hack dial and the stasis gauge.                                                                                                                                                                                                           |
-| The deck, the engineer        | Procedural meshes and lights (`station/`, `engineer/`, `weapons/`): flickering strips, an emergency beacon, fog, dust and steam; the suit built from code and posed per beat.                                                                                                                                         |
-| The game                      | React's: one reducer (`ui/src/game/`) holds the suit, the inventory, the credits, the upgrades, the story and the doors; every action plays its sound and tells Bevy what to show (`ui/src/game/act.ts`).                                                                                                             |
-| The sound                     | Synthesized at startup into in-memory buffers (`sound/`): every cue, the station's drone, and the breathing that takes over in a vacuum. No audio files.                                                                                                                                                              |
-| The beat strip                | The only flat UI, laid out at 1080p logical px like the cyberpunk example.                                                                                                                                                                                                                                            |
+| On screen                       | How                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every hologram                  | A `<surface>` (fourteen of them, `holo/mod.rs` has the table) on a quad drawn by one material, `hologram.wesl`: the UI composited premultiplied, raised past 1.0 so the HDR camera blooms it, with scanlines, a shimmer, and an unfold from a line of light. React opens them (`bevy.holo.open`); Rust animates them.                                             |
+| Locking on a screen             | `player/lock.rs`: `offer` finds the panel he stands before, looking at it; F gives it the camera. `Screen::shot` frames it (the screen against the right of the view, his post in what is left) and `player/camera.rs` glides there; F or a walk key lets go. The suit menu is locked on the same way.                                                            |
+| The cursor                      | The OS cursor is locked, so the app keeps its own on the screen that holds the camera and hands the surface pointer the ray through it: `SurfacePointerRay::Ray`. That hits the mesh, its UV becomes a pointer on the surface, and clicks, hover styles and the wheel work inside, as on screen. The ring is drawn by the hologram's shader.                      |
+| Dead and live panels            | Rust measures how far he stands from each fixture (`holo/mod.rs` `wake`), eases the material from grey to color and tells React (`holo.active`). A dead panel keeps its React tree; `useLive` stops what would cost frames (a turntable's camera, the bench's pulse).                                                                                             |
+| The noise, glitches and swaps   | Composited layers inside the surfaces: `holoNoise` (time-driven grain and a rolling band) and `glitch` (bursts on a hit or a refused action) on every hologram, and the `scanSwap` morph sweeping each tab change (`filters.rs`, `assets/shaders/`).                                                                                                              |
+| The turning items and the map   | `<portal>`s inside the menu and the store: a turntable, a deck miniature you orbit with an arrow where he stands (`bevy.map.orbit`, `bevy.map.zoom`), and every inventory icon filmed once into a snapshot target (`preview/`).                                                                                                                                   |
+| The waveform, dial and gauges   | `<canvas>` for the audio-log waveform, `<svg>` for the bench's circuit, the hack dial and the stasis gauge.                                                                                                                                                                                                                                                       |
+| Reading it from across the room | Neither the UI textures nor the deck's patterns have mips, so both are filtered in their shaders to the pixel's footprint: `hologram.wesl` averages the UI's texels under each pixel and fades its scanlines, `station_paint.wesl` draws the grating, seams and stripes as box-filtered pulses. Drawn hard-edged they shimmer and break into moiré at a distance. |
+| The deck, the engineer          | Procedural meshes and lights (`station/`, `engineer/`, `weapons/`): flickering strips, an emergency beacon, fog, dust and steam; the suit built from code, its hands and feet solved with two-bone IK, striding where he walks.                                                                                                                                   |
+| The game                        | React's: one reducer (`ui/src/game/`) holds the suit, the inventory, the credits, the upgrades, the story and the doors; every action plays its sound and tells Bevy what to show (`ui/src/game/act.ts`). Bevy owns the player: where he stands, where he looks, whether he aims (`player/`).                                                                     |
+| The sound                       | Synthesized at startup into in-memory buffers (`sound/`): every cue, his steps, the station's drone, and the breathing that takes over in a vacuum. No audio files.                                                                                                                                                                                               |
 
 ![Over the engineer's shoulder in a vacuum: his health glowing amber down the spine after two hits, the stasis gauge at 75 on his shoulder blade, an O2 countdown floating beside his helmet, the locked bulkhead ahead.](../../screenshots/deadspace-suit.webp)
 
-![The store hologram: items with icons and amber prices in a scrolling list, the Pulse Driver turning in the preview, the credits in the corner.](../../screenshots/deadspace-store.webp)
+![The store, the camera locked on it: items with amber prices in a scrolling list, the row under the cursor lit, the Pulse Driver turning in the preview, the credits in the corner, the engineer at the left edge.](../../screenshots/deadspace-store.webp)
 
-![The upgrade bench: the Arc Cutter's circuit with two nodes powered and a hovered capacity node previewing 12 → 14, no power cells left.](../../screenshots/deadspace-bench.webp)
+![At the upgrade bench: the Arc Cutter's circuit with two nodes powered and a third previewing capacity 12 → 14, no power cells left.](../../screenshots/deadspace-bench.webp)
 
-![The bypass dial over the hack panel: one tumbler locked in green, the pick turned toward the next, a resonance bar and the countdown.](../../screenshots/deadspace-hack.webp)
+![The bypass dial over the hack panel: one tumbler locked in green, the pick turned to where the cursor is, the countdown beside it, the engineer's back filling the left of the view.](../../screenshots/deadspace-hack.webp)
 
 ## Performance
 
-Every beat renders in 4–5 ms a frame in a dev build at 1920×1080 on an RTX
-3070; the bench, whose circuit re-rasterizes as its reachable nodes pulse,
-takes about 7.5 ms. A hologram's surface camera renders only while its quad
-is unfolded and in view, so a beat pays for the two to six holograms it
-shows. The turntable and the map render only while their tab is open, and
+A frame takes 3–5 ms in a dev build at 1920×1080 on an RTX 3070 wherever he
+stands; at the bench, whose circuit re-rasterizes as its reachable nodes
+pulse, about 7 ms. A hologram's surface camera renders only while its quad
+is unfolded and in view. The turntable and the map render only while their
+page is up and he is at it, the bench pulses only while he is at it, and
 the inventory icons are snapshots, filmed once.
 
 ## Scripted screenshots
 
 `--shoot` renders offscreen, plays scripted steps, saves a PNG and prints the
-average frame time. `--size` is the capture's size in physical pixels:
+average frame time. `--size` is the capture's size in pixels:
 
 ```sh
-cargo run -p deadspace -- --shoot out.png 3 --size 2560x1440 \
-  --do "0.3 beat 3" --do "1.5 tab map"
+cargo run -p deadspace -- --shoot out.png 5 --size 2560x1440 \
+  --do "0.2 go store" --do "1 use" --do "2 point 0.3 0.47"
 ```
 
-`beat <n>` moves the tour; the holograms add their own verbs (`hit`, `fire`,
+`go <spot>` stands him somewhere (`start`, `center`, `store`, `bench`,
+`save`, `hack`, `doors`, `lift`), `look <yaw> <pitch>` turns the free camera
+by degrees from there, `use` presses F (at a panel's spot that locks the
+camera on it), `point <u> <v>` puts the cursor on the locked screen (0..1
+from its top left), `aim on` raises the gun, `walk <right> <ahead>` holds the walk keys. The holograms add their own verbs (`menu on`, `hit`, `fire`,
 `tab`, `select`, `buy`, `install`, `hack`, `locator`…, see `useDebug` in
-`ui/src`). The in-world pointer follows the real cursor, so hover and clicks
-inside holograms go through verbs. Run the binary directly with
-`BEVY_ASSET_ROOT=examples/deadspace`, or assets resolve against `target/`.
+`ui/src`). Run the binary
+directly with `BEVY_ASSET_ROOT=examples/deadspace`, or assets resolve
+against `target/`.
 
 ## Credits
 

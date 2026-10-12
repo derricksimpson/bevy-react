@@ -273,6 +273,65 @@ holograms unfold with their beat and the dip runs on fixed timing; the
 objective is derived from the game (bought, cutter upgraded, door open),
 not advanced by events, so the tour can be taken in any order.
 
+### Redesign (2026-10-12): walk it
+
+The showroom became walkable; where this contradicts the decisions below,
+this wins. Asked for: no main menu, mouse + W A S D, panels disabled (grey)
+until the player approaches, no white-noise transitions, every screen
+diegetic and opening smoothly. Decided with the user:
+
+- **Camera: over the shoulder** (Dead Space 2), not first person: the suit's
+  own readouts are on his back.
+- **The crosshair is the pointer.** Cursor locked; the middle of the screen
+  is the in-world pointer (click, wheel), with a reticle drawn on the
+  hologram. Needed a core addition: `SurfacePointerRay` (the app's ray
+  instead of the window cursor). The view narrows onto the hologram pointed
+  at, so small panels read from where he stands.
+- **A dead panel shows its real UI, grey**: desaturated, dim, under the
+  bloom, deaf to input; live within reach (3.6 m for the big ones, 2.8 m
+  for the far wall's). The bulkhead lock and the floor indicator are status
+  lights: always live.
+- **Only the static cut went** (`holoStatic`, the `static` cue, the dip).
+  The grain, the glitch bursts and the `scanSwap` tab sweep stay.
+- **Controls**: the alcove terminal (was the title) lists them and he starts
+  in front of it; a prompt hologram beside his arm says what the panel he
+  stands at answers to, the basic keys for the first seconds, and how to
+  take the mouse. No beat strip, no flat UI.
+- **H (take a hit) and V (vent) stay keys.** RMB aims, LMB fires. The suit
+  menu (Tab) stops him; a step folds it.
+
+**Second pass, same day: the camera locks on screens.** Pointing with the
+middle of the screen was "not comfortable". Decided with the user:
+
+- **Dead Space staging.** Walking up to a panel, facing it, locks the camera
+  on it head-on; he steps to a post beside it and his back stays at the
+  frame's left edge. The mouse moves a cursor on the screen (camera still).
+- **Back away to leave**: W A S D keep walking him, relative to the screen;
+  S out of range releases; a sidestep along the far wall hands the lock on.
+- **Near and facing** triggers it (walking past doesn't); panels still wake
+  to color from farther out.
+- **The suit menu locks the same way.**
+
+This replaced the crosshair pointer and its zoom (no pointer at all while
+the camera is free) and the dead panels' blocking pane.
+
+**Third pass: F, not proximity.** The user: "F to activate the screen, F
+again or walk in any direction to deactivate it." The lock no longer takes
+hold on approach: before a panel, looking at it, the prompt offers it and F
+gives it the camera; F again or a freshly pressed W A S D lets go (keys held
+since before F don't count, and he walks nowhere of his own while held). No
+handover between neighbours. F also folds the suit menu. Nothing is
+activated at startup (the user, after I had him start held by the controls
+terminal): he stands before it and the prompt offers it.
+
+Gone: the tour (`tour.rs`, `beats.ts`, `tour.beat`), the title screen and
+`app.quit`, the beat strip, the dip, `fit_ui_to_1080p`. New: `player/`,
+`layout::{confine, inside, reach, spot}`, `holo.active`, `player.stance`,
+`player.fire`, `player.sync`, the `prompt` surface (fourteen now), a walk
+cycle, footsteps, the corridor behind the bulkhead is walkable once open.
+Core, found on the way: surface UI cameras saw the scene's meshes, so no
+live surface near the origin ever idled (they are on no render layer now).
+
 ### Decisions (grilled 2026-10-08)
 
 - **Name** `deadspace` (folder, cargo + npm package). In game: our own title

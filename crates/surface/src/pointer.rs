@@ -1,7 +1,8 @@
 //! In-world interaction: a mesh tagged [`SurfacePointer`] is clickable.
-//! [`drive_surface_pointer`] ray-casts the main camera through the cursor,
-//! reads the hit **UV**, and drives a single virtual [`PointerId::Custom`]
-//! pointer parked on the surface's image render target. Bevy's UI picking
+//! [`drive_surface_pointer`] ray-casts the main camera through the cursor
+//! (or along the app's own ray, [`SurfacePointerRay`]), reads the hit
+//! **UV**, and drives a single virtual [`PointerId::Custom`] pointer parked
+//! on the surface's image render target. Bevy's UI picking
 //! backend then hit-tests the offscreen subtree, and the core turns the
 //! pointer's picking state into the common UI events (`onClick`/
 //! `onPointer*`, hover/press styling) like any other pointer's.
@@ -63,6 +64,20 @@ impl SurfacePointer {
     }
 }
 
+/// Where the in-world pointer's ray comes from. The default follows the
+/// window cursor; an app that hides or locks the cursor (a crosshair, a
+/// gamepad reticle, a tracked hand) writes its own ray every frame.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub enum SurfacePointerRay {
+    /// The window cursor through the active window camera.
+    #[default]
+    Cursor,
+    /// The app's ray, in world space; `None` while it points at nothing.
+    /// Screen UI doesn't cover it (it isn't the window cursor), and the
+    /// mouse buttons and wheel still act where it lands.
+    Ray(Option<Ray3d>),
+}
+
 /// Holds the id of the single virtual pointer driving in-world surface clicks,
 /// plus the small bit of frame-to-frame state the driver needs. (The core
 /// recognizes the pointer through [`VirtualPointers`], where
@@ -99,7 +114,8 @@ pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<Virtual
     });
 }
 
-/// Ray-cast the main camera through the cursor at the [`SurfacePointer`] meshes and
+/// Ray-cast the main camera through the cursor (or along the app's
+/// [`SurfacePointerRay`]) at the [`SurfacePointer`] meshes and
 /// drive the virtual pointer to the hit UV (mapped into the surface's texture
 /// pixels), so Bevy's UI picking backend hit-tests the offscreen subtree. Emits
 /// `PointerInput` move/press/release events for the [`SurfaceVirtualPointer`].
@@ -111,6 +127,7 @@ pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<Virtual
 #[allow(clippy::too_many_arguments)]
 pub fn drive_surface_pointer(
     surfaces: Res<Surfaces>,
+    source: Res<SurfacePointerRay>,
     mut state: ResMut<SurfaceVirtualPointer>,
     windows: Query<&Window>,
     cameras: Query<(&Camera, &BevyRenderTarget, &GlobalTransform)>,
@@ -130,17 +147,19 @@ pub fn drive_surface_pointer(
     // button). Last frame's capture: this runs before `PointerCaptureSet`.
     let covered = capture.is_some_and(|c| c.over_ui) && !state.buttons.any_pressed();
 
-    // Nearest `SurfacePointer` mesh under the cursor (cloned out of the cast borrow).
-    let hit = cursor_ray(&windows, &cameras)
-        .filter(|_| !covered)
-        .and_then(|ray| {
-            let filter = |entity: Entity| pointer_meshes.contains(entity);
-            let settings = MeshRayCastSettings::default().with_filter(&filter);
-            ray_cast
-                .cast_ray(ray, &settings)
-                .first()
-                .map(|(entity, hit)| (*entity, hit.clone()))
-        });
+    let ray = match *source {
+        SurfacePointerRay::Cursor => cursor_ray(&windows, &cameras).filter(|_| !covered),
+        SurfacePointerRay::Ray(ray) => ray,
+    };
+    // Nearest `SurfacePointer` mesh on the ray (cloned out of the cast borrow).
+    let hit = ray.and_then(|ray| {
+        let filter = |entity: Entity| pointer_meshes.contains(entity);
+        let settings = MeshRayCastSettings::default().with_filter(&filter);
+        ray_cast
+            .cast_ray(ray, &settings)
+            .first()
+            .map(|(entity, hit)| (*entity, hit.clone()))
+    });
 
     if let Some((entity, hit)) = hit
         && let Ok(pointer) = pointer_meshes.get(entity)
@@ -246,4 +265,70 @@ fn cursor_ray(
         .iter()
         .find(|(c, target, _)| c.is_active && matches!(target, BevyRenderTarget::Window(_)))?;
     camera.viewport_to_world(transform, cursor).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::camera::primitives::Aabb;
+    use bevy::camera::visibility::{InheritedVisibility, ViewVisibility};
+
+    use super::*;
+    use crate::registry::SurfaceSpec;
+
+    /// The app's ray drives the pointer to the texture pixel it hits, and
+    /// `Ray(None)` takes it off the surface.
+    #[test]
+    fn app_ray_drives_the_pointer() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>()
+            .init_asset::<Mesh>()
+            .init_resource::<Surfaces>()
+            .init_resource::<VirtualPointers>()
+            .init_resource::<bevy::picking::pointer::PointerMap>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_message::<PointerInput>()
+            .add_systems(Startup, init_surface_pointer)
+            .add_systems(Update, drive_surface_pointer);
+        app.world_mut()
+            .resource_scope(|world, mut surfaces: Mut<Surfaces>| {
+                let mut images = world.resource_mut::<Assets<Image>>();
+                let spec = SurfaceSpec {
+                    size: UVec2::new(200, 100),
+                    ..default()
+                };
+                surfaces.create(&mut images, "panel", spec);
+            });
+        // A 2 × 1 m quad at the origin facing +Z: u runs along +X, v down.
+        let mesh = app
+            .world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(Rectangle::new(2.0, 1.0));
+        app.world_mut().spawn((
+            Mesh3d(mesh),
+            Aabb::from_min_max(Vec3::new(-1.0, -0.5, 0.0), Vec3::new(1.0, 0.5, 0.0)),
+            GlobalTransform::IDENTITY,
+            InheritedVisibility::VISIBLE,
+            ViewVisibility::VISIBLE,
+            SurfacePointer::new("panel"),
+        ));
+
+        let ray = Ray3d::new(Vec3::new(0.5, 0.25, 5.0), Dir3::NEG_Z);
+        app.insert_resource(SurfacePointerRay::Ray(Some(ray)));
+        app.update();
+        let moved = |app: &App| -> Vec<Vec2> {
+            let messages = app.world().resource::<Messages<PointerInput>>();
+            let mut cursor = messages.get_cursor();
+            cursor
+                .read(messages)
+                .filter(|input| matches!(input.action, PointerAction::Move { .. }))
+                .map(|input| input.location.position)
+                .collect()
+        };
+        assert_eq!(moved(&app).last(), Some(&Vec2::new(150.0, 25.0)));
+
+        app.insert_resource(SurfacePointerRay::Ray(None));
+        app.update();
+        assert_eq!(moved(&app).last(), Some(&Vec2::splat(-1.0)));
+    }
 }

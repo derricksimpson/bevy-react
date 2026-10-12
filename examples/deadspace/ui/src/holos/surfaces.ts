@@ -5,6 +5,7 @@ export const SURFACES = {
   stasis: { width: 160, height: 160 },
   air: { width: 220, height: 110 },
   ammo: { width: 220, height: 130 },
+  prompt: { width: 460, height: 48 },
   menu: { width: 1280, height: 720 },
   store: { width: 1280, height: 760 },
   bench: { width: 1280, height: 760 },
@@ -13,7 +14,7 @@ export const SURFACES = {
   elevator: { width: 240, height: 360 },
   floor: { width: 240, height: 80 },
   hack: { width: 420, height: 420 },
-  title: { width: 960, height: 540 },
+  controls: { width: 960, height: 540 },
 } as const;
 
 export type SurfaceName = keyof typeof SURFACES;

@@ -1,7 +1,8 @@
-//! The engineer: a hard-surface suit built from code (`suit.rs`), standing
-//! at `layout::ENGINEER` facing the bulkhead, posed every frame
-//! (`pose.rs`). He carries the worn holograms (`HoloAnchor`s for `spine`,
-//! `stasis` and `air`) and answers the suit messages React sends: a hit
+//! The engineer: a hard-surface suit built from code (`suit.rs`), walking
+//! where the player goes and posed every frame (`pose.rs`). He carries the
+//! worn holograms (`HoloAnchor`s for `spine`, `stasis` and `air`, and for
+//! the `menu` and the `prompt` he projects) and answers the suit messages
+//! React sends: a hit
 //! makes him flinch in a spray of sparks, a medpack runs a ring of green
 //! light up the suit, stasis flies off his left hand, a vacuum fogs his
 //! helmet and pales his lights.
@@ -13,10 +14,11 @@ pub mod suit;
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
 
-pub use pose::{GunKick, Stance};
+pub use pose::GunKick;
 pub use suit::Rig;
 
-use crate::layout::{BULKHEAD, BULKHEAD_SIZE, ENGINEER, ROOM_MIN};
+use crate::layout;
+use crate::player::{Player, PlayerSet};
 use crate::station::kit::{PaintMaterial, additive};
 use crate::station::{Burst, BurstKind, Flash, Noise};
 use pose::Reactions;
@@ -55,7 +57,8 @@ struct HealRing;
 #[derive(Component)]
 struct StasisBolt {
     velocity: Vec3,
-    stop_z: f32,
+    /// Meters left to fly.
+    left: f32,
 }
 
 /// The stasis bolt's look, made once.
@@ -72,11 +75,13 @@ impl Plugin for EngineerPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.init_resource::<GunKick>()
-            .init_resource::<Stance>()
             .init_resource::<Reactions>()
             .init_resource::<Glow>()
             .add_systems(Startup, spawn)
-            .add_systems(Update, (pose::pose, light_up, fly_bolts));
+            .add_systems(
+                Update,
+                (follow, pose::pose, light_up, fly_bolts).after(PlayerSet),
+            );
     }
 }
 
@@ -104,7 +109,7 @@ fn spawn(
             ),
         ),
         MeshMaterial3d(additive(&mut materials, LinearRgba::rgb(0.6, 5.0, 1.4))),
-        Transform::from_translation(ENGINEER),
+        Transform::default(),
         Visibility::Hidden,
         HealRing,
         bevy::light::NotShadowCaster,
@@ -116,33 +121,48 @@ fn spawn(
     });
 }
 
+/// He stands where the player is, facing the player's way.
+fn follow(player: Res<Player>, mut suits: Query<&mut Transform, With<Rig>>) {
+    for mut suit in &mut suits {
+        *suit = player.frame();
+    }
+}
+
 fn on_hit(
     _: On<SuitHit>,
     time: Res<Time>,
+    player: Res<Player>,
     mut react: ResMut<Reactions>,
     mut bursts: MessageWriter<Burst>,
     mut flashes: MessageWriter<Flash>,
 ) {
     react.flinch = 1.0;
     react.flinch_roll = ((time.elapsed_secs() * 13.7).sin()) * 0.18;
-    let at = ENGINEER + Vec3::new(0.12, 1.45, 0.2);
+    // Off his back, toward the camera.
+    let body = player.frame();
+    let at = body.transform_point(Vec3::new(0.12, 1.45, 0.2));
     bursts.write(Burst {
         at,
-        dir: Vec3::new(0.3, 0.5, 1.0),
+        dir: body.rotation * Vec3::new(0.3, 0.5, 1.0),
         kind: BurstKind::Sparks,
     });
     flashes.write(Flash {
-        at: at + Vec3::Z * 0.4,
+        at: at + body.rotation * Vec3::Z * 0.4,
         color: LinearRgba::rgb(1.0, 0.55, 0.25),
         intensity: 250_000.0,
         secs: 0.2,
     });
 }
 
-fn on_heal(_: On<SuitHeal>, mut glow: ResMut<Glow>, mut bursts: MessageWriter<Burst>) {
+fn on_heal(
+    _: On<SuitHeal>,
+    player: Res<Player>,
+    mut glow: ResMut<Glow>,
+    mut bursts: MessageWriter<Burst>,
+) {
     glow.heal = Some(0.0);
     bursts.write(Burst {
-        at: ENGINEER + Vec3::new(0.0, 1.1, 0.0),
+        at: player.at + Vec3::new(0.0, 1.1, 0.0),
         dir: Vec3::Y,
         kind: BurstKind::Heal,
     });
@@ -153,14 +173,19 @@ fn on_stasis(_: On<SuitStasis>, mut react: ResMut<Reactions>, mut glow: ResMut<G
     glow.throw_in = Some(0.2);
 }
 
-fn on_vacuum(vacuum: On<SuitVacuum>, mut glow: ResMut<Glow>, mut bursts: MessageWriter<Burst>) {
+fn on_vacuum(
+    vacuum: On<SuitVacuum>,
+    player: Res<Player>,
+    mut glow: ResMut<Glow>,
+    mut bursts: MessageWriter<Burst>,
+) {
     // React restates the vacuum on mount and on a load: only a change puffs.
     if glow.vacuum == vacuum.on {
         return;
     }
     glow.vacuum = vacuum.on;
     bursts.write(Burst {
-        at: ENGINEER + Vec3::new(0.0, 1.66, 0.05),
+        at: player.at + Vec3::new(0.0, 1.66, 0.0),
         dir: Vec3::Y,
         kind: BurstKind::Frost,
     });
@@ -172,6 +197,7 @@ fn on_vacuum(vacuum: On<SuitVacuum>, mut glow: ResMut<Glow>, mut bursts: Message
 fn light_up(
     mut commands: Commands,
     time: Res<Time>,
+    player: Res<Player>,
     mut glow: ResMut<Glow>,
     lights: Option<Res<SuitLights>>,
     bolt: Option<Res<BoltAssets>>,
@@ -194,7 +220,7 @@ fn light_up(
         let k = (h.min(1.0) * std::f32::consts::PI).sin();
         tint = mix(tint, LinearRgba::rgb(0.8, 6.0, 1.6), k);
         for (mut t, mut v) in &mut rings {
-            t.translation = ENGINEER + Vec3::Y * (0.08 + 1.85 * h);
+            t.translation = player.at + Vec3::Y * (0.08 + 1.85 * h);
             t.scale = Vec3::splat(1.25 - 0.45 * h);
             v.set_if_neq(if h < 1.0 {
                 Visibility::Inherited
@@ -224,22 +250,17 @@ fn light_up(
     let Ok(hand) = globals.get(rig.arms[1][2]) else {
         return;
     };
-    let from = hand.translation() + Vec3::new(0.0, -0.08, -0.12);
-    // Through the bulkhead if it stands open, else to the far wall.
-    let through = bulkhead.is_some_and(|b| b.is_open())
-        && (from.x - BULKHEAD.x).abs() < BULKHEAD_SIZE.x * 0.5 - 0.1;
-    let stop_z = if through {
-        ROOM_MIN.z - 6.8
-    } else {
-        ROOM_MIN.z + 0.1
-    };
+    // Where he looks, as far as the room goes.
+    let dir = player.view() * Vec3::NEG_Z;
+    let from = hand.translation() + dir * 0.12 - Vec3::Y * 0.08;
+    let left = layout::reach(from, dir, bulkhead.is_some_and(|b| b.is_open())) - 0.1;
     commands
         .spawn((
-            Transform::from_translation(from),
+            Transform::from_translation(from).looking_to(dir, Vec3::Y),
             Visibility::default(),
             StasisBolt {
-                velocity: Vec3::new(0.0, 0.0, -13.0),
-                stop_z,
+                velocity: dir * 13.0,
+                left,
             },
         ))
         .with_children(|b| {
@@ -268,24 +289,28 @@ fn light_up(
 fn fly_bolts(
     mut commands: Commands,
     time: Res<Time>,
-    mut bolts: Query<(Entity, &StasisBolt, &mut Transform)>,
+    mut bolts: Query<(Entity, &mut StasisBolt, &mut Transform)>,
     mut bursts: MessageWriter<Burst>,
     mut flashes: MessageWriter<Flash>,
     mut noise: MessageWriter<Noise>,
 ) {
-    for (e, bolt, mut t) in &mut bolts {
-        t.translation += bolt.velocity * time.delta_secs();
-        if t.translation.z > bolt.stop_z {
+    for (e, mut bolt, mut t) in &mut bolts {
+        let step = bolt.velocity * time.delta_secs();
+        bolt.left -= step.length();
+        if bolt.left > 0.0 {
+            t.translation += step;
             continue;
         }
-        let at = t.translation.with_z(bolt.stop_z);
+        // Where it struck, and back off the wall.
+        let back = -bolt.velocity.normalize();
+        let at = t.translation + step - back * bolt.left;
         bursts.write(Burst {
             at,
-            dir: Vec3::Z,
+            dir: back,
             kind: BurstKind::Stasis,
         });
         flashes.write(Flash {
-            at: at + Vec3::Z * 0.3,
+            at: at + back * 0.3,
             color: LinearRgba::rgb(0.3, 0.6, 1.0),
             intensity: 500_000.0,
             secs: 0.6,

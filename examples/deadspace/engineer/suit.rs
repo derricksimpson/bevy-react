@@ -16,10 +16,12 @@ use bevy::prelude::*;
 
 use super::limbs::{boot, forearm, hand, shin_armor, thigh_armor, upper_arm};
 use crate::holo::HoloAnchor;
-use crate::layout::ENGINEER;
+use crate::layout::{START, facing};
+use crate::player::lock::{MENU_AT, MENU_FACING};
 use crate::station::kit::{Build, Paint, PaintMaterial, Pattern};
 
-/// The joints, filled in at spawn.
+/// The joints, filled in at spawn. On the suit's root, which the player
+/// moves (`engineer::follow`).
 #[derive(Component)]
 pub struct Rig {
     pub hips: Entity,
@@ -134,7 +136,7 @@ fn worn(color: &str, metal: f32, rough: f32, seed: f32) -> PaintMaterial {
     }
 }
 
-/// Spawn the engineer at `layout::ENGINEER` and return the root.
+/// Spawn the engineer at `layout::START` and return the root.
 pub fn spawn(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -162,7 +164,7 @@ pub fn spawn(
     };
 
     let root = commands
-        .spawn((Transform::from_translation(ENGINEER), Visibility::default()))
+        .spawn((Transform::from_translation(START), Visibility::default()))
         .id();
     let joint = |commands: &mut Commands, parent: Entity, at: Vec3| {
         commands
@@ -196,6 +198,25 @@ pub fn spawn(
             Transform::from_translation(at),
             Visibility::default(),
             ChildOf(chest),
+        ));
+    }
+    // What the suit projects into the air around him rides the root, not
+    // the body, so it doesn't sway with his breath: the menu ahead and to
+    // his right (the camera locks on it); the prompt line beside his right
+    // arm.
+    for (name, at, toward) in [
+        ("menu", MENU_AT, MENU_FACING),
+        (
+            "prompt",
+            Vec3::new(0.66, 1.34, -0.05),
+            Vec3::new(0.0, 0.1, 1.0),
+        ),
+    ] {
+        commands.spawn((
+            HoloAnchor(name),
+            Transform::from_translation(at).with_rotation(facing(toward)),
+            Visibility::default(),
+            ChildOf(root),
         ));
     }
 

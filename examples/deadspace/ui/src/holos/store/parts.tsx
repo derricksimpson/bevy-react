@@ -93,7 +93,7 @@ export function List({
   );
 }
 
-/** The selected item up close: the turntable (while the store is up — the
+/** The selected item up close: the turntable (while he is at it — the
  *  `preview` camera renders only while a portal shows it), its name and
  *  text, then the page's own lines and button. */
 export function Detail({

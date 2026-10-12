@@ -1,4 +1,4 @@
-//! The fixtures the holograms hang on: the title terminal's alcove, the
+//! The fixtures the holograms hang on: the controls terminal's alcove, the
 //! store kiosk, the upgrade bench, the save station, the hack panel, and the
 //! housings of the elevator's call panel and floor indicator. Static,
 //! merged per material. (The bulkhead and the elevator move: `doors.rs`.)
@@ -76,7 +76,7 @@ pub fn build(commands: &mut Commands, meshes: &mut Assets<Mesh>, kit: &Kit) {
     }
 }
 
-/// The title terminal: a deep frame around a dark screen recess (the
+/// The controls terminal: a deep frame around a dark screen recess (the
 /// hologram floats in it), a console ledge below with its keys lit.
 fn terminal(kit: &Kit) -> Parts {
     let mut p = Parts::new(TERMINAL, ON_LEFT);
@@ -322,10 +322,12 @@ fn save_station(kit: &Kit) -> Parts {
         Vec3::new(0.34, 1.9, 0.04),
         Vec3::new(0.0, 1.15, 0.31),
     );
+    // The light column stops under the screen (it would shine through
+    // the hologram's glass).
     p.lit_cube(
         &kit.cyan,
-        Vec3::new(0.06, 1.7, 0.02),
-        Vec3::new(0.0, 1.15, 0.335),
+        Vec3::new(0.06, 0.8, 0.02),
+        Vec3::new(0.0, 0.7, 0.335),
     );
     p.lit_cube(
         &kit.cyan,

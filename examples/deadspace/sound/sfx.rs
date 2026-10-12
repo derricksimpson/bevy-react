@@ -13,7 +13,7 @@ type Render = fn() -> Vec<f32>;
 
 /// Every cue by name. `fire` is played as `fire-<weapon>` (the sound module
 /// tracks the equipped weapon).
-pub const SFX: [(&str, Render); 27] = [
+pub const SFX: [(&str, Render); 26] = [
     ("holoOpen", holo_open),
     ("holoClose", holo_close),
     ("tick", tick),
@@ -39,7 +39,6 @@ pub const SFX: [(&str, Render); 27] = [
     ("save", save),
     ("elevator", gear::elevator),
     ("locator", locator),
-    ("static", static_burst),
     ("log", log),
 ];
 
@@ -245,23 +244,6 @@ fn locator() -> Vec<f32> {
         (0.5 + 0.5 * (t * 90.0).sin()) * pluck(t, 0.05, 0.25)
     });
     hiss(&mut b, 0.0, 0.6, 9000.0, 81, |t| 0.12 * pluck(t, 0.1, 0.2));
-    normalize(&mut b, 0.2);
-    b
-}
-
-/// The dip between fixtures: a swell of hologram static.
-fn static_burst() -> Vec<f32> {
-    let mut b = silence(0.55);
-    let mut n = noise(91);
-    let (mut lo, mut hi) = (0.0, 0.0);
-    for (i, s) in b.iter_mut().enumerate() {
-        let t = i as f32 / SR;
-        let x = n();
-        let band = lowpass(&mut lo, x, coef(5000.0)) - lowpass(&mut hi, x, coef(700.0));
-        let env = (t / 0.15).min(1.0) * ((0.55 - t) / 0.3).clamp(0.0, 1.0);
-        let crackle = if (i / 300) % 7 == 3 { 1.6 } else { 1.0 };
-        *s = band * env * crackle;
-    }
     normalize(&mut b, 0.2);
     b
 }

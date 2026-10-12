@@ -2,16 +2,22 @@
 //! renders the app into an offscreen image (independent of window focus or
 //! occlusion), plays the scripted actions, captures one PNG and exits.
 //!
-//! `--size` is the capture's size in physical pixels (default 1920×1080);
-//! the UI is laid out at 1080p logical whatever it is, like the window.
+//! `--size` is the capture's size in pixels (default 1920×1080).
 //!
-//! Actions are strings the React app interprets (`debug.act` — see
-//! `useDebug` in `ui/src/hooks.ts`): `beat <n>` moves the tour, `tab
-//! <name>`, `select <item>`, `hit`, `fire`, `buy <item>`… (the verbs are
-//! listed in the README). The clock starts when React's first commit lands,
-//! so a slow isolate boot never swallows an early step. The surface pointer
-//! follows the real window's cursor, so it is dead here: hover and clicks
-//! inside holograms go through verbs.
+//! Six actions are Bevy's own, since the player is: `go <spot>` stands him
+//! somewhere (`layout::spot`: `start`, `center`, `store`, `bench`, `save`,
+//! `hack`, `doors`, `lift`), `look <yaw> <pitch>` turns the free camera by
+//! degrees from where the spot faces, `use` presses F (locks the camera on
+//! the screen he stands before, or lets go), `point <u> <v>` puts the
+//! cursor on the screen that holds the camera (0..1 from its top left),
+//! `aim on|off` raises the gun, `walk <right> <ahead>` holds the walk keys
+//! (`walk 0 1` = W, `walk 0 0` lets go). The rest are strings the React app
+//! interprets (`debug.act` — see `useDebug` in `ui/src/hooks.ts`):
+//! `menu on`, `tab <name>`, `select <item>`, `hit`, `fire`, `buy <item>`…
+//! (the verbs are listed in the README). The clock starts when React's
+//! first commit lands, so a slow isolate boot never swallows an early step.
+//!
+//! The real mouse and keys are dead here.
 
 use std::path::PathBuf;
 
@@ -22,8 +28,8 @@ use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
 use bevy_react::{ReactAppExt, ReactEvents, ReactNode, react_event};
 
-use crate::UI_HEIGHT;
-use crate::tour::MainCamera;
+use crate::layout;
+use crate::player::{MainCamera, Player, Scripted};
 
 /// Bevy → React: perform a scripted step (see the module docs).
 #[react_event(name = "debug.act")]
@@ -109,18 +115,19 @@ struct Shoot {
 }
 
 pub fn install(app: &mut App, cfg: ShootConfig) {
-    app.insert_resource(Shoot {
-        cfg,
-        target: None,
-        start: None,
-        frames: (0, 0.0),
-        next_step: 0,
-        shot: false,
-        captured: false,
-    })
-    .add_systems(First, mute_mouse)
-    .add_systems(PostStartup, redirect_camera)
-    .add_systems(Update, drive);
+    app.init_resource::<Scripted>()
+        .insert_resource(Shoot {
+            cfg,
+            target: None,
+            start: None,
+            frames: (0, 0.0),
+            next_step: 0,
+            shot: false,
+            captured: false,
+        })
+        .add_systems(First, mute_mouse)
+        .add_systems(PostStartup, redirect_camera)
+        .add_systems(Update, drive);
 }
 
 /// The window is real and may sit under the user's pointer: their clicks
@@ -133,8 +140,7 @@ fn mute_mouse(
     wheel.clear();
 }
 
-/// Point the main camera (the deck + the flat UI) at an offscreen image,
-/// scaled so its logical height is the UI's 1080.
+/// Point the main camera at an offscreen image.
 fn redirect_camera(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -150,7 +156,7 @@ fn redirect_camera(
     ));
     let target = ImageRenderTarget {
         handle,
-        scale_factor: h as f32 / UI_HEIGHT,
+        scale_factor: 1.0,
     };
     commands
         .entity(*camera)
@@ -158,9 +164,45 @@ fn redirect_camera(
     shoot.target = Some(target);
 }
 
+/// One of Bevy's own steps (see the module docs); `false` = React's.
+fn act(action: &str, player: &mut Player, scripted: &mut Scripted) -> bool {
+    let mut words = action.split(' ');
+    let (verb, a, b) = (words.next(), words.next(), words.next());
+    let number = |word: Option<&str>| word.and_then(|w| w.parse::<f32>().ok());
+    match (verb, a) {
+        (Some("go"), Some(spot)) => {
+            let (at, yaw) =
+                layout::spot(spot).unwrap_or_else(|| panic!("--do: no spot named {spot:?}"));
+            player.at = at;
+            player.yaw = yaw;
+            player.look = Vec2::new(yaw, 0.0);
+        }
+        (Some("look"), Some(_)) => {
+            let (yaw, pitch) = (number(a).unwrap_or(0.0), number(b).unwrap_or(0.0));
+            player.look = Vec2::new(player.yaw + yaw.to_radians(), pitch.to_radians());
+        }
+        (Some("aim"), Some(on)) => scripted.aiming = on == "on",
+        (Some("use"), None) => scripted.toggle = true,
+        (Some("point"), Some(_)) => {
+            scripted.cursor = Some(Vec2::new(
+                number(a).unwrap_or(0.5),
+                number(b).unwrap_or(0.5),
+            ));
+        }
+        (Some("walk"), Some(_)) => {
+            scripted.wish = Vec2::new(number(a).unwrap_or(0.0), number(b).unwrap_or(0.0));
+        }
+        _ => return false,
+    }
+    true
+}
+
+#[allow(clippy::too_many_arguments)]
 fn drive(
     time: Res<Time>,
     mut shoot: ResMut<Shoot>,
+    mut player: ResMut<Player>,
+    mut scripted: ResMut<Scripted>,
     mounted: Query<(), With<ReactNode>>,
     events: ReactEvents,
     mut commands: Commands,
@@ -190,7 +232,9 @@ fn drive(
             break;
         }
         info!("shoot: {action} at {t:.2}s");
-        events.send(&Act { action });
+        if !act(&action, &mut player, &mut scripted) {
+            events.send(&Act { action });
+        }
         shoot.next_step += 1;
     }
     if t < shoot.cfg.settle_secs {

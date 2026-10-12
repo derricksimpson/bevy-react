@@ -1,28 +1,24 @@
 //! Posing the suit every frame. A pose is a handful of numbers — where the
 //! hips sit, how the spine, chest and head turn, where the gun is, where
-//! the feet stand — and the beat picks which pose he eases toward (idle,
-//! aiming, reading the menu). Reactions add on top (a flinch, a stasis
-//! throw, the gun's kick). The arms and legs are solved with two-bone IK:
-//! hands on the gun's grips (or hanging), feet planted, so every pose and
-//! blend stays connected.
+//! the feet stand — and what the player does picks which pose he eases
+//! toward (idle, aiming, reading the menu). Walking strides the feet along
+//! the way he goes; reactions add on top (a flinch, a stasis throw, the
+//! gun's kick). The arms and legs are solved with two-bone IK: hands on
+//! the gun's grips (or hanging), feet on the floor, so every pose and blend
+//! stays connected.
 
 use bevy::prelude::*;
 
 use super::suit::{
     ANKLE_HEIGHT, CHEST, FOREARM, HIP, HIPS, NECK, Rig, SHIN, SHOULDER, SPINE, THIGH, UPPER_ARM,
 };
-use crate::tour::Beat;
+use crate::player::{Player, RUN, WALK};
+use crate::station::Noise;
 
 /// Where the hands hold a weapon, in the gun's frame (the weapon models
 /// put their grips here).
 pub const GRIP: Vec3 = Vec3::new(0.0, -0.06, 0.06);
 pub const FOREGRIP: Vec3 = Vec3::new(0.0, -0.05, -0.14);
-
-/// What the weapons read: how far into the aim he is (0..1).
-#[derive(Resource, Default)]
-pub struct Stance {
-    pub aim: f32,
-}
 
 /// What the weapons write: the gun's kick (1 on a shot, fading) and the
 /// reload's progress (0..1 while reloading).
@@ -118,8 +114,14 @@ const MENU: Pose = Pose {
     ..IDLE
 };
 
-/// How fast he settles into a new pose.
-const BLEND: f32 = 4.0;
+/// His stride: where in the cycle his feet are (radians; the right foot
+/// lands at every whole turn, the left half a turn later) and how much of
+/// it shows (0 standing .. 1 walking).
+#[derive(Default)]
+pub struct Stride {
+    phase: f32,
+    amount: f32,
+}
 
 fn euler(r: Vec3) -> Quat {
     Quat::from_euler(EulerRot::YXZ, r.y, r.x, r.z)
@@ -149,35 +151,54 @@ fn limb(a: Vec3, b: Vec3, back: Vec3) -> Quat {
 #[allow(clippy::too_many_arguments)]
 pub fn pose(
     time: Res<Time>,
-    beat: Res<Beat>,
-    mut weights: Local<[f32; 3]>,
+    player: Res<Player>,
+    mut stride: Local<Stride>,
     mut kick: ResMut<GunKick>,
     mut react: ResMut<Reactions>,
-    mut stance: ResMut<Stance>,
+    mut noise: MessageWriter<Noise>,
     rigs: Query<&Rig>,
     mut transforms: Query<&mut Transform>,
 ) {
     let dt = time.delta_secs();
     let t = time.elapsed_secs();
-    let target = match beat.0 {
-        2 => 1,
-        3 => 2,
-        _ => 0,
-    };
-    for (i, w) in weights.iter_mut().enumerate() {
-        let goal = if i == target { 1.0 } else { 0.0 };
-        *w += (goal - *w) * (1.0 - (-BLEND * dt).exp());
+    // Idle, into the aim, into the menu (never both).
+    let aim = player.aim;
+    let mut p = IDLE.lerp(&AIM, aim).lerp(&MENU, player.menu * (1.0 - aim));
+
+    // He looks, and aims, up and down with the camera.
+    let pitch = player.look.y;
+    p.head.x += pitch * 0.5;
+    p.spine.x += pitch * 0.25 * aim;
+    p.chest.x += pitch * 0.25 * aim;
+    p.gun_rot.x += pitch * aim;
+    p.gun.y += pitch * 0.3 * aim;
+
+    // Walking: each foot swings ahead along the way he goes while the
+    // other carries him, the hips sink into it, the chest counters.
+    let speed = player.velocity.length();
+    let going = Quat::from_rotation_y(-player.yaw) * player.velocity.normalize_or_zero();
+    let hurry = ((speed - WALK) / (RUN - WALK)).clamp(0.0, 1.0);
+    let walking = if speed > 0.2 { 1.0 } else { 0.0 };
+    stride.amount += (walking - stride.amount) * (1.0 - (-8.0 * dt).exp());
+    let before = stride.phase;
+    stride.phase += std::f32::consts::TAU * (1.5 + 0.7 * hurry) * dt * stride.amount;
+    let (phase, amount) = (stride.phase, stride.amount);
+    for (i, foot) in p.feet.iter_mut().enumerate() {
+        let swing = phase + i as f32 * std::f32::consts::PI;
+        *foot += going * (0.3 + 0.1 * hurry) * swing.cos() * amount;
+        foot.y += (0.09 + 0.04 * hurry) * (-swing.sin()).max(0.0) * amount;
     }
-    // A convex mix of the three: idle with aim, then that with the menu.
-    let [w0, w1, w2] = *weights;
-    let sum = (w0 + w1 + w2).max(1e-4);
-    let mut p = IDLE
-        .lerp(&AIM, w1 / (w0 + w1).max(1e-4))
-        .lerp(&MENU, w2 / sum);
-    stance.aim = w1 / sum;
+    p.hips.y -= (0.05 + 0.04 * hurry - 0.012 * (2.0 * phase).cos()) * amount;
+    p.chest.y += 0.07 * phase.sin() * amount;
+    p.spine.x -= 0.07 * hurry * amount;
+    // A foot lands every half turn.
+    let step = std::f32::consts::PI;
+    if (before / step).floor() != (phase / step).floor() {
+        noise.write(Noise("step", player.at));
+    }
 
     // Breathing and a slow shift of weight, less of both while aiming.
-    let calm = 1.0 - 0.6 * stance.aim;
+    let calm = 1.0 - 0.6 * aim;
     p.chest.x += (t * 1.7).sin() * 0.018 * calm;
     p.hips.x += (t * 0.42).sin() * 0.014 * calm;
     p.hips_rot.z += (t * 0.42).sin() * 0.02 * calm;
@@ -231,7 +252,9 @@ pub fn pose(
         // hanging, or thrown forward for stasis.
         for (i, side) in [1.0f32, -1.0].into_iter().enumerate() {
             let shoulder = chest.transform_point(SHOULDER * Vec3::new(side, 1.0, 1.0));
-            let hang = shoulder + Vec3::new(side * 0.06, -0.5, 0.06);
+            // The free arm swings against its leg.
+            let swing = going * 0.12 * (phase + i as f32 * std::f32::consts::PI).cos() * amount;
+            let hang = shoulder + Vec3::new(side * 0.06, -0.5, 0.06) - swing;
             let mut hand = if i == 0 {
                 gun.transform_point(GRIP)
             } else {

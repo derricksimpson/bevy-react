@@ -28,7 +28,6 @@ export type Cue =
   | "shock"
   | "save"
   | "locator"
-  | "static"
   | "log";
 
 /** Play a cue. */

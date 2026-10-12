@@ -1,3 +1,4 @@
+import type { SurfaceName } from "../holos/surfaces";
 import type { BenchTarget } from "./bench";
 import { initialPack, type ItemId, type Pack, type WeaponId } from "./items";
 
@@ -23,8 +24,25 @@ export type SaveSlot = {
 /** The whole fake game. Pure data: `reduce.ts` changes it, `act.ts` turns
  *  player actions into changes plus their sounds and messages to Bevy. */
 export type Game = {
-  /** The tour beat on screen. */
-  beat: number;
+  /** Where he stands and what his hands do: Bevy's side of the game
+   *  (`holo.active`, `player.stance`) and the Tab key. A loaded save
+   *  doesn't rewind it. */
+  here: {
+    /** The fixtures' panels he stands within reach of. */
+    near: SurfaceName[];
+    aiming: boolean;
+    /** The app has taken the mouse. */
+    mouse: boolean;
+    /** The screen the camera is locked on: a panel he stands at, or the
+     *  suit menu. Its cursor is the pointer. */
+    screen: SurfaceName | null;
+    /** The panel F would lock the camera on (he stands before it). */
+    offer: SurfaceName | null;
+    /** The suit menu is up. */
+    menu: boolean;
+    /** The first seconds: the prompt names the basic keys. */
+    intro: boolean;
+  };
   suit: {
     /** Vitals, 0..1 (the spine's segments). */
     health: number;
@@ -59,7 +77,15 @@ export type Game = {
 
 export function initialGame(): Game {
   return {
-    beat: 0,
+    here: {
+      near: [],
+      aiming: false,
+      mouse: true,
+      screen: null,
+      offer: null,
+      menu: false,
+      intro: true,
+    },
     suit: { health: 0.7, stasis: 0.75, vacuum: false, air: 60 },
     arms: {
       weapon: "cutter",
@@ -80,7 +106,17 @@ export function initialGame(): Game {
 
 /** Every change the game knows. */
 export type Action =
-  | { type: "beat"; beat: number }
+  // Where he is (Bevy's reports) and the suit menu.
+  | { type: "near"; surface: SurfaceName; on: boolean }
+  | {
+      type: "stance";
+      aiming: boolean;
+      mouse: boolean;
+      screen: SurfaceName | null;
+      offer: SurfaceName | null;
+    }
+  | { type: "menu"; open: boolean }
+  | { type: "introOver" }
   // The suit.
   | { type: "hit" }
   | { type: "heal"; item: ItemId }

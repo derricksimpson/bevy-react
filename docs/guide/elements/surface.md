@@ -141,6 +141,43 @@ UvChannel::Uv1`), match it with
   gets no hover or clicks. A press that started on the surface keeps it
   through the drag.
 
+### Pointing without the cursor
+
+An app that locks or hides the cursor (a first- or third-person camera, a
+gamepad reticle) points with its own ray. Write it to the `SurfacePointerRay`
+resource every frame: the mouse buttons and the wheel then act where that ray
+lands. `Ray(None)` points at nothing, and `SurfacePointerRay::Cursor` (the
+default) goes back to the window cursor.
+
+The pointer is driven in `PreUpdate`. A system that writes the ray there,
+after bevy's `InputSystems` and before `SurfacePointerSet`, has it act in the
+same frame; written later (in `Update`, say) it acts one frame late, and a
+cursor you draw yourself is then a frame ahead of the hover and the clicks.
+
+```rust
+use bevy::input::InputSystems;
+use bevy_react::surface::{SurfacePointerRay, SurfacePointerSet};
+
+app.add_systems(
+    PreUpdate,
+    aim_pointer.after(InputSystems).before(SurfacePointerSet),
+);
+
+/// The screen center is the pointer.
+fn aim_pointer(
+    camera: Single<&GlobalTransform, With<Camera3d>>,
+    mut pointer: ResMut<SurfacePointerRay>,
+) {
+    let ray = Ray3d::new(camera.translation(), camera.forward());
+    *pointer = SurfacePointerRay::Ray(Some(ray));
+}
+```
+
+Screen UI doesn't cover a ray of your own. The
+[Deadspace example](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace)
+points this way: it keeps its own cursor on the hologram the camera is
+locked on and casts the ray through it.
+
 ## Render modes
 
 - `RenderMode::Live` (the default): the UI renders every frame while at

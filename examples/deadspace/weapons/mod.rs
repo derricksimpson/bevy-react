@@ -2,8 +2,8 @@
 //! (`models.rs`). The equipped one rides the engineer's gun pivot (the pose
 //! puts his hands on its grips), with the `ammo` hologram (a `HoloAnchor`)
 //! floating over it and its tri-laser sight lit while he aims. A shot
-//! throws a bolt down the room that bursts into sparks where it strikes; a
-//! reload racks the weapon (the pose plays it from `GunKick`).
+//! throws a bolt the way the gun points that bursts into sparks where it
+//! strikes; a reload racks the weapon (the pose plays it from `GunKick`).
 
 pub mod models;
 
@@ -14,9 +14,10 @@ use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
 
 use crate::doors::Bulkhead;
-use crate::engineer::{GunKick, Rig, Stance};
+use crate::engineer::{GunKick, Rig};
 use crate::holo::HoloAnchor;
-use crate::layout::{BULKHEAD, BULKHEAD_SIZE, ROOM_MIN};
+use crate::layout;
+use crate::player::Player;
 use crate::station::kit::additive;
 use crate::station::{Burst, BurstKind, Flash, Noise};
 
@@ -54,7 +55,8 @@ struct Arsenal {
 #[derive(Component)]
 struct Bolt {
     velocity: Vec3,
-    stop_z: f32,
+    /// Meters left to fly.
+    left: f32,
 }
 
 /// How each weapon's shot flies: its speed (m/s), its shape (meters).
@@ -218,14 +220,8 @@ fn on_fire(
     let muzzle = model.transform_point(spec.muzzle);
     let dir = (model.rotation() * Vec3::NEG_Z).normalize();
     let (speed, size) = BOLTS[i];
-    // Through the bulkhead's opening if it stands open, else the far wall.
-    let open = bulkhead.is_some_and(|b| b.is_open());
-    let through = open && (muzzle.x - BULKHEAD.x).abs() < BULKHEAD_SIZE.x * 0.5 - 0.1;
-    let stop_z = if through {
-        ROOM_MIN.z - 6.9
-    } else {
-        ROOM_MIN.z + 0.05
-    };
+    // As far as the room goes (on through the bulkhead once it stands open).
+    let left = layout::reach(muzzle, dir, bulkhead.is_some_and(|b| b.is_open()));
     commands.spawn((
         Mesh3d(arsenal.bolt_mesh.clone()),
         MeshMaterial3d(arsenal.bolt_looks[i].clone()),
@@ -234,7 +230,7 @@ fn on_fire(
             .with_scale(size),
         Bolt {
             velocity: dir * speed,
-            stop_z,
+            left,
         },
         bevy::light::NotShadowCaster,
     ));
@@ -258,7 +254,7 @@ fn on_reload(_: On<Reload>, mut kick: ResMut<GunKick>) {
 /// The sight while aiming, the muzzle flash's moment.
 fn show(
     time: Res<Time>,
-    stance: Res<Stance>,
+    player: Res<Player>,
     mut arsenal: ResMut<Arsenal>,
     mut visibility: Query<&mut Visibility>,
 ) {
@@ -266,7 +262,7 @@ fn show(
     for i in 0..3 {
         let on = i == arsenal.equipped;
         if let Ok(mut v) = visibility.get_mut(arsenal.lasers[i]) {
-            v.set_if_neq(if on && stance.aim > 0.85 {
+            v.set_if_neq(if on && player.aim > 0.85 {
                 Visibility::Inherited
             } else {
                 Visibility::Hidden
@@ -286,31 +282,29 @@ fn show(
 fn fly(
     mut commands: Commands,
     time: Res<Time>,
-    mut bolts: Query<(Entity, &Bolt, &mut Transform)>,
+    mut bolts: Query<(Entity, &mut Bolt, &mut Transform)>,
     mut bursts: MessageWriter<Burst>,
     mut flashes: MessageWriter<Flash>,
     mut noise: MessageWriter<Noise>,
 ) {
-    for (e, bolt, mut t) in &mut bolts {
-        t.translation += bolt.velocity * time.delta_secs();
-        // The far wall, or the floor (a shot fired while the gun is still
-        // coming up).
-        let floor = t.translation.y <= 0.0;
-        if t.translation.z > bolt.stop_z && !floor {
+    for (e, mut bolt, mut t) in &mut bolts {
+        let step = bolt.velocity * time.delta_secs();
+        bolt.left -= step.length();
+        if bolt.left > 0.0 {
+            t.translation += step;
             continue;
         }
-        let at = if floor {
-            t.translation.with_y(0.02)
-        } else {
-            t.translation.with_z(bolt.stop_z)
-        };
+        // Where it struck (it overshot by what is left), and back off the
+        // wall.
+        let back = -bolt.velocity.normalize();
+        let at = t.translation + step - back * bolt.left;
         bursts.write(Burst {
             at,
-            dir: Vec3::new(0.0, 0.35, 1.0),
+            dir: back + Vec3::Y * 0.35,
             kind: BurstKind::Sparks,
         });
         flashes.write(Flash {
-            at: at + Vec3::Z * 0.4,
+            at: at + back * 0.4,
             color: LinearRgba::rgb(1.0, 0.7, 0.4),
             intensity: 260_000.0,
             secs: 0.18,

@@ -68,7 +68,13 @@ impl Plugin for PreviewPlugin {
         app.add_systems(Startup, (spawn_preview, spawn_icons, map::spawn_map))
             .add_systems(
                 Update,
-                (turn, retake_icons, map::orbit_camera, map::pulse_marker),
+                (
+                    turn,
+                    retake_icons,
+                    map::orbit_camera,
+                    map::pulse_marker,
+                    map::place_you,
+                ),
             );
     }
 }

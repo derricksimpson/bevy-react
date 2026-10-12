@@ -4,31 +4,23 @@ import { useGame } from "../game/store";
 import { useDebug, useKeys } from "../hooks";
 import { cue } from "../sound";
 import { C, F } from "../theme";
-import { Holo } from "./Holo";
+import { Holo, useHeld } from "./Holo";
 import { DIAL, Dial } from "./hack/Dial";
 import { TUMBLERS, useBypass } from "./hack/useBypass";
 
-/** Degrees the pick turns per A/D key event (auto-repeat while held). */
-const KEY_STEP = 4;
-
-/** The bulkhead's bypass panel (420 × 420): turn the pick (the mouse around
- *  the dial, or A/D) until the dial answers, then try (E or click). Three
- *  tumblers before the clock runs out. */
+/** The bulkhead's bypass panel (420 × 420): move the cursor around the dial
+ *  to turn the pick until the dial answers, then try (a click, or E). Three
+ *  tumblers before the clock runs out; it runs only while the camera is on
+ *  the panel. */
 export function Hack() {
-  const beat = useGame((g) => g.beat);
+  const held = useHeld("hack");
   const unlocked = useGame((g) => g.fixtures.door !== "locked");
-  const bypass = useBypass(beat === 7, unlocked);
+  const bypass = useBypass(held, unlocked);
   const { angle, solved, time, near, done } = bypass;
 
-  useKeys(
-    beat === 7,
-    (e) => {
-      if (e.code === "KeyA") bypass.turn(-KEY_STEP);
-      else if (e.code === "KeyD") bypass.turn(KEY_STEP);
-      else if (e.code === "KeyE" && !e.repeat) bypass.attempt();
-    },
-    true,
-  );
+  useKeys(held, (e) => {
+    if (e.code === "KeyE") bypass.attempt();
+  });
   useDebug("hack", (arg) => {
     const [verb, value] = arg.split(" ");
     if (verb === "solve") bypass.solve();

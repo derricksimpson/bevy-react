@@ -28,7 +28,6 @@ export type Bypass = {
   /** 0..1: how near the pick sits to the next tumbler. */
   near: number;
   done: boolean;
-  turn: (by: number) => void;
   point: (deg: number) => void;
   /** Try the current tumbler at the pick's angle. */
   attempt: () => void;
@@ -76,7 +75,6 @@ export function useBypass(running: boolean, unlocked: boolean): Bypass {
     time,
     near: done ? 0 : Math.max(0, 1 - angleBetween(angle, target) / 90),
     done,
-    turn: (by) => setAngle((a) => wrap(a + by)),
     point: (deg) => setAngle(wrap(deg)),
     attempt: () => {
       if (done) return;

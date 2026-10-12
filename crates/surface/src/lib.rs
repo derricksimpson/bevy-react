@@ -33,8 +33,9 @@
 //!
 //! A surface is **clickable in-world**: tag the mesh that displays the texture
 //! with [`SurfacePointer`] (the mesh needs UVs). [`drive_surface_pointer`]
-//! ray-casts the main camera through the cursor and drives a virtual picking
-//! pointer over the offscreen subtree; the core turns its picking state into
+//! ray-casts the main camera through the cursor (or along a ray the app
+//! writes to [`SurfacePointerRay`]) and drives a virtual picking pointer
+//! over the offscreen subtree; the core turns its picking state into
 //! the usual `onClick`/`onPointer*` calls and hover/press styling, like any
 //! pointer's. Registered in the core's `VirtualPointers`, it stays out of the
 //! window's `PointerCapture` and its hover sets the OS cursor.
@@ -51,12 +52,19 @@ mod registry;
 
 pub use element::{RSurface, SURFACE, SURFACE_WRITER, TARGET};
 pub use pointer::{
-    SurfacePointer, SurfaceVirtualPointer, UvChannel, drive_surface_pointer, init_surface_pointer,
+    SurfacePointer, SurfacePointerRay, SurfaceVirtualPointer, UvChannel, drive_surface_pointer,
+    init_surface_pointer,
 };
 pub use registry::{
     RenderMode, SurfaceCamera, SurfaceSpec, Surfaces, add_surface_camera_systems, bind_surfaces,
     drive_surfaces, retire_surface_cameras,
 };
+
+/// The system that drives the in-world pointer, in `PreUpdate`. A system
+/// that writes [`SurfacePointerRay`] runs before this set (and after bevy's
+/// `InputSystems`), or its ray only acts a frame later.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SurfacePointerSet;
 
 /// Registers the `<surface>` element and its machinery: the [`Surfaces`]
 /// registry, the in-world virtual pointer, the binding of `<surface>` roots to
@@ -68,6 +76,7 @@ impl Plugin for SurfacePlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.init_resource::<Surfaces>()
+            .init_resource::<SurfacePointerRay>()
             .add_systems(Startup, init_surface_pointer)
             // Drive the virtual pointer (cursor → mesh UV → image render
             // target) before `bevy_picking` processes inputs, so the
@@ -75,6 +84,7 @@ impl Plugin for SurfacePlugin {
             .add_systems(
                 PreUpdate,
                 drive_surface_pointer
+                    .in_set(SurfacePointerSet)
                     // After bevy_input: the press it forwards lands in the
                     // frame of the mouse's own (see the core's transform3d
                     // pointer).

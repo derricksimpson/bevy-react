@@ -12,17 +12,11 @@ export function useEvent<K extends keyof ReactEvents>(
   useEffect(() => on(name, (value) => latest.current(value)), [name]);
 }
 
-/** Key presses (no auto-repeat unless `repeat`) while mounted and `active`.
- *  `run` gets the event; match on `e.code` (layout-independent) or
- *  `e.key`. */
-export function useKeys(
-  active: boolean,
-  run: (e: KeyboardEventData) => void,
-  repeat = false,
-) {
+/** Key presses (no auto-repeat) while mounted and `active`. `run` gets the
+ *  event; match on `e.code` (layout-independent) or `e.key`. */
+export function useKeys(active: boolean, run: (e: KeyboardEventData) => void) {
   useEvent("keyDown", (e) => {
-    if (!active || (e.repeat && !repeat)) return;
-    run(e);
+    if (active && !e.repeat) run(e);
   });
 }
 

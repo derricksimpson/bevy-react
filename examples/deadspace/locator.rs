@@ -1,10 +1,8 @@
-//! The locator: a ribbon of light traced along the floor from the
-//! engineer's feet to a destination (`layout::destination`), the way the
+//! The locator: a ribbon of light traced along the floor from where the
+//! engineer stands to a destination (`layout::destination`), the way the
 //! suit's navigation would draw it — out along the deck in straight runs
 //! with rounded corners, a bright head racing ahead, chevrons flowing
 //! toward the goal, then a hold and a fade. `locator_ribbon.wesl` draws it.
-
-use std::collections::HashMap;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
@@ -13,7 +11,8 @@ use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy_react::{ReactAppExt, react_message};
 
-use crate::layout::{ENGINEER, destination};
+use crate::layout::destination;
+use crate::player::Player;
 
 /// React → Bevy: trace the line to `to` (`store`, `bench`, `save`,
 /// `elevator`, `bulkhead`).
@@ -52,7 +51,6 @@ impl Material for RibbonMaterial {
 struct Trace {
     entity: Entity,
     material: Handle<RibbonMaterial>,
-    paths: HashMap<String, (Handle<Mesh>, f32)>,
     age: Option<f32>,
     length: f32,
 }
@@ -94,7 +92,6 @@ fn spawn(mut commands: Commands, mut materials: ResMut<Assets<RibbonMaterial>>) 
     commands.insert_resource(Trace {
         entity,
         material,
-        paths: HashMap::new(),
         age: None,
         length: 0.0,
     });
@@ -102,6 +99,7 @@ fn spawn(mut commands: Commands, mut materials: ResMut<Assets<RibbonMaterial>>) 
 
 fn on_show(
     show: On<ShowLocator>,
+    player: Res<Player>,
     mut trace: ResMut<Trace>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut ribbons: Query<(&mut Mesh3d, &mut Visibility)>,
@@ -109,21 +107,17 @@ fn on_show(
     let Some(to) = destination(&show.to) else {
         return;
     };
-    let (mesh, length) = trace
-        .paths
-        .entry(show.to.clone())
-        .or_insert_with(|| {
-            let points = route(ENGINEER + Vec3::new(0.0, 0.0, -0.3), to);
-            let (mesh, length) = ribbon(&points);
-            (meshes.add(mesh), length)
-        })
-        .clone();
+    let Ok((mut mesh, mut visibility)) = ribbons.get_mut(trace.entity) else {
+        return;
+    };
+    // From half a step ahead of his feet. The last trace's mesh goes.
+    let ahead = player.frame().rotation * Vec3::NEG_Z * 0.3;
+    let (ribbon, length) = ribbon(&route(player.at + ahead, to));
+    meshes.remove(&mesh.0);
+    mesh.0 = meshes.add(ribbon);
+    *visibility = Visibility::Inherited;
     trace.length = length;
     trace.age = Some(0.0);
-    if let Ok((mut m, mut v)) = ribbons.get_mut(trace.entity) {
-        m.0 = mesh;
-        *v = Visibility::Inherited;
-    }
 }
 
 fn run(
@@ -163,11 +157,12 @@ fn run(
 fn route(from: Vec3, to: Vec3) -> Vec<Vec2> {
     let (a, b) = (from.xz(), to.xz());
     // Side-wall goals turn at their own depth; far-wall goals cross the
-    // room a meter out from the wall's fixtures first.
+    // room a meter out from the wall's fixtures first (or where he stands,
+    // if he is nearer the wall than that).
     let lane = if b.x.abs() > 6.0 {
         b.y
     } else {
-        (-1.0f32).max(b.y)
+        (-1.0f32).max(b.y).min(a.y)
     };
     let mut points = vec![a, Vec2::new(a.x, lane), Vec2::new(b.x, lane), b];
     points.dedup_by(|p, q| p.distance(*q) < 0.05);
@@ -242,17 +237,19 @@ fn ribbon(points: &[Vec2]) -> (Mesh, f32) {
 mod tests {
     use super::*;
 
-    /// Every destination's route starts at the feet, ends on the goal and
-    /// never jumps (samples stay close together).
+    /// Every destination's route, from anywhere he can stand, starts at his
+    /// feet, ends on the goal and never jumps (samples stay close together).
     #[test]
     fn routes_are_continuous() {
-        for to in ["store", "bench", "save", "elevator", "bulkhead"] {
-            let goal = destination(to).unwrap();
-            let from = ENGINEER + Vec3::new(0.0, 0.0, -0.3);
-            let points = route(from, goal);
-            assert!(points[0].distance(from.xz()) < 1e-4, "{to}");
-            assert!(points.last().unwrap().distance(goal.xz()) < 1e-3, "{to}");
-            assert!(points.windows(2).all(|w| w[0].distance(w[1]) < 0.2), "{to}");
+        for from in ["start", "center", "store", "bench", "hack", "lift"] {
+            let (from, _) = crate::layout::spot(from).unwrap();
+            for to in ["store", "bench", "save", "elevator", "bulkhead"] {
+                let goal = destination(to).unwrap();
+                let points = route(from, goal);
+                assert!(points[0].distance(from.xz()) < 1e-4, "{to}");
+                assert!(points.last().unwrap().distance(goal.xz()) < 1e-3, "{to}");
+                assert!(points.windows(2).all(|w| w[0].distance(w[1]) < 0.2), "{to}");
+            }
         }
     }
 }

@@ -4,10 +4,10 @@ import { countItem, credits } from "../game/items";
 import { LOGS, OBJECTIVES } from "../game/lore";
 import { objective } from "../game/reduce";
 import { getGame, useGame } from "../game/store";
-import { useDebug, useKeys } from "../hooks";
+import { useDebug } from "../hooks";
 import { cue } from "../sound";
 import { C, F, T } from "../theme";
-import { Holo } from "./Holo";
+import { Holo, useLive } from "./Holo";
 import { Inventory } from "./menu/Inventory";
 import { Logs } from "./menu/Logs";
 import { MapTab } from "./menu/MapTab";
@@ -25,12 +25,12 @@ type Tab = (typeof TABS)[number]["id"];
 /** How long an audio log's transmission plays. */
 const PLAY_MS = 4200;
 
-/** The suit's RIG menu, projected in front of the engineer (beat 3): his
- *  vitals and credits, then four pages — the inventory, the deck map, the
- *  objective chain and the logs. Tab / Shift+Tab or a click switch pages,
- *  each change sweeping a scan line across the hologram. */
+/** The suit's RIG menu, projected in front of the engineer while Tab has it
+ *  up: his vitals and credits, then four pages — the inventory, the deck
+ *  map, the objective chain and the logs. A click switches pages, each
+ *  change sweeping a scan line across the hologram. */
 export function Menu() {
-  const active = useGame((g) => g.beat) === 3;
+  const active = useLive("menu");
   const [tab, setTab] = useState<Tab>("inventory");
   const [slot, setSlot] = useState(0);
   const [log, setLog] = useState(LOGS[0].id);
@@ -59,12 +59,6 @@ export function Menu() {
     return () => clearTimeout(t);
   }, [playing]);
 
-  useKeys(active, (e) => {
-    if (e.code !== "Tab") return;
-    const at = TABS.findIndex((t) => t.id === tab);
-    const step = e.shiftKey ? TABS.length - 1 : 1;
-    pick(TABS[(at + step) % TABS.length].id);
-  });
   useDebug("tab", (id) => {
     if (TABS.some((t) => t.id === id)) setTab(id as Tab);
   });
@@ -94,7 +88,7 @@ export function Menu() {
           }}
         >
           <Tabs tabs={TABS} active={tab} onPick={pick} />
-          <text style={{ ...T.small, letterSpacing: 2 }}>TAB · SHIFT+TAB</text>
+          <text style={{ ...T.small, letterSpacing: 2 }}>TAB · CLOSE</text>
         </node>
         <Rule />
         <node style={{ flexGrow: 1, margin: { top: 16, bottom: 12 } }}>

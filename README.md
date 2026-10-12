@@ -104,11 +104,12 @@ drawn by a shader.
 is a homage to the diegetic interface of a sci-fi horror game: there is no
 HUD. The engineer's health runs down his spine, the ammo count floats over
 his gun, and the suit menu, the store, the upgrade bench and the hack panel
-are holograms in the room — every one a React `<surface>` you click and
-scroll in 3D, glitching when the suit takes a hit.
+are holograms in the room — every one a React `<surface>`. You walk him
+around the deck: panels wake as he comes near, and F locks the camera on
+the one he faces and makes the mouse its cursor.
 [Play it in your browser](https://tulustul.github.io/bevy-react/deadspace/).
 
-![The suit menu projected into the room beside the engineer's armored shoulder: a grid of item icons, a glowing stasis pack turning in the preview, vitals, power cells and credits along the top, the locked bulkhead behind.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/deadspace-menu.webp)
+![The suit menu projected into the room, the camera locked on it: a grid of item icons with the cursor on a stasis pack, the pack turning in the preview, vitals, power cells and credits along the top, the engineer's back and stasis gauge at the left edge.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/deadspace-menu.webp)
 
 ## Getting started
 

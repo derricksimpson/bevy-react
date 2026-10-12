@@ -249,3 +249,25 @@ fn surface_camera_carries_the_scale_factor() {
     assert_eq!(scale(&app, "crisp"), 2.0);
     assert_eq!(scale(&app, "broken"), 1.0);
 }
+
+/// A surface camera is on no render layer: it must not see the scene's
+/// meshes, or the tagged ones would count as visible (and their surfaces
+/// never idle) wherever the real cameras look.
+#[test]
+fn surface_camera_sees_no_meshes() {
+    let mut app = test_app();
+    app.add_systems(Update, bind_surfaces);
+    app.world_mut()
+        .resource_scope(|world, mut surfaces: Mut<Surfaces>| {
+            let mut images = world.resource_mut::<Assets<Image>>();
+            surfaces.create(&mut images, "monitor", SurfaceSpec::default());
+        });
+    app.update();
+    let cam = app.world().resource::<Surfaces>().entries["monitor"]
+        .camera
+        .unwrap();
+    assert_eq!(
+        app.world().entity(cam).get::<RenderLayers>(),
+        Some(&RenderLayers::none())
+    );
+}

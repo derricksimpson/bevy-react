@@ -1,6 +1,6 @@
 //! The world's own noises (`station::Noise`, written by the doors, the
 //! weapons and the suit when something happens out in the room): heavy
-//! machinery, impacts down the deck. React's cues cover the interface; these
+//! machinery, impacts down the deck, his boots. React's cues cover the interface; these
 //! cover the room.
 
 use super::kit::*;
@@ -10,7 +10,8 @@ type Render = fn() -> Vec<f32>;
 
 /// Every world noise by its `Noise` name. `elevatorArrive` rings the
 /// elevator's bell (the `elevator` cue).
-pub const NOISES: [(&str, Render); 5] = [
+pub const NOISES: [(&str, Render); 6] = [
+    ("step", step),
     ("bulkheadOpen", bulkhead_open),
     ("elevatorDoors", elevator_doors),
     ("elevatorMove", elevator_move),
@@ -31,6 +32,32 @@ fn band(buf: &mut [f32], at: f32, len: f32, lo: f32, hi: f32, seed: u32, amp: im
         let x = n();
         *s += (lowpass(&mut y_hi, x, a_hi) - lowpass(&mut y_lo, x, a_lo)) * amp(i as f32 / SR);
     }
+}
+
+/// A boot on the deck's grating: a dull thud and the plate's short ring.
+fn step() -> Vec<f32> {
+    let mut b = silence(0.22);
+    tone(
+        &mut b,
+        0.0,
+        0.16,
+        sine,
+        |t| 62.0 + 50.0 * (-t / 0.015).exp(),
+        |t| pluck(t, 0.002, 0.045),
+    );
+    band(&mut b, 0.0, 0.1, 300.0, 2600.0, 0x57E9, |t| {
+        0.35 * pluck(t, 0.001, 0.02)
+    });
+    tone(
+        &mut b,
+        0.0,
+        0.2,
+        sine,
+        |_| 410.0,
+        |t| 0.08 * pluck(t, 0.001, 0.05),
+    );
+    normalize(&mut b, 0.13);
+    b
 }
 
 /// The bulkhead giving way: a deep clunk, two halves grinding apart on a

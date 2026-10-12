@@ -14,7 +14,7 @@ import { getGame, useGame } from "../game/store";
 import { useDebug } from "../hooks";
 import { cue } from "../sound";
 import { C, T } from "../theme";
-import { Holo } from "./Holo";
+import { Holo, useLive } from "./Holo";
 import { HoloButton, Rule, Shell, Tabs } from "./shared/kit";
 import { Detail, ItemRow, List } from "./store/parts";
 
@@ -35,16 +35,16 @@ function catalog(owned: string[]): ItemId[] {
   });
 }
 
-/** The store kiosk's hologram (beat 4): buy, sell, and the safe that keeps
- *  what the suit can't carry. Credits up top in amber. */
+/** The store kiosk's hologram: buy, sell, and the safe that keeps what the
+ *  suit can't carry. Credits up top in amber. */
 export function Store() {
-  const active = useGame((g) => g.beat) === 4;
+  const active = useLive("store");
   const [tab, setTab] = useState<Tab>("buy");
   const [item, setItem] = useState<ItemId>("medpack-s");
   const [slot, setSlot] = useState(0);
   const pack = useGame((g) => g.pack);
 
-  // The turntable shows what this page is about while the store is up.
+  // The turntable shows what this page is about while he is at the store.
   const shown =
     tab === "buy" ? item : tab === "sell" ? pack.slots[slot]?.item : undefined;
   useEffect(() => {
@@ -184,7 +184,7 @@ function Buy({
         <node style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
           {owned ? (
             <text style={{ ...T.small, letterSpacing: 2, color: C.green }}>
-              OWNED · Q SWAPS TO IT IN THE WEAPON BEAT
+              OWNED · Q DRAWS IT
             </text>
           ) : (
             <HoloButton

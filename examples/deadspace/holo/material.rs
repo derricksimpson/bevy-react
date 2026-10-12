@@ -16,20 +16,25 @@ pub struct HologramMaterial {
     /// (presence 0..1, gain, seed, flicker 0..1)
     #[uniform(0)]
     pub look: Vec4,
-    /// (texture logical px w, h, scanline strength, edge glow)
+    /// (texture logical px w, h, scanline strength, power 0..1: 0 = a dead
+    /// panel, grey and dim)
     #[uniform(1)]
     pub shape: Vec4,
     #[texture(2)]
     #[sampler(3)]
     pub ui: Handle<Image>,
+    /// The pointer's reticle: (u, v, strength 0..1, -).
+    #[uniform(4)]
+    pub cursor: Vec4,
 }
 
 impl HologramMaterial {
     pub fn new(ui: Handle<Image>, px: Vec2, seed: f32) -> Self {
         Self {
             look: Vec4::new(0.0, 1.35, seed, 0.06),
-            shape: Vec4::new(px.x, px.y, 0.12, 1.0),
+            shape: Vec4::new(px.x, px.y, 0.12, 0.0),
             ui,
+            cursor: Vec4::ZERO,
         }
     }
 }

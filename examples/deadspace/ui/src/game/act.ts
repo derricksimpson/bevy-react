@@ -158,7 +158,7 @@ export function read(log: string) {
   dispatch({ type: "read", log });
 }
 
-/** The hack beat solved the lock: the bulkhead opens. */
+/** The bypass solved the lock: the bulkhead opens. */
 export function unlock() {
   if (dispatch({ type: "unlock" })) {
     cue("unlock");

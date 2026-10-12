@@ -42,7 +42,7 @@ export function reserve(g: Game, weapon: WeaponId): number {
 }
 
 /** The current objective (index into `OBJECTIVES`): the first step the
- *  game hasn't done yet, in whatever order the tour visits them. */
+ *  game hasn't done yet, in whatever order he gets to them. */
 export function objective(g: Game): number {
   if (!g.story.bought) return 0;
   if (g.bench.cutter.length === 0) return 1;
@@ -55,8 +55,23 @@ export function objective(g: Game): number {
  *  identity to know an action was refused. */
 export function reduce(g: Game, a: Action): Game {
   switch (a.type) {
-    case "beat":
-      return { ...g, beat: a.beat };
+    case "near": {
+      const { near } = g.here;
+      if (near.includes(a.surface) === a.on) return g;
+      const next = a.on
+        ? [...near, a.surface]
+        : near.filter((s) => s !== a.surface);
+      return { ...g, here: { ...g.here, near: next } };
+    }
+    case "stance": {
+      const { aiming, mouse, screen, offer } = a;
+      return { ...g, here: { ...g.here, aiming, mouse, screen, offer } };
+    }
+    case "menu":
+      if (g.here.menu === a.open) return g;
+      return { ...g, here: { ...g.here, menu: a.open } };
+    case "introOver":
+      return g.here.intro ? { ...g, here: { ...g.here, intro: false } } : g;
 
     case "hit": {
       const armor = stats("rig", g.bench.rig).damage / 100;
@@ -219,11 +234,11 @@ export function reduce(g: Game, a: Action): Game {
     case "load": {
       const slot = g.fixtures.saves.find((s) => s.id === a.id);
       if (!slot) return g;
-      // The room itself doesn't rewind: the beat, the doors and the
-      // elevator stay where they are.
+      // The room itself doesn't rewind: where he stands, the doors and
+      // the elevator stay as they are.
       return {
         ...slot.game,
-        beat: g.beat,
+        here: g.here,
         fixtures: { ...g.fixtures, locator: slot.game.fixtures.locator },
       };
     }
