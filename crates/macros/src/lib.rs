@@ -336,6 +336,18 @@ pub fn react_morph_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
     )
 }
 
+/// Why a filter's `shader = "…"` path is refused, if it is. Bevy 0.20 composes
+/// only `.wesl` files; a `.wgsl` one reaches the GPU as written, so its
+/// prelude import never resolves — an invisible subtree on native, a crash on
+/// the web. A build error is the cheaper place to find out.
+fn shader_path_error(path: &str) -> Option<&'static str> {
+    path.ends_with(".wgsl").then_some(
+        "a filter shader must be WESL: rename the file to `.wesl` and import the prelude \
+         with `import bevy_react::filter::{…};` (Bevy 0.20 loads a `.wgsl` file verbatim, \
+         so its imports never resolve)",
+    )
+}
+
 /// The shared `#[react_filter]`/`#[react_morph_filter]` expansion:
 /// everything after argument parsing. `macro_name` personalizes the error
 /// messages; `is_morph` bakes `IS_MORPH` and adds the `ReactMorphFilter`
@@ -357,6 +369,12 @@ fn expand_react_filter(
         .to_compile_error()
         .into();
     };
+
+    if let Some(message) = shader_path_error(&shader.value()) {
+        return syn::Error::new(shader.span(), message)
+            .to_compile_error()
+            .into();
+    }
 
     let mut input = parse_macro_input!(item as DeriveInput);
     let name = name_override.unwrap_or_else(|| lower_first(&input.ident.to_string()));
@@ -706,5 +724,17 @@ fn lower_first(s: &str) -> String {
     match chars.next() {
         Some(first) => first.to_lowercase().collect::<String>() + chars.as_str(),
         None => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shader_path_error;
+
+    #[test]
+    fn a_wgsl_shader_path_is_refused() {
+        assert!(shader_path_error("shaders/glow.wgsl").is_some());
+        assert!(shader_path_error("shaders/glow.wesl").is_none());
+        assert!(shader_path_error("embedded://my_crate/glow.wesl").is_none());
     }
 }

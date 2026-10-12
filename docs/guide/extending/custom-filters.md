@@ -127,6 +127,9 @@ file. It imports what it uses from the prelude
 capture: `in.uv` spans the image `0..1`, y down, and whatever the function
 returns is written as-is, alpha included.
 
+A `shader` path ending in `.wgsl` is a build error: Bevy passes such a file
+to the GPU as written, so its imports would never resolve.
+
 WESL's `@if(NAME)` keeps a declaration or statement only when Bevy sets that
 shader def, for example `@if(SIXTEEN_BYTE_ALIGNMENT)` on WebGL2 builds.
 
