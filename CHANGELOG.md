@@ -253,6 +253,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A dev bundle on a Rust build without the `devtools` feature (or a release
   build) logged two `no handler registered` errors at startup for the
   devtools tables.
+- `<anchor>` overlays trailed a moving camera or entity by one frame: they
+  were projected in `Update`, from `GlobalTransform`s Bevy only refreshes in
+  `PostUpdate`. They are now positioned in `PostUpdate`, just before UI
+  layout, from that frame's `Transform`s. A system that moves the camera or
+  an anchored entity in `PostUpdate` must run
+  `.before(bevy_react::anchor::position_anchored_nodes)`.
 
 ## [0.7.0] - 2026-10-05
 

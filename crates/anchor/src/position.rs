@@ -1,6 +1,7 @@
 //! The anchor layer and the per-frame positioning of anchored overlays.
 
 use bevy::prelude::*;
+use bevy::transform::helper::TransformHelper;
 use bevy::ui::{IsDefaultUiCamera, UiGlobalTransform, UiTransform, Val2};
 use serde::Deserialize;
 
@@ -115,67 +116,104 @@ pub(crate) fn spawn_anchor_layer(mut commands: Commands) {
     ));
 }
 
-/// Reposition every [`Anchored`] node each frame: project its target's world
-/// position through the UI camera and write the result into the node's
-/// `UiTransform.translation`, centered on the anchor point. The node's layout
-/// position is a one-time seed (`position_type: Absolute`, `left`/`top` `0`) —
-/// movement rides the transform, which is **not** a layout input, so a moving
-/// anchor (every frame, while the camera orbits) never re-runs taffy. The
-/// trade-off: anchored nodes **own** `translation` — a style/animated
-/// `translate` on an `<anchor>` is overwritten each frame (`scale` composes
-/// with distance scaling as before; `rotation` is untouched). Hides the overlay
-/// until it has been laid out (so it never flashes uncentered on spawn), and
-/// when the target has despawned or its anchor point is behind the camera /
-/// off-screen.
+/// Adopt every [`Anchored`] node: parent it under the shared [`AnchorLayer`]
+/// (the element is detached: the bridge never attaches it anywhere), so it
+/// lives in its own hierarchy and never contributes to the flex layout or
+/// scrollable `content_size` of whatever app container it was declared in,
+/// and seed its layout position at the layer's origin.
 ///
-/// Each anchored node is also parented under the shared [`AnchorLayer`] (the
-/// element is detached: the bridge never attaches it anywhere), so it lives in
-/// its own hierarchy and never contributes to the flex layout or scrollable
-/// `content_size` of whatever app container it was declared in (it sits at
-/// the layer's origin; the transform translation doesn't feed `content_size`).
-///
-/// Registered in [`ElementOverrideSet`](bevy_react_core::ext::ElementOverrideSet): after
-/// the op drain so it overrides this frame's static style, and after the
-/// animation/transition drivers so its `translation` write deterministically
-/// wins over theirs. A no-op when no anchored nodes exist.
-#[allow(clippy::type_complexity)]
-pub fn position_anchored_nodes(
+/// Registered in [`ElementOverrideSet`](bevy_react_core::ext::ElementOverrideSet):
+/// after the op drain, so a node mounted this frame is under the layer — and
+/// a re-render's wholesale `Node` re-stamp is re-seeded — by the time layout
+/// runs.
+pub(crate) fn adopt_anchored_nodes(
     mut commands: Commands,
-    default_cam: Query<(&Camera, &GlobalTransform), With<IsDefaultUiCamera>>,
-    other_cam: Query<(&Camera, &GlobalTransform), Without<IsDefaultUiCamera>>,
     layer: Query<Entity, With<AnchorLayer>>,
-    targets: Query<&GlobalTransform>,
-    ui_nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
-    mut anchored: Query<(
-        Entity,
-        &Anchored,
-        Option<&ChildOf>,
-        &mut Node,
-        &mut Visibility,
-        &mut UiTransform,
-    )>,
+    mut anchored: Query<(Entity, Option<&ChildOf>, &mut Node), With<Anchored>>,
 ) {
-    // The overlay container every anchored node is reparented under.
     let Ok(layer_entity) = layer.single() else {
         return;
     };
-    // Parent each overlay under the shared anchor layer (once) so it can't
-    // affect its declared parent's flex layout or scroll range. Done before
-    // every guard below — camera, layout readiness — so a node mounted this
-    // frame is under the layer by the time layout runs.
-    for (entity, _, child_of, ..) in &anchored {
+    for (entity, child_of, mut node) in &mut anchored {
         if child_of.map(|c| c.parent()) != Some(layer_entity) {
             commands.entity(entity).insert(ChildOf(layer_entity));
         }
+        // Always absolute — so a hidden overlay never takes flex-flow space —
+        // at the layer's origin. The node MOVES via `UiTransform.translation`
+        // (see `position_anchored_nodes`), never `left`/`top`, which are taffy
+        // inputs and would force a full relayout every frame the camera
+        // orbits. Guarded so a settled overlay doesn't tick `Changed<Node>`
+        // (a relayout) every frame.
+        if node.position_type != PositionType::Absolute
+            || node.left != Val::Px(0.0)
+            || node.top != Val::Px(0.0)
+        {
+            node.position_type = PositionType::Absolute;
+            node.left = Val::Px(0.0);
+            node.top = Val::Px(0.0);
+        }
     }
+}
 
+/// Where `entity` is drawn THIS frame: its `Transform`s composed up the
+/// hierarchy. Bevy only propagates them into `GlobalTransform` later in
+/// `PostUpdate` — and nothing orders that against UI layout — so the stored
+/// `GlobalTransform` is still last frame's here; it answers only for an entity
+/// without a `Transform` (one the app writes itself).
+fn world_transform(
+    entity: Entity,
+    transforms: &TransformHelper,
+    globals: &Query<&GlobalTransform>,
+) -> Option<GlobalTransform> {
+    transforms
+        .compute_global_transform(entity)
+        .ok()
+        .or_else(|| globals.get(entity).ok().copied())
+}
+
+/// Reposition every [`Anchored`] node each frame: project its target's world
+/// position through the UI camera and write the result into the node's
+/// `UiTransform.translation`, centered on the anchor point. The node's layout
+/// position is a one-time seed ([`adopt_anchored_nodes`]) — movement rides
+/// the transform, which is **not** a layout input, so a moving anchor (every
+/// frame, while the camera orbits) never re-runs taffy. The trade-off:
+/// anchored nodes **own** `translation` — a style/animated `translate` on an
+/// `<anchor>` is overwritten each frame (`scale` composes with distance
+/// scaling as before; `rotation` is untouched). Hides the overlay until it has
+/// been laid out (so it never flashes uncentered on spawn), and when the
+/// target has despawned or its anchor point is behind the camera / off-screen.
+///
+/// Runs in `PostUpdate`, before UI layout (which resolves the translation)
+/// and visibility propagation: every `Update` system has moved its cameras
+/// and targets by then, and the projection reads this frame's transforms
+/// ([`world_transform`]) and camera projection — the overlay is drawn exactly
+/// where the 3D frame under it puts the anchor point, never a frame behind a
+/// panning camera. An app system that moves a camera or a target in
+/// `PostUpdate` orders itself `.before(position_anchored_nodes)`. A no-op when
+/// no anchored nodes exist.
+#[allow(clippy::type_complexity)]
+pub fn position_anchored_nodes(
+    default_cam: Query<(Entity, &Camera), With<IsDefaultUiCamera>>,
+    other_cam: Query<(Entity, &Camera), Without<IsDefaultUiCamera>>,
+    layer: Query<Entity, With<AnchorLayer>>,
+    transforms: TransformHelper,
+    globals: Query<&GlobalTransform>,
+    ui_nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
+    mut anchored: Query<(Entity, &Anchored, &mut Visibility, &mut UiTransform)>,
+) {
+    let Ok(layer_entity) = layer.single() else {
+        return;
+    };
     // Project through the default UI camera; if none is marked, fall back to any
     // camera (the host app's UI camera may carry no marker).
-    let Some((cam, cam_tf)) = default_cam
+    let Some((cam_entity, cam)) = default_cam
         .iter()
         .next()
         .or_else(|| other_cam.iter().next())
     else {
+        return;
+    };
+    let Some(cam_tf) = world_transform(cam_entity, &transforms, &globals) else {
         return;
     };
     // Anchored nodes position relative to the layer's box, so subtract its
@@ -187,28 +225,10 @@ pub fn position_anchored_nodes(
         .map(|(c, t)| t.translation * c.inverse_scale_factor())
         .unwrap_or(Vec2::ZERO);
 
-    for (entity, anchor, _, mut node, mut visibility, mut transform) in &mut anchored {
-        // Seed the layout position once (self-heals after a re-render's
-        // wholesale `Node` re-stamp): always absolute — so a hidden overlay
-        // never takes flex-flow space — anchored at the layer's origin. The
-        // node MOVES via `UiTransform.translation` below, never `left`/`top`,
-        // which are taffy inputs and would force a full relayout every frame
-        // the camera orbits. Guarded so a settled overlay doesn't tick
-        // `Changed<Node>` (a relayout) every frame.
-        if node.position_type != PositionType::Absolute
-            || node.left != Val::Px(0.0)
-            || node.top != Val::Px(0.0)
-        {
-            node.position_type = PositionType::Absolute;
-            node.left = Val::Px(0.0);
-            node.top = Val::Px(0.0);
-        }
-
-        // Center the overlay on the anchor using its own laid-out size. On the frame
-        // it spawns, `bevy_ui` layout hasn't produced a size yet (it runs later, in
-        // `PostUpdate`) and the target's transform may not have propagated — so stay
-        // hidden one frame rather than flash uncentered at a stale position. By the
-        // next frame the size is real and the transforms have settled.
+    for (entity, anchor, mut visibility, mut transform) in &mut anchored {
+        // Center the overlay on the anchor using its own laid-out size. On the
+        // frame it spawns, `bevy_ui` layout hasn't produced a size yet (it runs
+        // after this) — so stay hidden one frame rather than flash uncentered.
         let Ok((computed, _)) = ui_nodes.get(entity) else {
             visibility.set_if_neq(Visibility::Hidden);
             continue;
@@ -219,13 +239,13 @@ pub fn position_anchored_nodes(
         }
 
         // The target may have despawned (or not exist yet): hide until it returns.
-        let Ok(target_tf) = targets.get(anchor.target) else {
+        let Some(target_tf) = world_transform(anchor.target, &transforms, &globals) else {
             visibility.set_if_neq(Visibility::Hidden);
             continue;
         };
 
         let world = target_tf.translation() + anchor.offset;
-        let Ok(viewport) = cam.world_to_viewport(cam_tf, world) else {
+        let Ok(viewport) = cam.world_to_viewport(&cam_tf, world) else {
             // Behind the camera / outside the viewport: hide rather than clamp.
             visibility.set_if_neq(Visibility::Hidden);
             continue;
@@ -242,11 +262,11 @@ pub fn position_anchored_nodes(
         }
 
         // `world_to_viewport` is in logical pixels, but the node is laid out at
-        // the anchor layer's origin (`left`/`top` 0 above) — so subtract the
-        // layer's top-left (computed once above). Also center this node on the
-        // anchor using its own size. Applied as a transform translation
-        // (logical px, resolved physical exactly like `left`/`top` would be),
-        // compare-guarded so a static camera + target settles.
+        // the anchor layer's origin — so subtract the layer's top-left
+        // (computed once above). Also center this node on the anchor using its
+        // own size. Applied as a transform translation (logical px, resolved
+        // physical exactly like `left`/`top` would be), compare-guarded so a
+        // static camera + target settles.
         let half = computed.size() * computed.inverse_scale_factor() / 2.0;
         let local = viewport - parent_top_left - half;
 

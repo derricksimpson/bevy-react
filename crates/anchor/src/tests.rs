@@ -92,19 +92,13 @@ fn anchor_offset_defaults_to_zero() {
 
 #[test]
 fn anchored_node_is_reparented_under_the_layer() {
-    use crate::{AnchorLayer, Anchored, position_anchored_nodes};
+    use crate::position::adopt_anchored_nodes;
+    use crate::{AnchorLayer, Anchored};
     use bevy::ecs::system::RunSystemOnce;
     use bevy::prelude::*;
-    use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiGlobalTransform};
+    use bevy::ui::{ComputedNode, UiGlobalTransform};
 
     let mut world = World::new();
-
-    // A default UI camera so the system gets past its camera guard.
-    world.spawn((
-        Camera::default(),
-        GlobalTransform::default(),
-        IsDefaultUiCamera,
-    ));
 
     // The shared overlay layer (carries the components the layer query reads).
     let layer = world
@@ -118,8 +112,7 @@ fn anchored_node_is_reparented_under_the_layer() {
     // Some unrelated container the overlay was "declared" under in the React tree.
     let other_parent = world.spawn(Node::default()).id();
 
-    // An anchored node parented under `other_parent` (not the layer). It has no
-    // `ComputedNode`, so it stays hidden — but the reparent runs first regardless.
+    // An anchored node parented under `other_parent` (not the layer).
     let target = world.spawn(GlobalTransform::default()).id();
     let badge = world
         .spawn((
@@ -133,7 +126,7 @@ fn anchored_node_is_reparented_under_the_layer() {
         ))
         .id();
 
-    world.run_system_once(position_anchored_nodes).unwrap();
+    world.run_system_once(adopt_anchored_nodes).unwrap();
 
     assert_eq!(
         world.entity(badge).get::<ChildOf>().map(|c| c.parent()),
@@ -218,7 +211,13 @@ fn anchored_move_never_ticks_node() {
         .id();
 
     let mut apply = Schedule::default();
-    apply.add_systems(position_anchored_nodes);
+    apply.add_systems(
+        (
+            crate::position::adopt_anchored_nodes,
+            position_anchored_nodes,
+        )
+            .chain(),
+    );
     // A separate detect schedule so each `Changed` filter spans exactly one
     // apply run.
     let mut detect = Schedule::default();
@@ -285,6 +284,84 @@ fn anchored_move_never_ticks_node() {
         (0, 0),
         "a static anchor must tick neither Node nor UiTransform"
     );
+}
+
+/// The overlay is projected through the transforms the frame is DRAWN with:
+/// a camera (or target) moved in `Update` is followed the same frame, not one
+/// frame late — the 3D view and its labels never drift apart during a pan.
+#[test]
+fn anchor_follows_a_camera_moved_this_frame() {
+    use crate::{AnchorPlugin, Anchored};
+    use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+    use bevy::prelude::*;
+    use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiTransform, Val2};
+
+    #[derive(Component)]
+    struct Pan;
+
+    let camera = Camera {
+        computed: ComputedCameraValues {
+            clip_from_view: bevy::math::proj::perspective_infinite_reverse(
+                std::f32::consts::FRAC_PI_4,
+                1.0,
+                0.1,
+            ),
+            target_info: Some(RenderTargetInfo {
+                physical_size: UVec2::new(1000, 1000),
+                scale_factor: 1.0,
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let mut app = App::new();
+    app.add_plugins((TransformPlugin, AnchorPlugin))
+        .add_systems(Update, |mut cams: Query<&mut Transform, With<Pan>>| {
+            for mut t in &mut cams {
+                t.translation.x += 1.0;
+            }
+        });
+    app.world_mut()
+        .spawn((camera.clone(), Transform::default(), IsDefaultUiCamera, Pan));
+    let target = app
+        .world_mut()
+        .spawn(Transform::from_xyz(0.0, 0.0, -10.0))
+        .id();
+    let badge = app
+        .world_mut()
+        .spawn((
+            Node::default(),
+            ComputedNode {
+                size: Vec2::new(20.0, 10.0),
+                inverse_scale_factor: 1.0,
+                ..Default::default()
+            },
+            Anchored {
+                target,
+                offset: Vec3::ZERO,
+                scale: None,
+            },
+        ))
+        .id();
+
+    for frame in 1..=3 {
+        app.update();
+        // Where the camera is drawn this frame.
+        let cam_tf = GlobalTransform::from_xyz(frame as f32, 0.0, 0.0);
+        let viewport = camera
+            .world_to_viewport(&cam_tf, Vec3::new(0.0, 0.0, -10.0))
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .entity(badge)
+                .get::<UiTransform>()
+                .unwrap()
+                .translation,
+            Val2::px(viewport.x - 10.0, viewport.y - 5.0),
+            "frame {frame}: the overlay must sit where this frame's camera projects it"
+        );
+    }
 }
 
 /// Install a decode scope holding the core's registrations plus this crate's
@@ -421,7 +498,7 @@ mod op_path {
         .unwrap();
         app.update();
         let overlay = ent(&app, 1);
-        // Where `position_anchored_nodes` puts it.
+        // Where the anchor crate's adoption puts it.
         app.world_mut().entity_mut(overlay).insert(ChildOf(layer));
 
         tx.send(vec![Op::Reset]).unwrap();

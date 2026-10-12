@@ -937,11 +937,11 @@ impl Plugin for ReactUiPlugin {
                 .after(AnimationSet::Apply)
                 .after(crate::transition::drive_transitions),
         );
-        // `ElementOverrideSet`: an element system that overrides this frame's
-        // driven values — the `<anchor>`'s projected translation writes
-        // `UiTransform` after the animation applier and the transition driver
-        // wrote it, so the projection deterministically wins (without the
-        // edges the winner would be nondeterministic — a ping-pong).
+        // `ElementOverrideSet`: an element system that overrides what this
+        // frame's op drain and drivers wrote — the `<anchor>` re-seeds its
+        // `Node` position and adopts the node into its layer here, so its
+        // write deterministically wins (without the edges the winner would be
+        // nondeterministic — a ping-pong).
         app.configure_sets(
             Update,
             crate::ext::ElementOverrideSet

@@ -79,16 +79,20 @@ follows the new values.
 
 ## Positioning
 
-- The anchor point is the entity's `GlobalTransform` translation plus
-  `offset`, in world units. Use `offset` to lift a label above a model's
-  origin.
+- The anchor point is the entity's world position plus `offset`, in world
+  units. Use `offset` to lift a label above a model's origin.
 - The point is projected through the camera marked `IsDefaultUiCamera`, or,
   if none is marked, the first camera found. Mark your main camera when the
   app has several, including [`<portal>`](portal.md) cameras and
   [`<surface>`](surface.md) cameras.
-- The overlay is centered on the point using its own laid-out size, and is
-  positioned after animations and transitions run, so it tracks the entity in
-  the same frame. Moving it never re-runs layout.
+- The overlay is centered on the point using its own laid-out size. Moving it
+  never re-runs layout.
+- It is positioned in `PostUpdate`, just before UI layout, from that frame's
+  `Transform`s: move the camera and the entity in `Update` or earlier and the
+  overlay is drawn exactly where the 3D frame puts the point, never a frame
+  behind. A system that moves them in `PostUpdate` must run
+  `.before(bevy_react::anchor::position_anchored_nodes)`. (An entity with a
+  `GlobalTransform` but no `Transform` is read as stored.)
 - The overlay is hidden while the entity doesn't exist (not spawned yet,
   despawned, or an invalid `entity` value) and while the point is behind the
   camera or beyond its far plane. A point off to the side of the screen keeps

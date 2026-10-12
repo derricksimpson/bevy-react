@@ -36,14 +36,17 @@
 //!   [`AnchorScaling`]) — and one writer ([`ANCHOR_WRITER`]) turning them into
 //!   the [`Anchored`] binding.
 //! - The element is **detached**: the core never attaches it under its React
-//!   parent (removing that parent still despawns it); [`position_anchored_nodes`]
-//!   parents it under the [`AnchorLayer`] — this crate's own zero-size UI root,
-//!   sorted below the app's tree — so an overlay never takes part in its
-//!   declared parent's flex layout or scroll range.
-//! - [`position_anchored_nodes`] runs in the contract's
-//!   [`ElementOverrideSet`](bevy_react_core::ext::ElementOverrideSet): after
-//!   the op drain, the animation appliers, and the transition drive, so the
-//!   projected `UiTransform.translation` deterministically wins over theirs.
+//!   parent (removing that parent still despawns it); the crate parents it
+//!   under the [`AnchorLayer`] — its own zero-size UI root, sorted below the
+//!   app's tree — so an overlay never takes part in its declared parent's
+//!   flex layout or scroll range. That adoption runs in the contract's
+//!   [`ElementOverrideSet`](bevy_react_core::ext::ElementOverrideSet), after
+//!   the op drain.
+//! - [`position_anchored_nodes`] runs in `PostUpdate`, before UI layout: it
+//!   projects through this frame's camera and target transforms, so an
+//!   overlay is drawn where the 3D frame under it puts its anchor point — not
+//!   a frame behind a moving camera — and its `UiTransform.translation` wins
+//!   over whatever an `Update` animation or transition wrote.
 //!
 //! [`Element`]: bevy_react_core::element::Element
 
@@ -70,7 +73,14 @@ impl Plugin for AnchorPlugin {
         app.add_systems(Startup, position::spawn_anchor_layer)
             .add_systems(
                 Update,
-                position_anchored_nodes.in_set(bevy_react_core::ext::ElementOverrideSet),
+                position::adopt_anchored_nodes.in_set(bevy_react_core::ext::ElementOverrideSet),
+            )
+            .add_systems(
+                PostUpdate,
+                position_anchored_nodes
+                    .after(bevy::camera::CameraUpdateSystems)
+                    .before(bevy::ui::UiSystems::Layout)
+                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             );
     }
 

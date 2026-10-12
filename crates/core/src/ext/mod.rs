@@ -362,8 +362,12 @@ impl DrivenExtValues {
 ///   and the transition drive, so a driven or eased value paints the same
 ///   frame.
 /// - [`ElementOverrideSet`] (`Update`): an element system that overrides
-///   this frame's driven values (an `<anchor>`'s projected translation). After
-///   the op drain, the animation appliers, and the transition drive.
+///   what this frame's op drain and drivers wrote (an `<anchor>`'s layout
+///   seed and its adoption into the anchor layer). After the op drain, the
+///   animation appliers, and the transition drive. A value that must follow
+///   this frame's world transforms (the `<anchor>`'s projection) is written in
+///   `PostUpdate` instead, before `UiSystems::Layout`: a `GlobalTransform`
+///   read in `Update` is last frame's.
 /// - [`MeasureStampSet`] (`PostUpdate`): re-stamp an intrinsic
 ///   `ContentSize` measure after `bevy_ui`'s content-size pass clears it,
 ///   before layout.
