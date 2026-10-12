@@ -77,6 +77,8 @@ The header holds the layout and mode controls:
 - **pick**: click a node on screen to select it in the tree. Hovering
   highlights what you would pick. Escape leaves pick mode.
 - **overlay**: show or hide the outline drawn around the selected node.
+- **paint**: flash every node Bevy redraws. See
+  [Paint flashing](#paint-flashing).
 - **x**: close the panel.
 
 The footer shows the app's node count and the last op batch: its number, op
@@ -136,6 +138,29 @@ list with, for each layer:
 A layer whose node is not currently rendered is marked `inactive`. Hovering
 a row outlines its node on screen. The tab streams data only while it is
 shown.
+
+## Paint flashing
+
+Bevy's UI renderer keeps what it extracted for a node and rebuilds it only
+when something the node draws changed: its size or position, a color, a
+border, an image, its text. With **paint** on, every node rebuilt in a frame
+flashes a green box that fades out, so you see what a state change, a hover
+or an animation really touches, and what it leaves alone.
+
+- A node that changes every frame holds a steady box for as long as it
+  does: an animated `transform`, a transition while it eases.
+- A container that moves or resizes flashes together with everything that
+  moved with it.
+- A screen at rest shows nothing. A box that stays on a screen that looks
+  still is a write repeated every frame.
+
+A flash reports the CPU side of drawing a node, not pixels: whether a
+composited layer captured its texture again is what the `repaints` counter
+in the [Layers](#layers) tab counts.
+
+Flashing runs only while the panel is open, and the toggle is remembered
+with the rest of the panel's settings. The panel's own nodes never flash,
+nor do nodes inside a `<surface>`.
 
 ## Console
 

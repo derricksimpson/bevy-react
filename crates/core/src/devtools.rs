@@ -37,7 +37,8 @@
 //!   when the Console tab opens, then increments while it stays open).
 //! - JS → Bevy messages: `devtools.open { open }`, `devtools.pick { on }`,
 //!   `devtools.select { id }`, `devtools.highlight { id }`,
-//!   `devtools.overlay { on }`, `devtools.panelRoot { id }`,
+//!   `devtools.overlay { on }`, `devtools.paintFlash { on }` (paint
+//!   flashing — see [`paint_flash`]), `devtools.panelRoot { id }`,
 //!   `devtools.layersOpen { on }` (the Layers tab was shown/hidden — gates
 //!   the layer stream), `devtools.consoleOpen { on }` (likewise for the
 //!   console stream), `devtools.consoleClear {}` (empty the console ring),
@@ -72,6 +73,7 @@ mod element_fields;
 #[cfg(test)]
 mod js_tables;
 mod layers;
+mod paint_flash;
 mod panel;
 mod pick;
 mod settings;
@@ -85,6 +87,9 @@ use console::{
 };
 use element_fields::on_elements_request;
 use layers::{emit_layers, on_layers_open_message};
+use paint_flash::{
+    PaintFlashes, RepaintFeed, drive_paint_flash, on_paint_flash_message, record_repaints,
+};
 use panel::{
     apply_dock_reservation, on_dock_message, on_open_message, on_overlay_message,
     on_panel_root_message, toggle_on_key,
@@ -179,14 +184,27 @@ impl Plugin for DevtoolsPlugin {
         // not, so warnings from the initial mount are waiting when it opens.
         crate::diag::arm_runtime();
         // Load persisted panel settings (native only; errors — missing file,
-        // corrupt JSON — mean fresh defaults). The overlay toggle seeds the
-        // Rust-side state immediately so highlight gating is correct before
-        // the JS panel wakes; the rest restores to JS via `send_restore`.
+        // corrupt JSON — mean fresh defaults). The overlay and paint toggles
+        // seed the Rust-side state immediately so their gating is correct
+        // before the JS panel wakes; the rest restores to JS via
+        // `send_restore`.
         let loaded = load_settings(self.config.settings_path.as_deref());
+        // Paint flashing: the render world reports what bevy_ui re-extracted
+        // through a feed both worlds hold (idle while the toggle is off).
+        let repaints = RepaintFeed::default();
+        if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render_app.insert_resource(repaints.clone()).add_systems(
+                bevy::render::ExtractSchedule,
+                record_repaints.after(bevy::ui_render::RenderUiSystems::ExtractChanges),
+            );
+        }
         app.insert_resource(DevtoolsState {
             show_selection_overlay: loaded.as_ref().is_none_or(|s| s.overlay),
+            paint_flash: loaded.as_ref().is_some_and(|s| s.paint_flash),
             ..Default::default()
         })
+        .insert_resource(repaints)
+        .init_resource::<PaintFlashes>()
         .insert_resource(DevtoolsPersistence::from_loaded(loaded))
         .init_resource::<DevtoolsTimers>()
         .insert_resource(self.config.clone())
@@ -198,6 +216,7 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_select_message)
         .add_react_handler(on_highlight_message)
         .add_react_handler(on_overlay_message)
+        .add_react_handler(on_paint_flash_message)
         .add_react_handler(on_panel_root_message)
         .add_react_handler(on_dock_message)
         .add_react_handler(on_settings_message)
@@ -216,6 +235,7 @@ impl Plugin for DevtoolsPlugin {
             (
                 toggle_on_key,
                 position_highlight,
+                drive_paint_flash,
                 apply_dock_reservation,
                 send_restore,
                 save_settings,
@@ -286,6 +306,9 @@ pub(crate) struct DevtoolsState {
     /// "overlay" toggle). Momentary highlights (tree-row hover, pick-mode
     /// hover) are always on.
     pub show_selection_overlay: bool,
+    /// Whether paint flashing is on (the panel's "paint" toggle); it runs
+    /// only while the panel is open.
+    pub paint_flash: bool,
     /// The panel's own `<root>` node id, reported by the JS panel on open
     /// (`None` while closed). Pick mode rejects hits under exactly this root —
     /// app `<root>` overlays stay pickable.
@@ -325,6 +348,7 @@ impl Default for DevtoolsState {
             tree_hover: None,
             pick_hover: None,
             show_selection_overlay: true,
+            paint_flash: false,
             panel_root: None,
             dock_side: None,
             dock_width: 0.0,

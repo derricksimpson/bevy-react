@@ -18,6 +18,7 @@ import {
   sendDock,
   sendOpen,
   sendOverlay,
+  sendPaintFlash,
   sendPanelRoot,
   sendPick,
   sendSelect,
@@ -108,6 +109,9 @@ export function DevtoolsHost() {
   // Whether the persistent selected-node box is drawn on screen (momentary
   // hover highlights are unaffected). Mirrored to Bevy via devtools.overlay.
   const [overlay, setOverlay] = useState(true);
+  // Paint flashing: nodes Bevy re-extracts flash on screen. Mirrored to Bevy
+  // via devtools.paintFlash.
+  const [paintFlash, setPaintFlash] = useState(false);
   // The last picked node: TreeView expands its ancestors so it's visible.
   const [reveal, setReveal] = useState<number | null>(null);
 
@@ -161,8 +165,9 @@ export function DevtoolsHost() {
   // mounted-while-closed, so this lands even before the first open). Applied
   // with validation/clamps so an old or hand-edited file can't wedge the
   // panel. `open` is not applied here — a persisted open arrives as the
-  // `devtools.toggle` Bevy sends right after this event; `overlay` only syncs
-  // the button — Rust already seeded its own state from the file at build.
+  // `devtools.toggle` Bevy sends right after this event; `overlay` and
+  // `paint_flash` only sync their buttons — Rust already seeded its own state
+  // from the file at build.
   useEffect(
     () =>
       onRestore((s) => {
@@ -179,6 +184,7 @@ export function DevtoolsHost() {
         });
         setReserve(!!s.reserve);
         setOverlay(!!s.overlay);
+        setPaintFlash(!!s.paint_flash);
         setSplit(Math.max(MIN_INSPECTOR, s.split));
       }),
     [],
@@ -206,9 +212,10 @@ export function DevtoolsHost() {
       float_h_frac: rect.h,
       reserve,
       overlay,
+      paint_flash: paintFlash,
       split,
     });
-  }, [open, tab, mode, widthFrac, rect, reserve, overlay, split]);
+  }, [open, tab, mode, widthFrac, rect, reserve, overlay, paintFlash, split]);
 
   // Fractions resolved to logical px against the live window size, with the
   // pixel floors applied (a proportional panel on a tiny window stays usable;
@@ -288,6 +295,11 @@ export function DevtoolsHost() {
     setOverlay(next);
     sendOverlay(next);
   };
+  const togglePaintFlash = () => {
+    const next = !paintFlash;
+    setPaintFlash(next);
+    sendPaintFlash(next);
+  };
 
   const floating = mode === "float";
   return (
@@ -333,6 +345,7 @@ export function DevtoolsHost() {
         <Header
           picking={picking}
           overlay={overlay}
+          paintFlash={paintFlash}
           mode={mode}
           reserve={reserve}
           drag={floating ? moveDrag : undefined}
@@ -340,6 +353,7 @@ export function DevtoolsHost() {
           onReserve={() => setReserve((r) => !r)}
           onPick={togglePick}
           onOverlay={toggleOverlay}
+          onPaintFlash={togglePaintFlash}
           onClose={close}
         />
         <TabBar tab={tab} onTab={setTab} />
@@ -405,6 +419,7 @@ export function DevtoolsHost() {
 function Header({
   picking,
   overlay,
+  paintFlash,
   mode,
   reserve,
   drag,
@@ -412,10 +427,12 @@ function Header({
   onReserve,
   onPick,
   onOverlay,
+  onPaintFlash,
   onClose,
 }: {
   picking: boolean;
   overlay: boolean;
+  paintFlash: boolean;
   mode: Mode;
   reserve: boolean;
   /** Float mode: drag handlers that move the window. Safe to put on the whole
@@ -426,6 +443,7 @@ function Header({
   onReserve: () => void;
   onPick: () => void;
   onOverlay: () => void;
+  onPaintFlash: () => void;
   onClose: () => void;
 }) {
   return (
@@ -468,6 +486,7 @@ function Header({
         )}
         <IconButton label="pick" active={picking} onClick={onPick} />
         <IconButton label="overlay" active={overlay} onClick={onOverlay} />
+        <IconButton label="paint" active={paintFlash} onClick={onPaintFlash} />
         <IconButton label="x" onClick={onClose} />
       </node>
     </node>

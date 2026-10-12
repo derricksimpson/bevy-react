@@ -198,13 +198,7 @@ pub(super) fn position_highlight(
     let rect = target
         .and_then(|id| bridge.nodes.get(&id))
         .and_then(|&e| targets.get(e).ok())
-        .map(|(computed, transform)| {
-            highlight_rect(
-                computed.size,
-                transform.translation,
-                computed.inverse_scale_factor,
-            )
-        });
+        .map(|(computed, transform)| highlight_rect(computed, transform));
     // Write only on change: a `Node` mutation forces a bevy_ui relayout, so an
     // idle overlay must not dirty itself every frame.
     let mut next = node.clone();
@@ -221,12 +215,18 @@ pub(super) fn position_highlight(
     node.set_if_neq(next);
 }
 
-/// A node's window-space logical rect from its computed (physical) geometry:
-/// `UiGlobalTransform.translation` is the node's physical center, so top-left =
-/// center - size/2, all scaled to logical px by the inverse scale factor.
-fn highlight_rect(physical_size: Vec2, physical_center: Vec2, inverse_scale: f32) -> (Vec2, Vec2) {
-    let top_left = (physical_center - physical_size * 0.5) * inverse_scale;
-    (top_left, physical_size * inverse_scale)
+/// A node's window-space logical bounds from its computed (physical)
+/// geometry: `UiGlobalTransform` maps the node's centered border box into
+/// physical window space, so the bounds are its translation ± the box's
+/// transformed half extents (a scaled or rotated node gets its axis-aligned
+/// bounding box), all scaled to logical px by the inverse scale factor.
+pub(super) fn highlight_rect(
+    computed: &ComputedNode,
+    transform: &UiGlobalTransform,
+) -> (Vec2, Vec2) {
+    let half = transform.matrix2.abs() * (computed.size * 0.5);
+    let scale = computed.inverse_scale_factor;
+    ((transform.translation - half) * scale, half * 2.0 * scale)
 }
 
 #[cfg(test)]
@@ -421,8 +421,23 @@ mod tests {
     #[test]
     fn highlight_rect_converts_physical_center_to_logical_top_left() {
         // A 200×100 physical node centered at (300, 150) on a 2× display.
-        let (pos, size) = highlight_rect(Vec2::new(200.0, 100.0), Vec2::new(300.0, 150.0), 0.5);
+        let computed = ComputedNode {
+            size: Vec2::new(200.0, 100.0),
+            inverse_scale_factor: 0.5,
+            ..Default::default()
+        };
+        let (pos, size) = highlight_rect(&computed, &UiGlobalTransform::from_xy(300.0, 150.0));
         assert_eq!(pos, Vec2::new(100.0, 50.0));
         assert_eq!(size, Vec2::new(100.0, 50.0));
+
+        // Scaled to half and turned a quarter: the bounds of what is drawn.
+        let turned = bevy::math::Affine2::from_scale_angle_translation(
+            Vec2::splat(0.5),
+            std::f32::consts::FRAC_PI_2,
+            Vec2::new(300.0, 150.0),
+        );
+        let (pos, size) = highlight_rect(&computed, &UiGlobalTransform::from(turned));
+        assert!(pos.abs_diff_eq(Vec2::new(137.5, 50.0), 1e-3), "{pos}");
+        assert!(size.abs_diff_eq(Vec2::new(25.0, 50.0), 1e-3), "{size}");
     }
 }

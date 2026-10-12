@@ -45,6 +45,9 @@ pub(crate) struct DevtoolsSettings {
     /// seed [`DevtoolsState::show_selection_overlay`] before the JS panel
     /// wakes, hence the wider visibility.
     pub(super) overlay: bool,
+    /// The paint-flashing toggle — seeds [`DevtoolsState::paint_flash`] at
+    /// plugin build, like `overlay`.
+    pub(super) paint_flash: bool,
     split: f32,
 }
 
@@ -61,6 +64,7 @@ impl Default for DevtoolsSettings {
             float_h_frac: 0.7,
             reserve: false,
             overlay: true,
+            paint_flash: false,
             split: 260.0,
         }
     }
@@ -259,6 +263,7 @@ mod tests {
             float_h_frac: 0.6,
             reserve: true,
             overlay: false,
+            paint_flash: true,
             split: 200.0,
         }
     }

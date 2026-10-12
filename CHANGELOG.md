@@ -102,6 +102,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   …) map to Bevy's generic families, which need its `system_font_discovery`
   feature. A single name behaves as before.
 
+- **Devtools paint flashing.** The panel's new **paint** toggle flashes
+  every node Bevy re-extracts for rendering, like a browser's paint
+  flashing: a green box that fades out. It shows what a state change, a
+  hover or an animation really redraws, and that a screen at rest redraws
+  nothing.
 
 ### Changed
 

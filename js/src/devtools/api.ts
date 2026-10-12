@@ -64,6 +64,8 @@ export interface DevtoolsSettings {
   float_h_frac: number;
   reserve: boolean;
   overlay: boolean;
+  /** Paint flashing (the header's "paint" toggle). */
+  paint_flash: boolean;
   split: number;
 }
 
@@ -268,6 +270,12 @@ export function sendHighlight(id: number | null): void {
  *  are unaffected). */
 export function sendOverlay(on: boolean): void {
   emit("devtools.overlay", { on });
+}
+
+/** Paint flashing on/off: while on (and the panel is open), every node Bevy
+ *  re-extracts for rendering flashes a fading box on screen. */
+export function sendPaintFlash(on: boolean): void {
+  emit("devtools.paintFlash", { on });
 }
 
 /** The Layers tab was shown/hidden — gates the Rust-side layer stream. Sent
