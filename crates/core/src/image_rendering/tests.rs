@@ -106,9 +106,12 @@ fn two_modes_on_one_source_get_their_own_variants() {
     let near = spawn(&mut app, Some(ImageRendering::Nearest), &src);
     let auto = spawn(&mut app, None, &src);
     app.update();
-    assert_eq!(
-        handle_of(&app, tri),
-        src,
+    // The pyramid may land within this very frame: without bevy's
+    // `multi_threaded` feature (`cargo test -p bevy_react_core`) the task pool
+    // runs a spawned task inline. Either way the node is never on a variant
+    // that is not the finished pyramid.
+    assert!(
+        handle_of(&app, tri) == src || mips(&app, tri) == 3,
         "no interim upload: the source shows until the pyramid lands"
     );
     settle(&mut app, |app| handle_of(app, tri) != src);
