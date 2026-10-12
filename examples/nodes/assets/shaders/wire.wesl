@@ -3,7 +3,7 @@
 // the box's logical pixels; screen-space derivatives give a one-pixel
 // antialiased edge at any zoom.
 
-#import bevy_ui::ui_vertex_output::UiVertexOutput
+import bevy_ui_render::ui_vertex_output::UiVertexOutput;
 
 struct Wire {
     // The box's logical size (xy).

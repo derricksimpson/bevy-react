@@ -78,7 +78,7 @@ pub struct WireMaterial {
 
 impl UiMaterial for WireMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/wire.wgsl".into()
+        "shaders/wire.wesl".into()
     }
 }
 
@@ -162,7 +162,7 @@ pub struct GridMaterial {
 
 impl UiMaterial for GridMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/grid.wgsl".into()
+        "shaders/grid.wesl".into()
     }
 }
 

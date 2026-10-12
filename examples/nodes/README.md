@@ -85,8 +85,20 @@ cargo run -p nodes -- --shoot out.png 5 --scale 1.5 \
 
 The steps are React's (`useDebug` in `ui/src/hooks.ts`): `preset <id>`,
 `select <id…>`, `view <x> <y> <zoom>`, `frame`, `menu add`, `mesh <name>`,
-`tile <n>`. Run the binary directly with `BEVY_ASSET_ROOT=examples/nodes`,
-or assets resolve against `target/`.
+`tile <n>`. Input is scripted too, by Bevy (`shoot.rs`): `ptr move <x> <y>`,
+`ptr press <button>` and `ptr release <button>` drive a pointer over the
+capture (logical px; `0` left, `1` middle, `2` right), `type <text>` and
+`key <Enter|Escape>` press keys:
+
+```sh
+# Drag a wire from Bricks' Random output onto Warp's Intensity input.
+cargo run -p nodes -- --shoot out.png 4 \
+  --do "2 ptr move 150 438" --do "2.1 ptr press 0" \
+  --do "2.3 ptr move 205 587" --do "2.5 ptr release 0"
+```
+
+Run the binary directly with `BEVY_ASSET_ROOT=examples/nodes`, or assets
+resolve against `target/`.
 
 The interface is set in [Inter](https://rsms.me/inter/) (SIL Open Font
 License).

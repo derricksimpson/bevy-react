@@ -6,7 +6,10 @@ import { C } from "../theme";
 
 /** Typing into a field: an autofocused `<editableText>` with its text
  *  selected. Enter or a press elsewhere commits (`onDone(text)`), Escape
- *  cancels (`onDone(null)`); the field then unmounts it. */
+ *  cancels (`onDone(null)`); the field then unmounts it.
+ *
+ *  A press elsewhere and Escape both blur the field. Escape's `keyDown`
+ *  arrives before its blur, so the cancel wins (`done`). */
 export function TextEdit({
   initial,
   onDone,
@@ -51,6 +54,9 @@ export function TextEdit({
         flexGrow: 1,
         color: C.text,
         backgroundColor: C.fieldDark,
+        // A press in the field is the field's: not a drag of the node card
+        // around it, which would also commit it.
+        focusPolicy: "block",
         ...style,
       }}
     />

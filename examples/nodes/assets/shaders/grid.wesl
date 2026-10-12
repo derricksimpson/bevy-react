@@ -1,7 +1,7 @@
 // The graph's backdrop: a dot lattice that pans and zooms with the view.
 // Minor dots fade out as they crowd together; every fifth dot stays.
 
-#import bevy_ui::ui_vertex_output::UiVertexOutput
+import bevy_ui_render::ui_vertex_output::UiVertexOutput;
 
 struct Grid {
     // The box's logical size (xy).

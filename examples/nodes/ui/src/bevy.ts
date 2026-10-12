@@ -10,7 +10,7 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 import type { ReactNode, Ref } from "react";
-import type { AnchorScaling, Animatable, BevyAttributes, BevyCanvasElement, BevyPointerProps, BevyScrollProps, BevyShapeTransition, BevyStyle, BevyVariantProps, BevyWheelProps, CanvasPainter, DrawCmd, Vec3 } from "bevy-react";
+import type { AnchorScaling, Animatable, BevyAttributes, BevyCanvasElement, BevyFocusProps, BevyPointerProps, BevyScrollProps, BevyShapeTransition, BevyStyle, BevyVariantProps, BevyWheelProps, CanvasPainter, DrawCmd, Vec3 } from "bevy-react";
 
 export type Act = { action: string, };
 export type BloomParams = { radius: number | string, threshold: number, intensity: number, };
@@ -328,7 +328,7 @@ declare module "bevy-react" {
 }
 
 /** The app's own elements' props (`app.add_react_element`). */
-export interface BevyAnchorProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+export interface BevyAnchorProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps, BevyFocusProps {
   style?: BevyStyle;
   entity: number | bigint;
   offset?: Vec3;
@@ -336,7 +336,7 @@ export interface BevyAnchorProps extends BevyAttributes, BevyVariantProps, BevyP
   children?: ReactNode;
 }
 
-export interface BevyCanvasProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+export interface BevyCanvasProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps, BevyFocusProps {
   style?: BevyStyle;
   draw?: CanvasPainter | DrawCmd[];
   onResize?: (payload: CanvasSize) => void;
@@ -451,7 +451,7 @@ export interface BevyPolylineProps extends BevyAttributes, BevyPointerProps {
   children?: ReactNode;
 }
 
-export interface BevyPortalProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+export interface BevyPortalProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps, BevyFocusProps {
   style?: BevyStyle;
   target: string;
   children?: ReactNode;
@@ -482,7 +482,7 @@ export interface BevySurfaceProps extends BevyAttributes {
   children?: ReactNode;
 }
 
-export interface BevySvgProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+export interface BevySvgProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps, BevyFocusProps {
   style?: BevyStyle;
   viewBox?: string;
   children?: ReactNode;
