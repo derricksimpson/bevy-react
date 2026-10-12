@@ -1,7 +1,9 @@
-//! The window material: `pane.wgsl` over the React `<surface>` texture.
+//! The window material: `pane.wesl` over the React `<surface>` texture.
 //! It reads the view's transmission texture (the world behind the window),
 //! which puts it in Bevy's transmissive pass — after every opaque thing is
-//! drawn, so the glass has the whole world to frost.
+//! drawn, so the glass has the whole world to frost. Bevy binds that texture
+//! only for a camera carrying `ScreenSpaceTransmission`: every camera that
+//! films a window has it (the eye, the mirror, the lenses).
 
 use bevy::mesh::MeshVertexBufferLayoutRef;
 use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
@@ -26,7 +28,7 @@ pub struct PaneMaterial {
 
 impl Material for PaneMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/pane.wgsl".into()
+        "shaders/pane.wesl".into()
     }
 
     fn reads_view_transmission_texture(&self) -> bool {

@@ -5,8 +5,9 @@
 use bevy::anti_alias::smaa::Smaa;
 use bevy::camera::Hdr;
 use bevy::camera::visibility::RenderLayers;
-use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::input::mouse::AccumulatedMouseMotion;
+use bevy::pbr::ScreenSpaceTransmission;
 use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
@@ -80,6 +81,10 @@ fn spawn_eye(mut commands: Commands) {
         // must arrive untouched: no tonemapping. Only true highlights (the
         // sun, the aurora, a forming window's edge) go past 1.0 and bloom.
         Tonemapping::None,
+        DebandDither::Disabled,
+        // The windows and the globe draw in the transmissive pass, the
+        // windows reading the world copied behind them (`panes/material.rs`).
+        ScreenSpaceTransmission::default(),
         Bloom {
             intensity: 0.2,
             low_frequency_boost: 0.6,

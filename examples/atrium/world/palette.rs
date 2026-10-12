@@ -1,6 +1,6 @@
 //! The world's light, as data. A [`Moment`] (an hour of the day plus the
 //! weather) becomes an [`Atmos`] — the one uniform every world shader reads
-//! (`assets/shaders/common.wgsl`). The sun follows real solar geometry for an
+//! (`assets/shaders/common.wesl`). The sun follows real solar geometry for an
 //! alpine latitude; the colors come from keyframes over the sun's altitude
 //! (night → blue hour → sunset → golden hour → noon), and the weather
 //! desaturates, darkens and fogs them.
@@ -16,7 +16,7 @@ use bevy::render::render_resource::ShaderType;
 const LATITUDE: f32 = 47.0;
 const DECLINATION: f32 = 14.0;
 
-/// The palette uniform (see `common.wgsl` for what each `w` carries).
+/// The palette uniform (see `common.wesl` for what each `w` carries).
 #[derive(Clone, Copy, Debug, Default, ShaderType)]
 pub struct Atmos {
     pub zenith: Vec4,

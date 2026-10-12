@@ -10,13 +10,13 @@
 // raises alpha to its own brightness. The endpoints return the exact
 // samples — the identity contract.
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     morph_progress,
     morph_sample_from,
     morph_sample_to,
     uniforms,
-}
+};
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);

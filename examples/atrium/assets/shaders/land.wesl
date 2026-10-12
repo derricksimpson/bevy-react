@@ -10,14 +10,14 @@
 // Anything below the lake's surface is discarded: the water is opaque from
 // above, and the mirror camera below it must see the sky, not the lake bed.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
     mesh_view_bindings::view,
-}
-#import atrium::common::{Atmos, apply_fog, noise2}
+};
+import super::common::{Atmos, apply_fog, noise2};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> atmos: Atmos;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> kind: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> atmos: Atmos;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> kind: vec4<f32>;
 
 fn terrain_albedo(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let slope = 1.0 - n.y;
@@ -44,11 +44,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     let n = normalize(cross(dpdy(p), dpdx(p)));
-#ifdef VERTEX_COLORS
+@if(VERTEX_COLORS)
     var albedo = in.color.rgb;
-#else
+@if(!VERTEX_COLORS)
     var albedo = vec3<f32>(0.5);
-#endif
     if kind.x < 0.5 {
         albedo = terrain_albedo(p, n);
     } else {

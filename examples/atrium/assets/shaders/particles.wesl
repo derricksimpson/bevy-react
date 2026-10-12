@@ -11,9 +11,9 @@
 // seed is above `amount` collapses to nothing, so the weather thins out
 // smoothly as it eases.
 
-#import bevy_pbr::mesh_view_bindings::{globals, view}
+import bevy_pbr::render::mesh_view_bindings::{globals, view};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> params: vec4<f32>;
 
 struct Vertex {
     @location(0) position: vec3<f32>,

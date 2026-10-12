@@ -12,16 +12,16 @@
 //   shape = (quad width m, quad height m, glass height m, corner radius m)
 //   look  = (presence 0..1, hover 0..1, frost px, seed)
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
-    mesh_view_bindings::{globals, view, view_transmission_texture, view_transmission_sampler},
+    mesh_view_bindings::{view, view_transmission_texture, view_transmission_sampler},
     utils::interleaved_gradient_noise,
-}
+};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> shape: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> look: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var ui: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var ui_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> shape: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> look: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var ui: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var ui_sampler: sampler;
 
 const GOLDEN: f32 = 2.39996323;
 const TAPS: i32 = 20;

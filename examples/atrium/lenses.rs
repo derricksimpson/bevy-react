@@ -9,7 +9,8 @@
 use std::f32::consts::TAU;
 
 use bevy::camera::visibility::RenderLayers;
-use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy::pbr::ScreenSpaceTransmission;
 use bevy::prelude::*;
 use bevy_react::{
     PortalCamera, ReactAppExt, RenderMode, RenderTargetSpec, RenderTargets, Request, Resolution,
@@ -179,6 +180,10 @@ fn spawn_lenses(
                 ..default()
             }),
             Tonemapping::None,
+            DebandDither::Disabled,
+            // A lens films the windows around you: frosted glass, as the
+            // eye sees it.
+            ScreenSpaceTransmission::default(),
             Msaa::Off,
             target.camera_target(),
             PortalCamera(name),
@@ -245,7 +250,7 @@ fn spawn_figure(
     }
 }
 
-/// `land.wgsl` reads a prop's albedo from its vertex colors.
+/// `land.wesl` reads a prop's albedo from its vertex colors.
 fn tinted(mut mesh: Mesh, color: [f32; 3]) -> Mesh {
     let n = mesh.count_vertices();
     mesh.insert_attribute(

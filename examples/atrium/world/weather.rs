@@ -1,5 +1,5 @@
 //! Rain, snow, fireflies — and sky lanterns. Each kind is one mesh of quads
-//! animated in `particles.wgsl` (one draw call), its amount eased from the
+//! animated in `particles.wesl` (one draw call), its amount eased from the
 //! sky's moment every frame: Kyoto rains, Zermatt snows, and fireflies come
 //! out over the shore when a clear evening falls. Finish the tour and React
 //! sends `bevy.atrium.celebrate()`: lanterns rise off the lake.
@@ -30,11 +30,11 @@ pub struct ParticleMaterial {
 
 impl Material for ParticleMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/particles.wgsl".into()
+        "shaders/particles.wesl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/particles.wgsl".into()
+        "shaders/particles.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

@@ -3,13 +3,13 @@
 // sun and moon, stars and the Milky Way, drifting clouds, and aurora
 // curtains. The sun and the aurora go above 1.0 (HDR) so they bloom.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
-}
-#import atrium::common::{Atmos, fbm2, hash13, luma, noise2, sky_gradient}
+};
+import super::common::{Atmos, fbm2, hash13, luma, noise2, sky_gradient};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> atmos: Atmos;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> atmos: Atmos;
 
 // A star field: one candidate star per cell of a direction grid.
 fn stars(d: vec3<f32>, t: f32) -> vec3<f32> {

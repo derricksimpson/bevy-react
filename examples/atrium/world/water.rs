@@ -1,14 +1,15 @@
 //! The lake. A mirror camera rides below the surface, mirroring the eye,
 //! and films the world (everything on layer 0 — the land, the sky, your
-//! windows) into a low-resolution HDR texture; `water.wgsl` samples it at
+//! windows) into a low-resolution HDR texture; `water.wesl` samples it at
 //! each fragment's screen position. That mirror is filmed for the eye's
 //! point of view, so only the eye sees that lake ([`MIRROR_WATER_LAYER`]);
 //! any other camera sees a twin that reflects the sky ([`SKY_WATER_LAYER`]).
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{Hdr, RenderTarget};
-use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::light::NotShadowCaster;
+use bevy::pbr::ScreenSpaceTransmission;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, TextureFormat};
 use bevy::shader::ShaderRef;
@@ -34,7 +35,7 @@ pub struct WaterMaterial {
 
 impl Material for WaterMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
+        "shaders/water.wesl".into()
     }
 
     fn enable_prepass() -> bool {
@@ -113,6 +114,10 @@ pub fn spawn(
         RenderTarget::Image(reflection.clone().into()),
         Hdr,
         Tonemapping::None,
+        DebandDither::Disabled,
+        // The mirror films your windows too: their glass needs the copy of
+        // the world behind them here as well.
+        ScreenSpaceTransmission::default(),
         Msaa::Off,
         Transform::default(),
         RenderLayers::layer(0),
@@ -137,7 +142,7 @@ pub fn spawn(
 type EyeOnly = (With<Eye>, Without<Mirror>);
 
 /// Keep the mirror camera the eye's reflection in the lake's plane (y = 0),
-/// upright — `water.wgsl` flips the image back as it samples.
+/// upright — `water.wesl` flips the image back as it samples.
 pub fn mirror_eye(
     eye: Single<(&GlobalTransform, &Projection), EyeOnly>,
     mut mirror: Single<(&mut Transform, &mut Projection), With<Mirror>>,

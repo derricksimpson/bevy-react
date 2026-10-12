@@ -39,10 +39,7 @@ impl Plugin for WorldPlugin {
             MaterialPlugin::<WorldMaterial>::default(),
             MaterialPlugin::<water::WaterMaterial>::default(),
         ))
-        .add_systems(
-            Startup,
-            (load_library, sky::spawn, land::spawn, water::spawn),
-        )
+        .add_systems(Startup, (sky::spawn, land::spawn, water::spawn))
         .add_systems(
             Update,
             (
@@ -67,16 +64,7 @@ pub fn register_bindings(app: &mut App) {
     app.add_react_event::<SkyNow>();
 }
 
-/// `common.wgsl` is imported by the world shaders as `atrium::common`; an
-/// import resolves only while its asset is loaded.
-#[derive(Resource)]
-struct ShaderLibrary(#[allow(dead_code)] Handle<Shader>);
-
-fn load_library(mut commands: Commands, assets: Res<AssetServer>) {
-    commands.insert_resource(ShaderLibrary(assets.load("shaders/common.wgsl")));
-}
-
-/// The land and its props: `land.wgsl`, lit by the palette. `kind.x` picks
+/// The land and its props: `land.wesl`, lit by the palette. `kind.x` picks
 /// terrain (procedural forest/rock/snow) or props (vertex colors).
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct WorldMaterial {
@@ -88,7 +76,7 @@ pub struct WorldMaterial {
 
 impl Material for WorldMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/land.wgsl".into()
+        "shaders/land.wesl".into()
     }
 }
 

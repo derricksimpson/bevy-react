@@ -1,4 +1,4 @@
-//! The sky dome: a sphere around the eye, painted by `sky.wgsl` from the
+//! The sky dome: a sphere around the eye, painted by `sky.wesl` from the
 //! palette. It rides along with the eye so it is always infinitely far.
 
 use bevy::mesh::MeshVertexBufferLayoutRef;
@@ -23,7 +23,7 @@ pub struct SkyMaterial {
 
 impl Material for SkyMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/sky.wgsl".into()
+        "shaders/sky.wesl".into()
     }
 
     fn enable_prepass() -> bool {

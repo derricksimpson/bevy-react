@@ -35,7 +35,7 @@ pub struct GlobeMaterial {
 
 impl Material for GlobeMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/globe.wgsl".into()
+        "shaders/globe.wesl".into()
     }
 
     // Drawn with the windows (the transmissive pass): the glass behind it

@@ -1,12 +1,11 @@
-// Shared by Atrium's world shaders (`examples/atrium/world/`): the sky
-// palette uniform, hash noise, the sky's color in any direction, and the
-// aerial-perspective fog that melts the land into that sky.
+// Shared by Atrium's world shaders (`examples/atrium/world/`), which import
+// it as `super::common`: the sky palette uniform, hash noise, the sky's color
+// in any direction, and the aerial-perspective fog that melts the land into
+// that sky.
 //
 // Every world material binds one `Atmos` at binding 0; the Rust side
 // (`world/palette.rs`) eases it from moment to moment, so a whole world
 // re-lights by writing one small uniform.
-
-#define_import_path atrium::common
 
 struct Atmos {
     // Sky gradient: straight up, partway up, at the horizon, and the glow

@@ -5,7 +5,7 @@ import { Colors } from "../theme";
 const SHADOW = { color: "rgba(0, 0, 0, 0.4)", offsetX: 0, offsetY: 1 };
 
 /** Where and when you are, top left. A new place condenses in — the
- *  `condense` morph, Atrium's own WGSL over these pixels. */
+ *  `condense` morph, Atrium's own WESL over these pixels. */
 export function Hud({
   place,
   hour,

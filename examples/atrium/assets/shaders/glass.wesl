@@ -29,13 +29,13 @@
 // and writing alpha 1 back satisfies the contract trivially. The composite
 // clips the output to the node's rounded border box.
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     content_rect_min,
     content_rect_size,
     sample_source_lod,
     uniforms,
-}
+};
 
 // Polynomial smooth max: rounds the interior corner where two edges meet.
 fn smax(a: f32, b: f32, k: f32) -> f32 {

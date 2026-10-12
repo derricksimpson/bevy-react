@@ -17,7 +17,7 @@ use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 ///
 /// The bezel samples up to `refraction` px beyond the node's edge, so the
 /// capture is inflated by `outset`.
-#[react_filter(shader = "shaders/glass.wgsl", outset = 28.0)]
+#[react_filter(shader = "shaders/glass.wesl", outset = 28.0)]
 struct LiquidGlass {
     /// The node's corner radius, px — keep it equal to `borderRadius`.
     #[serde(default = "default_radius")]
@@ -43,7 +43,7 @@ struct LiquidGlass {
 }
 
 /// Packing: `params[0]` = edge light (straight linear RGBA).
-#[react_morph_filter(shader = "shaders/condense.wgsl")]
+#[react_morph_filter(shader = "shaders/condense.wesl")]
 struct Condense {
     #[serde(default = "ice")]
     color: FilterColor,

@@ -1,6 +1,6 @@
 //! The land: one terrain heightfield around the lake, the pines on it (one
 //! merged mesh), and the pier you stand on. Everything shades through
-//! `land.wgsl` with the world palette — no lights, no textures.
+//! `land.wesl` with the world palette — no lights, no textures.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::light::NotShadowCaster;

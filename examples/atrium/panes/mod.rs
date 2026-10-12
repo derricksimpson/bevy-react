@@ -6,7 +6,7 @@
 //!   * A pane sits on a cylinder around your eye — a yaw, a height and a
 //!     distance — and always turns to face you.
 //!   * React opens and closes it (`bevy.panes.show`); it condenses out of
-//!     noise and dissolves back (`pane.wgsl`).
+//!     noise and dissolves back (`pane.wesl`).
 //!   * Pressing a window's grab bar (React, `bevy.panes.grab`) hands the pane
 //!     to the mouse until release; the wheel pushes it away or pulls it in.
 //!   * `bevy.panes.summon` brings a window to wherever you are looking.
@@ -205,7 +205,7 @@ fn spawn_panes(
 }
 
 /// A quad `size` meters (the surface texture, UV 0..1), facing +Z, grown by
-/// a thin margin whose UVs run past the texture: `pane.wgsl` antialiases the
+/// a thin margin whose UVs run past the texture: `pane.wesl` antialiases the
 /// glass's own edge, which must lie inside the geometry to be smoothed.
 fn quad_mesh(size: Vec2) -> Mesh {
     let margin = 0.01;

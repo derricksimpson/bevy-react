@@ -8,16 +8,16 @@
 // `params.x` = 1 when `reflection` belongs to this view (the main camera);
 // other views (the lenses) reflect the sky gradient instead.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
-}
-#import atrium::common::{Atmos, apply_fog, hash22, noise2, sky_gradient}
+};
+import super::common::{Atmos, apply_fog, hash22, noise2, sky_gradient};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> atmos: Atmos;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> params: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var reflection: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var reflection_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> atmos: Atmos;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> params: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var reflection: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var reflection_sampler: sampler;
 
 // The surface height: long slow swells plus fine wind ripples.
 fn height(p: vec2<f32>, t: f32) -> f32 {
