@@ -31,6 +31,14 @@ export { noteOwner } from "./owners";
 
 let installed = false;
 
+// A table request that failed. A Rust build without the `devtools` cargo
+// feature (or a release build, which registers none of it) answers neither
+// request, and the panel cannot open there either: not an error.
+function tableError(what: string, e: unknown): void {
+  if (String(e).includes("no handler registered")) return;
+  console.error(`[js] devtools ${what}:`, e);
+}
+
 /** Mount the devtools panel into its own React container (injected by the
  *  renderer to avoid a module cycle) and hook up the bridge tap. */
 export function installDevtools(host: {
@@ -70,13 +78,13 @@ export function installDevtools(host: {
       installStyleFields(fields);
       installStyleKinds(fields);
     },
-    (e) => console.error("[js] devtools style fields:", e),
+    (e) => tableError("style fields", e),
   );
   // The element table (every registered element's attributes): which props
   // are act-now (never retained by the mirror) and which edit inline.
   requestElements().then(
     (elements) => installElements(elements),
-    (e) => console.error("[js] devtools elements:", e),
+    (e) => tableError("elements", e),
   );
   host.mount(createElement(DevtoolsHost));
 }
