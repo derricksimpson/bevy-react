@@ -29,7 +29,6 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, BlendState};
 use bevy::shader::ShaderRef;
 use bevy::ui::IsDefaultUiCamera;
-use bevy::window::PrimaryWindow;
 use bevy_react::surface::{SurfacePointer, SurfaceSpec, Surfaces};
 use bevy_react::{PointerCapture, PointerCaptureSet, ReactAppExt, react_message};
 
@@ -273,7 +272,6 @@ fn drive_card(
     buttons: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
     capture: Res<PointerCapture>,
-    window: Single<&Window, With<PrimaryWindow>>,
     camera: Single<&Projection, (With<IsDefaultUiCamera>, Without<CardCamera>)>,
     mut card: Single<(&mut Transform, &mut Visibility), With<Card>>,
     mut lens: Single<&mut Camera, With<CardCamera>>,
@@ -324,13 +322,16 @@ fn drive_card(
         return;
     }
 
-    // World height that projects to the 2D twin's on-screen height.
+    // World height that projects to the 2D twin's on-screen height. The twin
+    // is laid out in the logical px of the frame the cameras draw: their
+    // viewport, not the window (`--shoot` renders to an image of its own size).
     let fov = match *camera {
         Projection::Perspective(p) => p.fov,
         _ => PI / 4.0,
     };
     let visible = 2.0 * DISTANCE * (fov / 2.0).tan();
-    let height = visible * held.last_height / window.height().max(1.0);
+    let viewport = lens.logical_viewport_size().map_or(1.0, |size| size.y);
+    let height = visible * held.last_height / viewport.max(1.0);
     let away = 1.0 - held.presence;
     let ease = away * away;
     transform.translation = Vec3::new(0.0, -ease * 1.5, -DISTANCE - ease * 4.0);
