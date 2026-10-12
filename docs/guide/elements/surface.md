@@ -174,7 +174,7 @@ fn aim_pointer(
 ```
 
 Screen UI doesn't cover a ray of your own. The
-[Deadspace example](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace)
+[Coldwake example](https://github.com/tulustul/bevy-react/tree/main/examples/coldwake)
 points this way: it keeps its own cursor on the hologram the camera is
 locked on and casts the ray through it.
 

@@ -284,14 +284,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arcana"
-version = "0.7.0"
-dependencies = [
- "bevy",
- "bevy-react",
-]
-
-[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -433,16 +425,6 @@ checksum = "301801c08259e328a1c7da556608c0c22687708831b22024dbd3a57ea741e6de"
 dependencies = [
  "portable-atomic",
  "portable-atomic-util",
-]
-
-[[package]]
-name = "atrium"
-version = "0.7.0"
-dependencies = [
- "bevy",
- "bevy-react",
- "serde",
- "ts-rs",
 ]
 
 [[package]]
@@ -2459,6 +2441,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "coldwake"
+version = "0.7.0"
+dependencies = [
+ "bevy",
+ "bevy-react",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2736,16 +2728,6 @@ name = "data-url"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
-
-[[package]]
-name = "deadspace"
-version = "0.7.0"
-dependencies = [
- "bevy",
- "bevy-react",
- "serde",
- "ts-rs",
-]
 
 [[package]]
 name = "debugid"
@@ -4476,16 +4458,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
-]
-
-[[package]]
-name = "nodes"
-version = "0.7.0"
-dependencies = [
- "bevy",
- "bevy-react",
- "serde",
- "ts-rs",
 ]
 
 [[package]]

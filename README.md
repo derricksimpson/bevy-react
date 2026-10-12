@@ -54,23 +54,6 @@ app without losing the count.
 
 ## Showcase
 
-[**Arcana**](https://github.com/tulustul/bevy-react/tree/main/examples/arcana)
-opens packs of living tarot cards: holographic foil that is a WESL shader running
-over React components, card art that is a live 3D scene, glass buttons that refract
-the world behind them, and a card that leaves the UI to become a real 3D object you
-can turn over — still React, still clickable.
-
-![A tarot card held as a real 3D object: turned in perspective, its foil running in rainbow bands, a live black hole spinning in its art window.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/arcana-card.webp)
-
-[**Atrium**](https://github.com/tulustul/bevy-react/tree/main/examples/atrium)
-is a spatial desktop: React apps on windows of frosted glass floating over an
-alpine lake. You drag them around you in 3D, borrow the sky of any place on a
-globe (the northern lights come out over your lake), watch your windows
-reflected in the water, and find yourself through live cameras around the
-shore. Every window is still React, still clickable.
-
-![The northern lights over black mountains, mirrored in the lake: frosted-glass React windows float in front, a dotted globe turned to Iceland beside them.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/atrium-aurora.webp)
-
 [**Civilization**](https://github.com/tulustul/bevy-react/tree/main/examples/civilization)
 recreates the interface of a 4X strategy game over a generated hex world: city
 banners and unit flags pinned to the 3D map, a minimap filmed by a second
@@ -90,26 +73,16 @@ next through a custom morph shader; the worlds on the cards are live 3D.
 
 ![The main menu of the homage: a slashed yellow CYBERPUNK wordmark and five menu items on a translucent red band, glowing cyan and red bars and walls of magenta data blurred behind it.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/cyberpunk-menu.webp)
 
-[**Nodes**](https://github.com/tulustul/bevy-react/tree/main/examples/nodes)
-is a node editor for procedural textures, after Blender's: drag nodes and
-wires, zoom with the wheel, scrub number fields, search the Add menu. Bevy
-evaluates the graph on the CPU, puts a live thumbnail in every node and shows
-the result as a PBR material on a 3D preview. The wires are a custom element
-drawn by a shader.
-[Try it in your browser](https://tulustul.github.io/bevy-react/nodes/).
-
-![A node editor: a sphere of weathered bricks in the 3D preview, the base color tiled beside it, and below a graph of bricks, noise, warp, color ramp and mix nodes, each with a live thumbnail, wired into a material output.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/nodes-bricks.webp)
-
-[**Deadspace**](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace)
+[**Coldwake**](https://github.com/tulustul/bevy-react/tree/main/examples/coldwake)
 is a homage to the diegetic interface of a sci-fi horror game: there is no
 HUD. The engineer's health runs down his spine, the ammo count floats over
 his gun, and the suit menu, the store, the upgrade bench and the hack panel
 are holograms in the room — every one a React `<surface>`. You walk him
 around the deck: panels wake as he comes near, and F locks the camera on
 the one he faces and makes the mouse its cursor.
-[Play it in your browser](https://tulustul.github.io/bevy-react/deadspace/).
+[Play it in your browser](https://tulustul.github.io/bevy-react/coldwake/).
 
-![The suit menu projected into the room, the camera locked on it: a grid of item icons with the cursor on a stasis pack, the pack turning in the preview, vitals, power cells and credits along the top, the engineer's back and stasis gauge at the left edge.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/deadspace-menu.webp)
+![The suit menu projected into the room, the camera locked on it: a grid of item icons with the cursor on a stasis pack, the pack turning in the preview, vitals, power cells and credits along the top, the engineer's back and stasis gauge at the left edge.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/coldwake-menu.webp)
 
 ## Getting started
 

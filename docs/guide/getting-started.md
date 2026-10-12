@@ -269,13 +269,6 @@ elements, styles or filters should depend on `bevy-react` with
 - [`examples/demos`](https://github.com/tulustul/bevy-react/tree/main/examples/demos):
   the gallery behind the [live demo](https://tulustul.github.io/bevy-react/demo/).
   Each demo is a small component you can copy from.
-- [`examples/arcana`](https://github.com/tulustul/bevy-react/tree/main/examples/arcana):
-  the showcase — a card-pack game that combines custom filters, live `<portal>`
-  art, `transform3d` and a `<surface>` card you can turn over in 3D.
-- [`examples/atrium`](https://github.com/tulustul/bevy-react/tree/main/examples/atrium):
-  a spatial desktop — React apps on `<surface>` windows of frosted glass in a
-  3D world, a globe with `<anchor>` labels, live `<portal>` lenses with a
-  shared-element flight, custom filters and morphs.
 - [`examples/civilization`](https://github.com/tulustul/bevy-react/tree/main/examples/civilization):
   a 4X strategy game's interface over a generated hex map — `<anchor>` city
   banners and tooltips, a `<portal>` minimap, a technology tree, and `<svg>`
@@ -286,14 +279,9 @@ elements, styles or filters should depend on `bevy-react` with
   `<portal>` cards, settings that drive the camera and the window, custom
   glitch filters and a glitch morph between screens.
   [Play it in the browser](https://tulustul.github.io/bevy-react/cyberpunk/).
-- [`examples/nodes`](https://github.com/tulustul/bevy-react/tree/main/examples/nodes):
-  a node editor for procedural textures — pan and zoom with `onWheel`, drag
-  nodes and wires, `editableText` number fields, an Add menu with search,
-  live per-node thumbnails, and wires drawn by a custom element.
-  [Try it in the browser](https://tulustul.github.io/bevy-react/nodes/).
-- [`examples/deadspace`](https://github.com/tulustul/bevy-react/tree/main/examples/deadspace):
+- [`examples/coldwake`](https://github.com/tulustul/bevy-react/tree/main/examples/coldwake):
   a sci-fi horror game's diegetic interface — fourteen `<surface>`
   holograms in a 3D room you walk through; a key locks the camera on the
   one you face and an app-drawn cursor clicks and scrolls it, with filters
   and morphs inside them, `<portal>` previews, `<canvas>` and `<svg>`.
-  [Play it in the browser](https://tulustul.github.io/bevy-react/deadspace/).
+  [Play it in the browser](https://tulustul.github.io/bevy-react/coldwake/).

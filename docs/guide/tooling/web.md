@@ -67,7 +67,10 @@ site also works from a subdirectory.
 
 For a release build, use `npx bevy-react build --prod` and
 `cargo build --release`, and point `wasm-bindgen` at
-`target/wasm32-unknown-unknown/release/`.
+`target/wasm32-unknown-unknown/release/`. Pass it `--remove-name-section`
+too: the function names it drops are only for stack traces, and they are
+about half of the file. A full Bevy app is then around 70 MB; with them it
+passes the 100 MiB a file may have on GitHub, Pages included.
 
 ## Load order
 
@@ -160,9 +163,8 @@ served as is.
 
 The demos app and the
 [Cyberpunk](https://tulustul.github.io/bevy-react/cyberpunk/),
-[Civilization](https://tulustul.github.io/bevy-react/civilization/),
-[Nodes](https://tulustul.github.io/bevy-react/nodes/) and
-[Deadspace](https://tulustul.github.io/bevy-react/deadspace/) showcases
+[Civilization](https://tulustul.github.io/bevy-react/civilization/) and
+[Coldwake](https://tulustul.github.io/bevy-react/coldwake/) showcases
 build for the web with one script,
 [`examples/build-web.mjs`](../../../examples/build-web.mjs): it builds both
 bundles with `buildVendor` and `buildApp` from `bevy-react/build-lib`,

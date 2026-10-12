@@ -20,7 +20,13 @@
 // in which case install the version this build hints at.
 
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,11 +71,14 @@ function findWasmBindgen() {
   process.exit(1);
 }
 
-mkdirSync(dist, { recursive: true });
-
 // Fail fast (before the multi-minute cargo build) if the CLI is missing.
 const wasmBindgen = findWasmBindgen();
 console.log(`[web] wasm-bindgen ${wasmBindgen.version} (${wasmBindgen.bin})`);
+
+// `dist/` is published as it is: start it empty, or a deploy carries whatever
+// earlier builds left there (assets since deleted, a renamed app's wasm).
+rmSync(dist, { recursive: true, force: true });
+mkdirSync(dist, { recursive: true });
 
 // 1) React bundles (host-agnostic; bridge.ts picks `globalThis.__bevyHost` on web).
 await buildVendor({ outfile: "dist/vendor.js", prod, cwd });
@@ -93,7 +102,11 @@ const wasm = resolve(
 );
 
 // wasm-bindgen emits dist/<name>.js (the `init` loader) + dist/<name>_bg.wasm.
+// A release build drops the `name` section: function names for stack traces,
+// about half the file — with it a showcase is over the 100 MiB a file may
+// have on GitHub (Pages is a git push).
 run(wasmBindgen.bin, [
+  ...(prod ? ["--remove-name-section"] : []),
   "--target",
   "web",
   "--out-dir",

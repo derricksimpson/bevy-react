@@ -29,17 +29,8 @@ cargo run --release -p demos
 npm run build:prod -w minimal
 cargo run --release -p minimal
 
-npm run build:prod -w arcana
-cargo run --release -p arcana
-
-npm run build:prod -w atrium
-cargo run --release -p atrium
-
-npm run build:prod -w nodes
-cargo run --release -p nodes
-
-npm run build:prod -w deadspace
-cargo run --release -p deadspace
+npm run build:prod -w coldwake
+cargo run --release -p coldwake
 ```
 
 ### 4. Verify the web build works
@@ -92,6 +83,5 @@ git push origin v<version>
 ```sh
 npm run deploy:docs
 npm run deploy:demos
-npm run deploy:nodes
-npm run deploy:deadspace
+npm run deploy:coldwake
 ```
