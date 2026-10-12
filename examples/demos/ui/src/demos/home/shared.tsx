@@ -21,6 +21,12 @@ export const CARD_PADDING = 16;
 export const CARD_BORDER = 1;
 /** The page card's padding on a phone. */
 export const PAGE_PADDING_MOBILE = 12;
+/** Desktop corners of the page card and of every card on it: elliptical, so
+ * the top and bottom edges bow across the whole width. */
+export const RADIUS = "50% / 10%";
+/** A phone keeps plain corners: full-width boxes that tall would bow too far. */
+export const PAGE_RADIUS_MOBILE = 22;
+export const CARD_RADIUS_MOBILE = 16;
 
 /** Vertical rhythm shared by the card and every vignette. The card has no
  * `gap` (an `Extra` must take zero room at rest), so spacing rides the things. */

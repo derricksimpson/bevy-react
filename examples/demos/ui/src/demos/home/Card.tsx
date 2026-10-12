@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import {
-  CARD_RADIUS,
-  ChevronLeftIcon,
-  SecondaryButton,
-  Spotlight,
-} from "@/components";
+import { ChevronLeftIcon, SecondaryButton, Spotlight } from "@/components";
 import { Colors, Fonts, FontSizes } from "@/theme";
 import { useIsMobile } from "@/hooks";
 import { flightTransition, GROW_DELAY_MS, GROW_MS } from "./beats";
@@ -13,7 +8,9 @@ import { type ExpandPhase, ExpandPhaseProvider, Extra } from "./Extra";
 import {
   CARD_BORDER,
   CARD_PADDING,
+  CARD_RADIUS_MOBILE,
   PanelCaption,
+  RADIUS,
   Spacing,
   useCardContentWidth,
 } from "./shared";
@@ -54,6 +51,7 @@ export function Card({
   const returning = useHomeStore((s) => s.previousSelectedItem === tile.id);
   const { grown, phase } = useGrown(expanded, returning);
   const Vignette = tile.vignette;
+  const radius = isMobile ? CARD_RADIUS_MOBILE : RADIUS;
 
   const box: BevyStyle = expanded
     ? {
@@ -75,6 +73,7 @@ export function Card({
         style={{
           ...cardStyle,
           ...box,
+          borderRadius: radius,
           transition: {
             // A phone grows the card in place: nothing flies.
             ...(!isMobile && flightTransition),
@@ -84,12 +83,7 @@ export function Card({
         }}
         hoverStyle={expanded ? undefined : hoverStyle}
       >
-        <Spotlight
-          radius={CARD_RADIUS}
-          outset={CARD_BORDER}
-          edge={1}
-          wash={0.2}
-        />
+        <Spotlight radius={radius} outset={CARD_BORDER} edge={1} wash={0.2} />
         <node style={isMobile ? contentsMobileStyle : contentsStyle}>
           <node style={labelRowStyle}>
             <text style={labelStyle}>{tile.label}</text>
@@ -164,14 +158,14 @@ function useGrown(expanded: boolean, returning: boolean) {
   return { grown, phase };
 }
 
-/** The gallery card's surface (`components/Card`): graphite, a hairline rim
- * that catches the cursor light. No drop shadow — the wall's slots are layer
- * roots exactly the card's size, and a capture would cut it off square. */
+/** The gallery card's surface (`components/Card`) under the page's own corners
+ * (`radius`, per device): graphite, a hairline rim that catches the cursor
+ * light. No drop shadow — the wall's slots are layer roots exactly the card's
+ * size, and a capture would cut it off square. */
 const cardStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "stretch",
   padding: CARD_PADDING,
-  borderRadius: CARD_RADIUS,
   border: CARD_BORDER,
   borderColor: Colors.line,
   backgroundColor: Colors.card,

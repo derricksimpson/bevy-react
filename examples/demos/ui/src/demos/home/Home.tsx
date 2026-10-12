@@ -7,7 +7,12 @@ import { useIsMobile, useWindowSize } from "@/hooks";
 import { Beats, FLIGHT_MS, GROW_DELAY_MS } from "./beats";
 import { Card } from "./Card";
 import { Logos } from "./Logos";
-import { PAGE_PADDING_MOBILE, PanelCaption } from "./shared";
+import {
+  PAGE_PADDING_MOBILE,
+  PAGE_RADIUS_MOBILE,
+  PanelCaption,
+  RADIUS,
+} from "./shared";
 import { useHomeStore } from "./store";
 import { slotStyle, Tile } from "./Tile";
 import { TILE_HEIGHT, TILE_WIDTH, TILES } from "./tiles";
@@ -227,13 +232,13 @@ const pageStyle: BevyStyle = {
   alignItems: "center",
   gap: 14,
   padding: PAGE_PADDING,
-  borderRadius: 22,
   backgroundColor: "rgba(0, 0, 0, 0.3)",
 };
 
 /** Desktop only: the frost is an always-dirty chain (its source is the live
  * 3D frame), which a phone has no budget for. */
 const pageDesktopStyle: BevyStyle = {
+  borderRadius: RADIUS,
   border: PAGE_BORDER,
   borderColor: Colors.line,
   backdropFilter: Filters.backdrop,
@@ -242,6 +247,7 @@ const pageDesktopStyle: BevyStyle = {
 const pageMobileStyle: BevyStyle = {
   width: "100%",
   padding: PAGE_PADDING_MOBILE,
+  borderRadius: PAGE_RADIUS_MOBILE,
   gap: 10,
 };
 
