@@ -12,7 +12,7 @@
 //! and the swap is invisible, until you drag.
 //!
 //! Foil on the 3D card is not the UI's `holo` filter but a material
-//! extension (`shaders/foil.wgsl`): the rainbow comes from the real view
+//! extension (`shaders/foil.wesl`): the rainbow comes from the real view
 //! angle, so it runs across the card as it turns, and a specular glint
 //! (aimed to miss the card at rest) sweeps over it.
 
@@ -21,7 +21,7 @@ use std::f32::consts::PI;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::CameraOutputMode;
 use bevy::camera::visibility::RenderLayers;
-use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
@@ -58,7 +58,7 @@ pub struct Inspect {
 
 type FoilMaterial = ExtendedMaterial<StandardMaterial, FoilExtension>;
 
-/// `foil = (strength, drift, 0, 0)` — see `foil.wgsl`.
+/// `foil = (strength, drift, 0, 0)` — see `foil.wesl`.
 #[derive(Asset, AsBindGroup, Reflect, Clone, Default)]
 struct FoilExtension {
     #[uniform(100)]
@@ -67,7 +67,7 @@ struct FoilExtension {
 
 impl MaterialExtension for FoilExtension {
     fn fragment_shader() -> ShaderRef {
-        "shaders/foil.wgsl".into()
+        "shaders/foil.wesl".into()
     }
 }
 
@@ -156,7 +156,7 @@ fn spawn_card(
     let material = materials.add(ExtendedMaterial {
         base: StandardMaterial {
             // Unlit: the face is exactly the UI's pixels. The extension adds
-            // the foil and the glint itself (`foil.wgsl`).
+            // the foil and the glint itself (`foil.wesl`).
             base_color: Color::WHITE,
             base_color_texture: Some(texture),
             unlit: true,
@@ -191,7 +191,10 @@ fn spawn_card(
                 },
                 ..default()
             },
+            // A full passthrough: the face's pixels reach the frame as the UI
+            // drew them (dithering does nothing without tonemapping).
             Tonemapping::None,
+            DebandDither::Disabled,
             RenderLayers::layer(CARD_LAYER),
             CardCamera,
         ))

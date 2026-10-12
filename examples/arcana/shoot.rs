@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 
-use bevy::camera::{ImageRenderTarget, RenderTarget};
+use bevy::camera::{ImageRenderTarget, RenderTarget, ShadowLodOrigin};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
@@ -135,6 +135,9 @@ fn redirect_camera(
             .entity(entity)
             .insert(RenderTarget::Image(target.clone()));
     }
+    // No camera renders to the window any more: name the shadow LOD origin
+    // Bevy would otherwise pick with a warning.
+    commands.entity(*camera).insert(ShadowLodOrigin);
     shoot.target = Some(target);
 }
 

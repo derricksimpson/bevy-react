@@ -16,7 +16,7 @@ export const CARD_H = 336;
 
 const PIPS: Record<Rarity, number> = { common: 1, rare: 2, legendary: 3 };
 
-/** The edition's foil — a WGSL filter over the whole card's pixels. `tilt`
+/** The edition's foil — a WESL filter over the whole card's pixels. `tilt`
  *  (degrees) slides the rainbow: bind the card's tilt to it. */
 export function editionFilter(
   rarity: Rarity,

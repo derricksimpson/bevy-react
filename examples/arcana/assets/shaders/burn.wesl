@@ -10,13 +10,13 @@
 // premultiplied sample down (still valid); the ember adds onto rgb and is
 // clamped to the texel's alpha, so it never glows outside the wrapper.
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     content_rect_size,
     content_uv,
     sample_source,
     uniforms,
-}
+};
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);

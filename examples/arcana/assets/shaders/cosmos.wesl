@@ -15,13 +15,13 @@
 //     card's hue racing out from the table, trailing a wash of color.
 //     `progress >= 1` is parked: every flare term folds to zero.
 
-#import bevy_pbr::{
-    forward_io::VertexOutput,
-    mesh_view_bindings::{globals, view},
-}
+import bevy_pbr::{
+    render::forward_io::VertexOutput,
+    render::mesh_view_bindings::{globals, view},
+};
 
 // `(hue, progress, 0, 0)` — see `CosmosMaterial` in stage.rs.
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> flare: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> flare: vec4<f32>;
 
 const SKY_TOP: vec3<f32> = vec3<f32>(0.0030, 0.0024, 0.0100);
 const SKY_BOTTOM: vec3<f32> = vec3<f32>(0.0090, 0.0040, 0.0180);

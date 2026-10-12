@@ -24,7 +24,7 @@
 // back with the sample's own alpha (transparent texels stay transparent, so
 // the foil never paints outside the card's rounded corners).
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     content_rect_size,
     content_uv,
@@ -32,7 +32,7 @@
     sample_source,
     uniforms,
     unpremultiply,
-}
+};
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);

@@ -17,7 +17,7 @@ const VEIL_MS = 1100;
 const CAPTIONS = {
   sealed: [
     "This pack is a React component.",
-    "Its foil is a WGSL shader running over its pixels.",
+    "Its foil is a WESL shader running over its pixels.",
   ],
   dealt: [
     "Each card's art is a live 3D world,",

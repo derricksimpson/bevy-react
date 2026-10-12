@@ -11,26 +11,17 @@
 //     (up-left, and a fainter one down-right), placed so they miss the card
 //     when it faces you square; turn it and they sweep across it.
 
-#import bevy_pbr::{
-    mesh_view_bindings::{globals, view},
-    pbr_fragment::pbr_input_from_standard_material,
-    pbr_functions::alpha_discard,
-}
-
-#ifdef PREPASS_PIPELINE
-#import bevy_pbr::{
-    prepass_io::{VertexOutput, FragmentOutput},
-    pbr_deferred_functions::deferred_output,
-}
-#else
-#import bevy_pbr::{
-    forward_io::{VertexOutput, FragmentOutput},
-    pbr_functions::main_pass_post_lighting_processing,
-}
-#endif
+// Forward pass only: `FoilExtension` overrides just `fragment_shader`, so the
+// prepass and deferred pipelines keep StandardMaterial's own shaders.
+import bevy_pbr::{
+    render::forward_io::{VertexOutput, FragmentOutput},
+    render::mesh_view_bindings::{globals, view},
+    render::pbr_fragment::pbr_input_from_standard_material,
+    render::pbr_functions::{alpha_discard, main_pass_post_lighting_processing},
+};
 
 // (strength, drift, 0, 0)
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> foil: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> foil: vec4<f32>;
 
 // The lights, in view space (the card hangs at z = -6).
 const LIGHT: vec3<f32> = vec3<f32>(-3.2, 2.8, -2.4);
@@ -52,7 +43,11 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard(
+        pbr_input.material.flags,
+        pbr_input.material.alpha_cutoff,
+        pbr_input.material.base_color,
+    );
 
     let n = pbr_input.N;
     let v = pbr_input.V;
@@ -70,9 +65,6 @@ fn fragment(
         pbr_input.material.base_color = vec4<f32>(1.0 - (1.0 - c) * (1.0 - band * k), pbr_input.material.base_color.a);
     }
 
-#ifdef PREPASS_PIPELINE
-    let out = deferred_output(in, pbr_input);
-#else
     var out: FragmentOutput;
     // The face is its own light: the base color as-is (`apply_pbr_lighting`
     // would shade it by angle even with `unlit` set), plus the glint.
@@ -83,6 +75,5 @@ fn fragment(
     let glint = pow(a, 260.0) * 0.85 + pow(a, 40.0) * 0.05 + pow(b, 180.0) * 0.3;
     out.color = vec4<f32>(out.color.rgb + vec3<f32>(1.0, 0.96, 0.9) * glint, out.color.a);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-#endif
     return out;
 }

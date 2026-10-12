@@ -3,13 +3,13 @@
 // deep edge, slow drifting haze, and a sprinkle of twinkling stars. The quad
 // rides its camera; depth is pinned to the far plane.
 
-#import bevy_pbr::{
-    forward_io::VertexOutput,
-    mesh_view_bindings::{globals, view},
-}
+import bevy_pbr::{
+    render::forward_io::VertexOutput,
+    render::mesh_view_bindings::{globals, view},
+};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> deep: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> glow: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> deep: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> glow: vec4<f32>;
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);

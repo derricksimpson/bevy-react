@@ -2,7 +2,7 @@
 //!
 //! Everything you click is React; everything it does is Bevy:
 //!
-//!   * every card is a React component — and its foil is a WGSL shader
+//!   * every card is a React component — and its foil is a WESL shader
 //!     running over that component's pixels (`filters.rs`, `holo`);
 //!   * every card's art is a live 3D diorama rendered by its own camera
 //!     into a `<portal>` (`dioramas/`);
