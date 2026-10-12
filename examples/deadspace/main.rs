@@ -10,7 +10,7 @@
 //!   * the deck, its lights, fog, steam and dust (`station/`);
 //!   * the engineer and his poses, the weapons and their shots (`engineer/`,
 //!     `weapons/`);
-//!   * the holograms: where each one hangs, how it unfolds and the WGSL that
+//!   * the holograms: where each one hangs, how it unfolds and the WESL that
 //!     draws it (`holo/`);
 //!   * the camera tour (`tour.rs`), the doors and the elevator (`doors.rs`),
 //!     the locator line (`locator.rs`), the item preview and the map

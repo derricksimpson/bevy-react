@@ -11,7 +11,7 @@
 // grain and band scale rgb within [0, alpha] (min with alpha), so every
 // output stays a valid premultiplied color.
 
-#import bevy_react::filter::{FullscreenVertexOutput, sample_source_lod, uniforms}
+import bevy_react::filter::{FullscreenVertexOutput, sample_source_lod, uniforms};
 
 fn pcg(v: u32) -> u32 {
     let state = v * 747796405u + 2891336453u;

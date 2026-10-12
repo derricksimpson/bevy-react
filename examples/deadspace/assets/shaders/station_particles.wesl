@@ -19,22 +19,21 @@
 // params = (kind, amount 0..1, size m, speed). A quad ranked above `amount`
 // collapses, so an emitter thins out smoothly.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     mesh_functions::get_world_from_local,
     mesh_view_bindings::{globals, view},
-}
-#ifdef DISTANCE_FOG
-#import bevy_pbr::{
+};
+@if(DISTANCE_FOG)
+import bevy_pbr::render::{
     mesh_view_bindings::fog,
     mesh_view_types::{FOG_MODE_LINEAR, FOG_MODE_EXPONENTIAL, FOG_MODE_EXPONENTIAL_SQUARED},
-}
-#endif
+};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> area: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var<uniform> wind: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var<uniform> color: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(4) var<uniform> color2: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> params: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> area: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<uniform> wind: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<uniform> color: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(4) var<uniform> color2: vec4<f32>;
 
 const TAU: f32 = 6.2831853;
 
@@ -163,8 +162,8 @@ fn vertex(v: Vertex) -> VertexOutput {
     return out;
 }
 
-#ifdef DISTANCE_FOG
 /// How much of a light at distance `d` the view's fog lets through.
+@if(DISTANCE_FOG)
 fn fog_keep(d: f32) -> f32 {
     if fog.mode == FOG_MODE_LINEAR {
         return clamp((fog.be.y - d) / (fog.be.y - fog.be.x), 0.0, 1.0);
@@ -176,17 +175,16 @@ fn fog_keep(d: f32) -> f32 {
     }
     return 1.0;
 }
-#endif
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let q = in.corner * 2.0 - 1.0;
     var keep = 1.0;
     var haze = vec3<f32>(0.0);
-#ifdef DISTANCE_FOG
+@if(DISTANCE_FOG)
     keep = fog_keep(in.misc.y);
+@if(DISTANCE_FOG)
     haze = fog.base_color.rgb;
-#endif
     let kind = u32(params.x + 0.5);
     if kind == 1u || kind == 3u {
         // A puff, ragged at the edge.

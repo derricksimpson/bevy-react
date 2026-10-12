@@ -8,7 +8,7 @@
 //
 // PREMULTIPLY: writes opaque-ish color (rgb * a, a), valid by construction.
 
-#import bevy_react::filter::{FullscreenVertexOutput, uniforms}
+import bevy_react::filter::{FullscreenVertexOutput, uniforms};
 
 fn pcg(v: u32) -> u32 {
     let state = v * 747796405u + 2891336453u;

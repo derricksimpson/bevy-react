@@ -12,25 +12,24 @@
 //             through to the steel where feet and hands go.
 //   3 worn    scuffs and scratches over the UVs: suit plates, weapons.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
-}
+};
 
-#ifdef PREPASS_PIPELINE
-#import bevy_pbr::{
-    prepass_io::{VertexOutput, FragmentOutput},
-    pbr_deferred_functions::deferred_output,
-}
-#else
-#import bevy_pbr::{
+@if(PREPASS_PIPELINE)
+import bevy_pbr::{
+    prepass::io::{VertexOutput, FragmentOutput},
+    deferred::functions::deferred_output,
+};
+@else
+import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
-}
-#endif
+};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> mode: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> tint: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> mode: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> tint: vec4<f32>;
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
@@ -79,7 +78,11 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard(
+        pbr_input.material.flags,
+        pbr_input.material.alpha_cutoff,
+        pbr_input.material.base_color,
+    );
 
     let pos = in.world_position.xyz;
     let n = pbr_input.world_normal;
@@ -131,9 +134,8 @@ fn fragment(
         }
         default: {
             var uv = vec2<f32>(0.5);
-#ifdef VERTEX_UVS_A
+@if(VERTEX_UVS_A)
             uv = in.uv;
-#endif
             let scratch = smoothstep(0.86, 0.97, vnoise(vec2<f32>(uv.x * 46.0, uv.y * 3.5) + seed));
             let scuff = fbm(uv * 5.0 + seed);
             base *= 0.9 + 0.2 * scuff;
@@ -144,12 +146,14 @@ fn fragment(
     pbr_input.material.base_color = vec4<f32>(base, pbr_input.material.base_color.a);
     pbr_input.material.perceptual_roughness = rough;
 
-#ifdef PREPASS_PIPELINE
+    // `@if` scopes one statement: a block would scope `out` too.
+@if(PREPASS_PIPELINE)
     let out = deferred_output(in, pbr_input);
-#else
+@if(!PREPASS_PIPELINE)
     var out: FragmentOutput;
+@if(!PREPASS_PIPELINE)
     out.color = apply_pbr_lighting(pbr_input);
+@if(!PREPASS_PIPELINE)
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-#endif
     return out;
 }

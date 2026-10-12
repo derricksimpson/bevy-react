@@ -2,7 +2,7 @@
 //! engineer's feet to a destination (`layout::destination`), the way the
 //! suit's navigation would draw it — out along the deck in straight runs
 //! with rounded corners, a bright head racing ahead, chevrons flowing
-//! toward the goal, then a hold and a fade. `locator_ribbon.wgsl` draws it.
+//! toward the goal, then a hold and a fade. `locator_ribbon.wesl` draws it.
 
 use std::collections::HashMap;
 
@@ -31,7 +31,7 @@ pub struct RibbonMaterial {
 
 impl Material for RibbonMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/locator_ribbon.wgsl".into()
+        "shaders/locator_ribbon.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

@@ -1,4 +1,4 @@
-//! The holograms' own WGSL effects over React's pixels, each a params struct
+//! The holograms' own WESL effects over React's pixels, each a params struct
 //! and a shader under `assets/shaders/`, typed into `bevy.ts` like every
 //! other binding. They run inside the `<surface>`s, on each surface's own
 //! camera.
@@ -25,7 +25,7 @@ use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 ///
 /// Jittered rows move up to `jitter` px sideways, so the capture is inflated
 /// by `outset` (keep `jitter` within it).
-#[react_filter(shader = "shaders/holo_noise.wgsl", time = true, outset = 8.0)]
+#[react_filter(shader = "shaders/holo_noise.wesl", time = true, outset = 8.0)]
 struct HoloNoise {
     /// How visible the grain is, 0..1.
     #[serde(default = "default_amount")]
@@ -43,7 +43,7 @@ struct HoloNoise {
 
 /// Packing: `params[0]` = (intensity, frequency, split, tear),
 /// `params[1].x` = seed. (The same shader as the cyberpunk example's.)
-#[react_filter(shader = "shaders/glitch.wgsl", time = true, outset = 32.0)]
+#[react_filter(shader = "shaders/glitch.wesl", time = true, outset = 32.0)]
 struct Glitch {
     /// How broken the signal is, 0..1.
     #[serde(default = "one")]
@@ -67,7 +67,7 @@ struct Glitch {
 ///
 /// Sits on an empty full-screen node: the pass writes static over the frame,
 /// opaque by default — the camera cuts under it.
-#[react_filter(shader = "shaders/holo_static.wgsl", time = true)]
+#[react_filter(shader = "shaders/holo_static.wesl", time = true)]
 struct HoloStatic {
     #[serde(default = "opaque_cyan")]
     tint: FilterColor,
@@ -75,7 +75,7 @@ struct HoloStatic {
 
 /// Packing: `params[0].x` = softness (0..1 of the height),
 /// `params[1]` = tint (straight linear RGBA; alpha = how bright the line).
-#[react_morph_filter(shader = "shaders/scan_swap.wgsl")]
+#[react_morph_filter(shader = "shaders/scan_swap.wesl")]
 struct ScanSwap {
     #[serde(default = "default_softness")]
     softness: f32,

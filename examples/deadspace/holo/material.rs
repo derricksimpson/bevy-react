@@ -1,4 +1,4 @@
-//! The hologram material: `hologram.wgsl` over a React `<surface>` texture.
+//! The hologram material: `hologram.wesl` over a React `<surface>` texture.
 //! Premultiplied blending (`One`, `OneMinusSrcAlpha`), so the UI's dark
 //! translucent plates dim the world behind and its lines add light; unlit,
 //! both sides, no shadows.
@@ -36,7 +36,7 @@ impl HologramMaterial {
 
 impl Material for HologramMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/hologram.wgsl".into()
+        "shaders/hologram.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

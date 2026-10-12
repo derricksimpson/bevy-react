@@ -4,9 +4,9 @@
 // its racing head, brightest there; chevrons flow toward the goal; the
 // whole fades with `strength`.
 
-#import bevy_pbr::{forward_io::VertexOutput, mesh_view_bindings::globals}
+import bevy_pbr::render::{forward_io::VertexOutput, mesh_view_bindings::globals};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> trace: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> trace: vec4<f32>;
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {

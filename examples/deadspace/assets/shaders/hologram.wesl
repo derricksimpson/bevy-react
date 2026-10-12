@@ -15,12 +15,12 @@
 //   look  = (presence 0..1, gain, seed, flicker 0..1)
 //   shape = (logical px w, logical px h, scanline strength 0..1, -)
 
-#import bevy_pbr::{forward_io::VertexOutput, mesh_view_bindings::globals}
+import bevy_pbr::render::{forward_io::VertexOutput, mesh_view_bindings::globals};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> look: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> shape: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var ui: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var ui_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> look: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> shape: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var ui: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var ui_sampler: sampler;
 
 fn hash(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.xyx) * 0.1031);

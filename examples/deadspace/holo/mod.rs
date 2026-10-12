@@ -1,6 +1,6 @@
 //! The holograms. Every readout in the game is a React `<surface>` (see
 //! `ui/src/holos/`) on a quad in the world, drawn by one material
-//! (`hologram.wgsl`): premultiplied UI, scanlines, flicker, an edge glow,
+//! (`hologram.wesl`): premultiplied UI, scanlines, flicker, an edge glow,
 //! pushed past 1.0 so it blooms. React owns what is on them and which are
 //! open (`holo.open`); this module owns where they hang and how they unfold.
 //!

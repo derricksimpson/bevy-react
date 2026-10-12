@@ -1,5 +1,5 @@
 //! What the deck is made of: one palette of materials every builder shares
-//! (`Kit`), the `Paint` extension that grimes them (`station_paint.wgsl`),
+//! (`Kit`), the `Paint` extension that grimes them (`station_paint.wesl`),
 //! and `Build`, which merges a builder's boxes and pipes into one mesh per
 //! material — the whole room is a few dozen draw calls, not thousands.
 
@@ -10,7 +10,7 @@ use bevy::shader::ShaderRef;
 
 pub type PaintMaterial = ExtendedMaterial<StandardMaterial, Paint>;
 
-/// Procedural wear over a lit `StandardMaterial` (see `station_paint.wgsl`):
+/// Procedural wear over a lit `StandardMaterial` (see `station_paint.wesl`):
 /// `mode` = (pattern, seed, scale m, grime 0..1); `tint` = the stripes'
 /// paint for `Pattern::Hazard`.
 #[derive(Asset, AsBindGroup, Reflect, Clone, Default)]
@@ -23,7 +23,7 @@ pub struct Paint {
 
 impl MaterialExtension for Paint {
     fn fragment_shader() -> ShaderRef {
-        "shaders/station_paint.wgsl".into()
+        "shaders/station_paint.wesl".into()
     }
 }
 

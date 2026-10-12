@@ -12,13 +12,13 @@
 // coverage). Endpoint guards return the exact samples — the identity
 // contract.
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     morph_progress,
     morph_sample_from,
     morph_sample_to,
     uniforms,
-}
+};
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {

@@ -2,7 +2,7 @@ import type { BevyStyle } from "bevy-react";
 
 /** The suit's interface: cyan light on blue-black glass, white for what is
  *  selected, amber for prices, red for damage and locks, green for what is
- *  open. Holograms are drawn as light (`hologram.wgsl` raises them past 1.0
+ *  open. Holograms are drawn as light (`hologram.wesl` raises them past 1.0
  *  so they bloom): keep fills dark and translucent, lines and type bright. */
 export const C = {
   cyan: "#7fe3ff",

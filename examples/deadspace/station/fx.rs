@@ -1,6 +1,6 @@
 //! Particles and flashes, shared by everything that sparks, steams or
 //! flares. Each emitter is one mesh of quads animated in its vertex shader
-//! (`station_particles.wgsl`, one draw call): the room's dust and its steam
+//! (`station_particles.wesl`, one draw call): the room's dust and its steam
 //! vents run forever; bursts — sparks off a hit, a door's steam, a stasis
 //! blast — come from a small pool, fired by a [`Burst`] message. One shared
 //! light answers [`Flash`] messages (muzzle flashes, impacts), so the deck
@@ -16,7 +16,7 @@ use bevy::render::render_resource::{
 };
 use bevy::shader::ShaderRef;
 
-/// One emitter (see `station_particles.wgsl` for what each field means per
+/// One emitter (see `station_particles.wesl` for what each field means per
 /// kind).
 #[derive(Asset, AsBindGroup, Reflect, Clone)]
 pub struct FxMaterial {
@@ -35,11 +35,11 @@ pub struct FxMaterial {
 
 impl Material for FxMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/station_particles.wgsl".into()
+        "shaders/station_particles.wesl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/station_particles.wgsl".into()
+        "shaders/station_particles.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
