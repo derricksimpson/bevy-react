@@ -247,6 +247,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a pass-through label drawn over another element kept that element's
   clicks and `cursor` wherever its letters were. A hit on a text run now
   counts as a hit on its `<text>` block.
+- A `ref` object on an element (`useRef`) no longer crosses to Bevy: under
+  React 19 `ref` is an ordinary prop, so it was serialized into the element's
+  create op and reported as an unknown attribute.
 
 ## [0.7.0] - 2026-10-05
 

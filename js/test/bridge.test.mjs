@@ -325,6 +325,16 @@ test("every prop crosses generically; closures and children don't", () => {
   });
 });
 
+test("ref never crosses: it is an ordinary host prop since React 19", () => {
+  const ref = { current: null };
+  assert.deepEqual(serializeProps(9001, { ref, name: "hud" }), { name: "hud" });
+  // Callback refs too, and a ref swapped, added or dropped is not a delta.
+  assert.deepEqual(serializeProps(9002, { ref: () => {} }), {});
+  assert.equal(buildUpdateOp(9001, { ref }, { ref: { current: null } }), null);
+  assert.equal(buildUpdateOp(9001, {}, { ref }), null);
+  assert.equal(buildUpdateOp(9001, { ref }, {}), null);
+});
+
 test("flat attributes diff per key, structurally", () => {
   // An `<anchor>` offset change sends only the offset.
   const op = buildUpdateOp(

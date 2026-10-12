@@ -465,13 +465,13 @@ export function registerHandlers(
 // `canvas.ts` is the documented exception to the generic wire); a bigint
 // crosses as a number (the wire is JSON, which has none — lossless below
 // 2^53, e.g. an `<anchor entity>`'s `Entity::to_bits()`); any other function,
-// `undefined`, and `children` never cross.
+// `undefined`, `children` and `ref` never cross.
 function serializePropInto(
   out: SerializedProps,
   key: string,
   value: unknown,
 ): boolean {
-  if (key === "children" || value === undefined) return false;
+  if (key === "children" || key === "ref" || value === undefined) return false;
   if (typeof value === "function") {
     if (handlerEvent(key) !== null) {
       out[key] = true;
@@ -495,7 +495,8 @@ export function serializeProps(
   props: Record<string, unknown>,
   type?: string,
 ): SerializedProps {
-  // (`key`/`ref` never reach host props — React strips them.)
+  // (`key` never reaches host props — React strips it. `ref` does since
+  // React 19, where it is an ordinary prop: `serializePropInto` drops it.)
   const out: SerializedProps = {};
   for (const key in props) serializePropInto(out, key, props[key]);
   registerHandlers(id, props);
@@ -697,11 +698,11 @@ export function buildUpdateOp(
   const acc = resetAcc(id);
 
   for (const key in oldProps) {
-    if (key === "children") continue;
+    if (key === "children" || key === "ref") continue;
     diffKey(acc, key, oldProps[key], newProps[key]);
   }
   for (const key in newProps) {
-    if (key === "children" || key in oldProps) continue;
+    if (key === "children" || key === "ref" || key in oldProps) continue;
     diffKey(acc, key, undefined, newProps[key]);
   }
   // A record whose last closure just went away is dropped, so the map only
