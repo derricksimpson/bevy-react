@@ -28,9 +28,6 @@ cargo run --release -p demos
 
 npm run build:prod -w minimal
 cargo run --release -p minimal
-
-npm run build:prod -w coldwake
-cargo run --release -p coldwake
 ```
 
 ### 4. Verify the web build works
@@ -83,5 +80,12 @@ git push origin v<version>
 ```sh
 npm run deploy:docs
 npm run deploy:demos
+```
+
+### 13. Deploy other examples if necessary
+Deploy the
+```sh
+npm run deploy:civilization
+npm run deploy:cyberpunk
 npm run deploy:coldwake
 ```

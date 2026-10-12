@@ -115,7 +115,7 @@ guide covers configuration, cargo features, and the typed client.
 
 | bevy | bevy-react |
 | ---- | ---------- |
-| 0.20 | `main`     |
+| 0.20 | 0.8        |
 | 0.19 | 0.1 – 0.7  |
 
 Bevy 0.20 needs Rust 1.97.1 or newer.

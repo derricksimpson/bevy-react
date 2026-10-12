@@ -5,272 +5,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-12
+
 ### Added
 
-- **`SurfacePointerRay`: point at `<surface>` UI with your own ray.** The
-  in-world pointer follows the window cursor by default; an app that locks
-  or hides the cursor (a crosshair, a gamepad reticle) writes a world-space
-  ray to the `SurfacePointerRay` resource each frame and the mouse buttons
-  and the wheel act where it lands. Written in `PreUpdate` before the new
-  `SurfacePointerSet`, the ray acts in the same frame.
-- **Inline images in text.** An `<image>` written inside a `<text>` or a
-  span flows with the glyphs as an inline box (Bevy 0.20's `InlineImage`).
-  It takes `src`, `tint`, `flipX`, `flipY`, `opacity` and a `width`/`height`
-  in px, `em` (a multiple of the surrounding text's font size) or `rem`; it
-  sits on the baseline, wraps as a unit, and belongs to its block for clicks
-  and layers. A box with both sides given is reserved before the texture
-  loads.
-- **`em` and `rem` lengths.** Every length (sizes, insets, margins, padding,
-  borders, radii, gaps, grid tracks, translations, shadows, outlines,
-  gradient stops) takes `"2rem"`, a multiple of Bevy's `RemSize` resource
-  (20px by default), and `"1.5em"`, a multiple of the element's font size:
-  its own `fontSize` on `<text>` and `<editableText>`, the root size
-  elsewhere. Transitions ease between values of the same unit. Change
-  `RemSize` and the UI follows on the same frame.
-- **`fontSize` in `em`.** On a nested `<text>` it is a multiple of the
-  enclosing text's size (`"1em"` takes the parent's size); on a block, of
-  the root size.
-- **Keyboard focus on every element: `tabIndex`, `onFocus`, `onBlur`.** An
-  element with a `tabIndex` takes the keyboard focus when pressed (or from
-  Rust, through Bevy's `InputFocus`), `focusStyle` applies to it, and
-  `onFocus`/`onBlur` report it. An `<editableText>` stays focusable without
-  one. A press focuses the topmost element under the pointer that is
-  focusable or has a focusable ancestor: a label focuses the button around
-  it, and a pass-through overlay doesn't take the focus from what is
-  beneath. See the new Focus guide page.
-- **Tab navigation in one line.** Add Bevy's `TabNavigationPlugin` and Tab /
-  Shift+Tab walk the elements with `tabIndex >= 0`. bevy-react marks its UI
-  roots as tab groups: the window tree, then each `<root>` and the
-  `<anchor>` overlays; a `<surface>` is a scope of its own.
-- **Enter and Space click a focused `<button>`.** Its `onClick` fires once
-  per key press. A `<button>` is focusable only with a `tabIndex`, so
-  existing buttons don't start taking those keys.
-- **`<editableText readOnly>` and `disabled`.** A read-only field keeps the
-  focus, the caret and a selection to copy, but takes no edit; a disabled
-  one is inert (no focus, no caret, skipped by Tab) and reports as disabled
-  to assistive tech. Both still follow a controlled `value`.
-- **`<button disabled>`.** A disabled button doesn't click (it still
-  swallows the click), can't be focused and never shows its `pressStyle`;
-  `hoverStyle` and the `onPointer*` handlers keep working. Style it through
-  `style`: there is no `disabledStyle`.
-- **`focusVisibleStyle`.** A fifth state style, overlaid on `focusStyle`
-  while the focus indicator shows: under keyboard navigation (Bevy's
-  `InputFocusVisible`, which Tab turns on and a pointer press turns off) and
-  always on a focused `<editableText>`. The place for a focus ring that a
-  mouse click shouldn't draw.
-- **`onPointerHover`.** Fires on each frame the pointer moved while over the
-  element (between its `onPointerEnter` and `onPointerLeave`), a button held
-  or not: the DOM's hover `pointermove`. `onPointerMove` keeps its drag-only
-  semantics. Works for `<surface>` UI too.
-- **Modifier keys on pointer and wheel events.** `PointerEventData` and
-  `WheelEventData` carry `shiftKey`, `ctrlKey`, `altKey` and `metaKey`, for
-  Shift-click selection, Ctrl+wheel zoom and the like.
-- **Layers inside `<surface>`.** Group `opacity`, `filter`,
-  `backdropFilter`, `morphFilter`, `transform3d` and `cache` work under any
-  UI camera, a surface's included: each layer composites on its own camera.
-  The `layerCamera` warning is gone.
-- **The wheel reaches `<surface>` UI.** Scroll containers and `onWheel`
-  inside a surface follow the in-world pointer.
-- **`SurfaceSpec::scale_factor`.** A `<surface>` can render at a DPI scale
-  like a window: the subtree lays out in `size / scale_factor` logical px and
-  rasterizes at the texture's full resolution, so a UI designed at a fixed
-  size stays crisp on a large mesh. In-world picking maps hits to logical px.
+- **Keyboard focus on every element.** `tabIndex`, `onFocus` and `onBlur`
+  work on any element, and `focusStyle` applies to it. The new
+  `focusVisibleStyle` overlays it only while the focus indicator shows
+  (keyboard navigation, or a focused `<editableText>`). Add Bevy's
+  `TabNavigationPlugin` and Tab / Shift+Tab walk the elements with
+  `tabIndex >= 0`; Enter and Space click a focused `<button>`.
+- **`disabled` and `readOnly`.** `<button disabled>`,
+  `<editableText disabled>`, and `<editableText readOnly>` (keeps the focus,
+  the caret and a selection to copy, takes no edit).
+- **`em` and `rem` lengths.** Every length takes `"2rem"` (a multiple of
+  Bevy's `RemSize`, 20px by default) and `"1.5em"` (a multiple of the
+  element's font size). `fontSize` takes `em` too.
 - **`positionType: "fixed"`.** Places a node against the viewport of its UI
-  camera (the window, or a `<surface>`'s texture) instead of its parent: it
-  takes no space, and its ancestors' scrolling, clipping and transforms
-  don't reach it, while it keeps its place in the tree for paint order,
-  events and lifetime. Built on Bevy 0.20's `FixedNode`. Unlike in CSS, a
-  transformed or filtered ancestor does not become its containing block,
-  and it is not part of an ancestor's composited layer (an ancestor's
-  `opacity`, `filter`, `morphFilter` or `transform3d` doesn't apply to it);
-  pair it with `globalZIndex` to float it above everything.
-- **Elliptical `borderRadius`.** The string form takes the CSS slash:
-  `"50% / 25%"`, `"40px 10px / 10px 40px"`, horizontal radii before it and
-  vertical after. With a slash a percentage is of the node's width or
-  height, so `"50% / 50%"` is an ellipse; without one, corners are circular
-  exactly as before (`"50%"` stays a pill). Backgrounds, borders,
-  gradients, shadows, outlines, backdrop filters, images and pointer
-  hit-testing follow the ellipse, and `transition: { borderRadius }` eases
-  every radius. Built on Bevy 0.20's `CornerRadius`.
+  camera: it takes no space, and its ancestors' scrolling, clipping,
+  transforms and composited layers don't reach it.
+- **Elliptical `borderRadius`.** The CSS slash form: `"50% / 25%"`,
+  `"40px 10px / 10px 40px"`. Painting, hit-testing and
+  `transition: { borderRadius }` follow the ellipse.
+- **Inline images in text.** An `<image>` inside a `<text>` or a span flows
+  with the glyphs, sized in px, `em` or `rem`.
+- **`fontFamily` fallback lists.** `"Space Grotesk, Inter"` is tried per
+  glyph in order. The CSS generic keywords (`sans-serif`, `monospace`, …)
+  map to Bevy's generic families (needs its `system_font_discovery`
+  feature).
 - **Safe alignment keywords.** `"safeCenter"`, `"safeStart"`, `"safeEnd"`,
-  `"safeFlexStart"` and `"safeFlexEnd"` on `justifyContent`, `alignItems`,
-  `alignSelf` and `alignContent` (the first three on `justifyItems` and
-  `justifySelf`): aligned like the plain keyword while the content fits, at
-  the start once it would overflow, so a centered row that outgrows its
-  scroll container keeps its beginning reachable.
-- **Gradient `colorSpace: "okhsl"` and `"okhslLong"`.** Hue interpolation
-  with even perceived brightness, the short or the long way around the hue
-  circle (Bevy 0.20's `Okhsla`).
-- **`fontFamily` fallback lists.** A comma-separated list of registered
-  names (`"Space Grotesk, Inter"`) is tried per glyph in order, so a symbol
-  the first font lacks comes from the next; the default font always closes
-  a list. The CSS generic keywords (`sans-serif`, `monospace`, `system-ui`,
-  …) map to Bevy's generic families, which need its `system_font_discovery`
-  feature. A single name behaves as before.
-- **Devtools paint flashing.** The panel's new **paint** toggle flashes
-  every node Bevy re-extracts for rendering, like a browser's paint
-  flashing: a green box that fades out. It shows what a state change, a
-  hover or an animation really redraws, and that a screen at rest redraws
-  nothing.
+  `"safeFlexStart"` and `"safeFlexEnd"`: aligned like the plain keyword
+  while the content fits, at the start once it overflows.
+- **Gradient `colorSpace: "okhsl"` and `"okhslLong"`.**
+- **`onPointerHover`.** Fires on each frame the pointer moved over the
+  element, a button held or not. `onPointerMove` stays drag-only.
+- **Modifier keys on pointer and wheel events:** `shiftKey`, `ctrlKey`,
+  `altKey`, `metaKey`.
+- **`<surface>`.** Composited layers (`opacity`, `filter`, `backdropFilter`,
+  `morphFilter`, `transform3d`, `cache`) work inside a surface. The wheel
+  reaches its scroll containers and `onWheel`. `SurfaceSpec::scale_factor`
+  renders it at a DPI scale. The `SurfacePointerRay` resource points at
+  surface UI with your own world-space ray (a crosshair, a gamepad
+  reticle).
+- **Devtools paint flashing.** The panel's **paint** toggle flashes every
+  node Bevy re-extracts for rendering.
+- **Examples.** Three showcase apps: `civilization` (a 4X strategy HUD over
+  a hex map), `cyberpunk` (a game's front end) and `coldwake` (an in-world,
+  diegetic interface).
 
 ### Changed
 
-- **Bevy 0.20** (breaking). bevy-react now builds against Bevy 0.20, which
-  needs Rust 1.97.1 or newer. Apps on Bevy 0.19 stay on bevy-react 0.7.
-- **Shaders are WESL** (breaking). Bevy 0.20 composes shaders with WESL
-  only; a `.wgsl` file reaches the GPU as written, so its `#import` lines no
-  longer compile. A custom filter or morph shader must be a `.wesl` file
-  that imports the prelude with an `import` line:
-  `import bevy_react::filter::{FullscreenVertexOutput, sample_source, uniforms};`
-  in place of `#import bevy_react::filter::{…}`. Rename the files, update
-  each `shader = "…"` path, and turn `#ifdef` blocks into `@if(…)`. The
-  prelude's module path and functions are unchanged, and a `shader` path
-  that still ends in `.wgsl` is a build error. Your app's own material
-  shaders need the same port (Bevy's change), for example
-  `@group(constants::MATERIAL_BIND_GROUP)` in place of
-  `@group(#{MATERIAL_BIND_GROUP})`.
+- **Bevy 0.20** (breaking). Needs Rust 1.97.1 or newer. Apps on Bevy 0.19
+  stay on bevy-react 0.7.
+- **Shaders are WESL** (breaking). A custom filter or morph shader must be a
+  `.wesl` file that imports the prelude with
+  `import bevy_react::filter::{…};` in place of `#import`, with `#ifdef`
+  blocks turned into `@if(…)`. A `shader` path ending in `.wgsl` is a build
+  error. Your app's own material shaders need the same port.
 - **UI roots are sized in viewport units** (breaking). The window tree,
-  `<root>` and `<surface>` default to `width: "100vw"`, `height: "100vh"`
-  instead of `"100%"`. Bevy 0.20 grows a UI root's row to fit its content,
-  so a root sized `"100%"` outgrows the window (or the surface's texture)
-  once its content is taller, and nothing inside it scrolls. If you set
-  `"100%"` on a `<root>` or `<surface>` yourself, switch to viewport units.
-- **`<button>` carries `bevy::ui_widgets::Button`** (breaking for Rust code
-  that queries buttons). `bevy_ui`'s old `Button` component is private in
-  Bevy 0.20, so a `<button>` entity now has the headless widget `Button`
-  (its hover and press state is a `ReactInteraction`, see below). Its
-  accessible name still comes from the text under it, now with nested
-  wrappers included and refreshed when its direct children change.
+  `<root>` and `<surface>` default to `100vw` × `100vh` instead of `100%`:
+  Bevy 0.20 grows a `100%` root to fit its content, and nothing inside it
+  scrolls. If you set `"100%"` on a `<root>` or `<surface>` yourself,
+  switch to viewport units.
 - **Hover and press come from Bevy picking** (breaking for Rust code that
-  queries React entities). They no longer carry `bevy::ui::Interaction`
-  (deprecated in Bevy 0.20) or `RelativeCursorPosition`: read
-  `bevy_react::ReactInteraction` (`None`, `Hovered`, `Pressed`) instead. It
-  is kept for every pointer — the mouse, each touch, 3D-transformed elements
-  and `<surface>` UI — so they all behave alike now:
-  - In `<surface>` UI, hover follows `focusPolicy` as on screen: a blocking
-    child (a `<button>`) un-hovers its ancestors, a press on it no longer
-    presses or drags an ancestor with pointer handlers, and of overlapping
-    elements with pointer handlers only the topmost gets the drag.
-  - A scrollbar keeps hover and presses from what lies beneath it.
-  - Drags run per pointer: every finger drags its own element (one drag ran
-    at a time).
-  - `onPointerHover` goes to the elements under the moving pointer. A
-    pressed element stops receiving it once the pointer has left it
-    (`onPointerMove` still follows the drag).
-  - A press stays pressed until release, also while the cursor is outside
-    the window.
-  - A mesh or other picking target drawn by a higher-order camera keeps
-    hover from the UI beneath it, as it already kept clicks.
-  - An app that turns off Bevy picking's hover (`PickingSettings`), or sets
-    `UiPickingSettings::require_markers` without marking the UI camera,
-    loses hover and drags, not only clicks.
-  - Devtools pick mode selects a `<text>`, not one run inside it.
-- **Custom node-less elements get pointer events from picking alone**
-  (breaking for the extension contract). An element hit by a picking backend
-  is hovered, entered, left and dragged with no system of its own; the
-  `Interaction` sync in `InteractionSyncSet` is no longer needed (the set is
-  for filling `EventLocalPos`). `VirtualButtons::leave` takes the release
-  location and the parking location separately.
-- **`<editableText>` follows Bevy 0.20's text input.** The entity carries
-  `bevy::ui_widgets::TextInput` next to `EditableText`. Clicking anywhere
-  else now blurs the field, and so does Escape.
-- **Focus events and styles follow Bevy's `InputFocus` directly.** The
-  `onBlur` of the element losing the focus fires before the `onFocus` of the
-  one gaining it, each at most once per frame, and `focusStyle` applies in
-  the frame the focus moves (it was a frame late). An element that unmounts
-  while focused gives the focus up at once. `TabIndex` on a React entity is
-  now written by bevy-react (set `tabIndex`). Breaking for Rust code:
-  `elements::editable::{FOCUS, BLUR, on_focus_gained, on_focus_lost}` are
-  gone, `FocusState` is `{ focused, visible }`, `Common::ALL` includes the
-  new `Common::FOCUS`, and a custom element may no longer declare an
-  attribute named `tabIndex` or an event named `focus` or `blur`.
+  queries React entities). Read `bevy_react::ReactInteraction` in place of
+  `bevy::ui::Interaction` and `RelativeCursorPosition`. The mouse, each
+  touch, `<surface>` UI and 3D-transformed elements now behave alike: every
+  finger drags its own element, hover in a surface follows `focusPolicy`,
+  a scrollbar blocks what lies beneath it, and a press stays pressed until
+  release.
+- **`<button>` carries `bevy::ui_widgets::Button`, `<editableText>`
+  `bevy::ui_widgets::TextInput`** (breaking for Rust code that queries
+  them). Clicking elsewhere or pressing Escape now blurs a text field.
+- **Focus follows Bevy's `InputFocus` directly.** `onBlur` fires before the
+  next element's `onFocus`, and `focusStyle` applies in the frame the focus
+  moves (it was a frame late).
 - **`overflow` clips follow transforms and layout transitions.** A rotated
-  or scaled clipping node clips its children along its transformed box (Bevy
-  0.20), composited layers included. With `transition: { layout }` the clip
-  eases with the box, so a clipping wrapper can reveal auto-height content.
+  or scaled clipping node clips along its transformed box, and with
+  `transition: { layout }` the clip eases with the box.
 - **`letterSpacing: "…em"` is a multiple of the text's font size**, as in
-  CSS. It was a multiple of `RemSize`; write `"…rem"` for that.
-- **An unset `fontSize` is `1rem`** (Bevy 0.20's default): 20px as before,
-  but it now follows `RemSize`.
-- **`Length` gained `Em` and `Rem` variants, `FontSize` gained `Em`**
-  (`bevy_react::protocol::units`; breaking for Rust code that matches them
-  exhaustively, such as a hand-written filter `pack`).
-- **`positionType`'s value is `style::props::PositionMode`** (breaking for
-  a Rust writer that reads `POSITION_TYPE`). It was Bevy's `PositionType`,
-  which has no `Fixed`; `Node::position_type` is `Absolute` for a fixed
-  node. `FixedNode` on a React entity is written by bevy-react.
-- **`borderRadius`'s value is `protocol::visual::BorderRadiusSpec`**
-  (breaking for a Rust writer that reads `BORDER_RADIUS`). It was a `Rect`;
-  `.radii()` gives the `CornerRadii` (`x`, and `y` for elliptical corners),
-  which is also the type of `TransitionInput::border_radius`. A `Rect`
-  converts to either with `.into()`.
-- **`add_react_handler` and `add_react_request_handler` take one generic
-  parameter less** (breaking). Bevy's observers dropped their `Bundle`
-  parameter, so the signature is `<E, M, S>` instead of `<E, B, M, S>`.
-  Calls that leave the generics to inference are unaffected.
+  CSS (it was `RemSize`; write `"…rem"` for that). An unset `fontSize` is
+  `1rem`.
+- **Performance.** Bevy 0.20's UI renderer does more work per frame: the
+  table-ops benchmark runs 12–17% slower than on 0.7.0. Members of a clean
+  cached layer no longer enter Bevy's UI queue.
+- **Breaking for Rust extensions:**
+  - `add_react_handler` and `add_react_request_handler` take one generic
+    parameter less (`<E, M, S>`); calls that infer them are unaffected.
+  - `Length` gained `Em` and `Rem`, `FontSize` gained `Em`.
+  - `POSITION_TYPE`'s value is `style::props::PositionMode`,
+    `BORDER_RADIUS`'s is `protocol::visual::BorderRadiusSpec` (`.radii()`
+    gives the `CornerRadii`).
+  - `elements::editable::{FOCUS, BLUR, on_focus_gained, on_focus_lost}` are
+    gone, `FocusState` is `{ focused, visible }`, `Common::ALL` includes
+    `Common::FOCUS`, and a custom element may not declare a `tabIndex`
+    attribute or a `focus`/`blur` event.
+  - A node-less custom element gets its pointer events from picking alone,
+    with no `Interaction` sync system. `VirtualButtons::leave` takes the
+    release and the parking location separately.
+  - `TabIndex` and `FixedNode` on a React entity are written by bevy-react.
 
 ### Fixed
 
-- **A live `<surface>` idles once its meshes leave view, also in a scene
-  near the origin.** A surface's own UI camera counted the scene's meshes as
-  visible (its frustum is the texture's size in world units), so every
-  surface with a `SurfacePointer` mesh inside that box rendered every frame
-  whether a real camera saw the mesh or not. Surface cameras are now on no
-  render layer.
-- A node with `width: "100%"` and `maxWidth` (or a content-sized one with
-  `maxWidth`, in a row) reserved the height its wrapped text or `flexWrap`
-  children take at the unclamped width, so the content spilled over what
-  followed. Bevy 0.20 measures it at the clamped width.
-- A composited layer captured while its subtree was hidden stayed empty once
-  shown: a `morphFilter` or `opacity` group inside an `<anchor>` (which
-  hides until its first layout) drew nothing until something else
-  re-rendered it. Showing or hiding a layer's member now re-renders it.
-- A click on screen-space UI also clicked the `<surface>` mesh behind it.
-  Interactive on-screen UI under the cursor now covers in-world surfaces; a
-  press already held on a surface keeps its target.
-- The wheel could scroll or fire `onWheel` on `<surface>` UI whose
-  texture position happened to lie under the window cursor.
-- `<editableText value="…">` mounted empty: an element's spawn hook now sees
-  the create's act-now attributes, as documented.
-- UI under a virtual pointer (a `<surface>` subtree) lost its `focusStyle`
-  on the next hover or press change: releasing the pointer over a focused
-  `<editableText>` dropped its focus ring.
-- A hot-reloaded image kept its old smaller mip levels under
-  `imageRendering: "trilinear"`: drawn small, it still showed the previous
-  picture.
-- The `cursor` style could come from a node the pointer cannot reach: one
-  scrolled out of its container, a hidden one, or one beneath a
-  `focusPolicy: "block"` node. The cursor now follows the same hover as
-  `hoverStyle` and clicks.
-- Releasing a drag over an ancestor with `onClick` clicked it: a slider
-  dragged and released on the card around it clicked the card. While an
-  element is dragged, the click can't go to what lies beneath it. A
-  gesture's `onPointerUp` now always comes before its `onClick` (the order
-  used to vary).
-- A touch neither hovered nor pressed its element while the mouse cursor
-  rested elsewhere in the window, and a second finger pressed nothing.
-- Pointer events inside a `<surface>` with a `scale_factor` other than 1
-  reported wrong `x`/`y`.
-- A drag that left a 3D-transformed element froze `x`/`y` at the element's
-  edge.
+- `<anchor>` overlays trailed a moving camera or entity by one frame. They
+  are now positioned in `PostUpdate`: a system that moves the camera or an
+  anchored entity there must run
+  `.before(bevy_react::anchor::position_anchored_nodes)`.
+- Releasing a drag over an ancestor with `onClick` clicked it (a slider
+  released over the card around it). `onPointerUp` now always comes before
+  `onClick`.
+- A node with `maxWidth` reserved the height of its content wrapped at the
+  unclamped width.
+- A composited layer captured while hidden (inside an `<anchor>` before its
+  first layout) stayed empty once shown.
+- A live `<surface>` kept rendering with its meshes out of view.
+- A click on screen-space UI also clicked the `<surface>` mesh behind it,
+  and the wheel could reach surface UI lying under the window cursor.
+- Surface UI lost its `focusStyle` on the next hover or press change.
+- A touch neither hovered nor pressed its element while the mouse rested
+  elsewhere in the window, and a second finger pressed nothing.
 - `onPointerDown`, `onPointerMove` and `onPointerUp` never fired on `<svg>`
   shapes.
-- The glyphs of a `<text>` stopped the pointer whatever its `focusPolicy`:
-  a pass-through label drawn over another element kept that element's
-  clicks and `cursor` wherever its letters were. A hit on a text run now
-  counts as a hit on its `<text>` block.
-- A `ref` object on an element (`useRef`) no longer crosses to Bevy: under
-  React 19 `ref` is an ordinary prop, so it was serialized into the element's
-  create op and reported as an unknown attribute.
-- A dev bundle on a Rust build without the `devtools` feature (or a release
-  build) logged two `no handler registered` errors at startup for the
-  devtools tables.
-- `<anchor>` overlays trailed a moving camera or entity by one frame: they
-  were projected in `Update`, from `GlobalTransform`s Bevy only refreshes in
-  `PostUpdate`. They are now positioned in `PostUpdate`, just before UI
-  layout, from that frame's `Transform`s. A system that moves the camera or
-  an anchored entity in `PostUpdate` must run
-  `.before(bevy_react::anchor::position_anchored_nodes)`.
+- The glyphs of a `<text>` stopped the pointer whatever its `focusPolicy`.
+- The `cursor` style could come from a node the pointer cannot reach
+  (scrolled out, hidden, or beneath a `focusPolicy: "block"` node).
+- A drag that left a 3D-transformed element froze `x`/`y` at its edge.
+- `<editableText value="…">` mounted empty.
+- A hot-reloaded image kept its old mip levels under
+  `imageRendering: "trilinear"`.
+- A `ref` object (`useRef`) was serialized into the create op and reported
+  as an unknown attribute.
+- A dev bundle on a build without the `devtools` feature logged two
+  `no handler registered` errors at startup.
 
 ## [0.7.0] - 2026-10-05
 
@@ -610,7 +476,8 @@ No behavior change, but worth knowing when reading or patching the crate:
 
 Last release before this changelog was introduced.
 
-[Unreleased]: https://github.com/tulustul/bevy-react/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/tulustul/bevy-react/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/tulustul/bevy-react/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/tulustul/bevy-react/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tulustul/bevy-react/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/tulustul/bevy-react/compare/v0.5.0...v0.5.1
