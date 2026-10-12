@@ -77,35 +77,40 @@ export function GraphView({
   const ix = useInteraction(state, dispatch, view, setView, rect, {
     openAdd,
     openNodeMenu(id: NodeId, e: PointerEventData) {
-      const c = commands.current!;
       const node = state.doc.nodes[id];
-      const items = [
-        { label: "Duplicate", hint: "Shift D", onSelect: c.duplicate },
-        { label: "Copy", hint: "Ctrl C", onSelect: c.copy },
-        { label: "Delete", hint: "X", onSelect: c.delete },
-        {
-          label: node?.mute ? "Unmute" : "Mute",
-          hint: "M",
-          onSelect: c.mute,
-          separator: true,
-        },
-        {
-          label: node?.collapsed ? "Expand" : "Collapse",
-          hint: "H",
-          onSelect: c.collapse,
-        },
-        {
-          label: "Toggle Preview",
-          onSelect: c.preview,
-          disabled: !c.canPreview(),
-        },
-      ];
+      // Built when the menu renders: the press that opens it may have just
+      // selected the node, and the commands act on the selection of the
+      // render they come from.
+      const items = () => {
+        const c = commands.current!;
+        return [
+          { label: "Duplicate", hint: "Shift D", onSelect: c.duplicate },
+          { label: "Copy", hint: "Ctrl C", onSelect: c.copy },
+          { label: "Delete", hint: "X", onSelect: c.delete },
+          {
+            label: node?.mute ? "Unmute" : "Mute",
+            hint: "M",
+            onSelect: c.mute,
+            separator: true,
+          },
+          {
+            label: node?.collapsed ? "Expand" : "Collapse",
+            hint: "H",
+            onSelect: c.collapse,
+          },
+          {
+            label: "Toggle Preview",
+            onSelect: c.preview,
+            disabled: !c.canPreview(),
+          },
+        ];
+      };
       openPopup({
         x: e.clientX,
         y: e.clientY,
         w: MENU_WIDTH,
-        h: menuHeight(items) + 20,
-        render: (close) => <Menu title="Node" items={items} close={close} />,
+        h: menuHeight(items()) + 20,
+        render: (close) => <Menu title="Node" items={items()} close={close} />,
       });
     },
   });
