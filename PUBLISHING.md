@@ -83,7 +83,7 @@ npm run deploy:demos
 ```
 
 ### 13. Deploy other examples if necessary
-Deploy the
+
 ```sh
 npm run deploy:civilization
 npm run deploy:cyberpunk

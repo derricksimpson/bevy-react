@@ -8,6 +8,7 @@
       "scale": 1.5,
       "settle": 4,
       "record": 12,
+      "inputs": ["0 move 327 849", "0.1 move 1203 47 11.9"],
       "crop": [1314, 1204, 490, 70],
       "width": 800
     },
