@@ -8,15 +8,23 @@
 //! Actions are strings the React app interprets (`debug.act` — see
 //! `useDebug` in `ui/src/hooks.ts`): `go <screen>` jumps straight to a
 //! screen, `tab <name>`, `pick <value>`… (the verbs are listed in `App.tsx`).
-//! The clock starts when React's first commit lands, so a slow isolate boot
-//! never swallows an early step.
+//! Two are Bevy's: `key <name>` presses and releases a key as the window
+//! would report it (`key F` types an "f"), `focus` puts the keyboard focus
+//! in the text field on screen. The clock starts when React's first commit
+//! lands, so a slow isolate boot never swallows an early step.
 
 use std::path::PathBuf;
 
-use bevy::camera::{ImageRenderTarget, RenderTarget};
+use bevy::camera::{ImageRenderTarget, RenderTarget, ShadowLodOrigin};
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
+use bevy::text::EditableText;
+use bevy::time::TimeSystems;
+use bevy::window::PrimaryWindow;
 use bevy_react::{ReactAppExt, ReactEvents, ReactNode, react_event};
 
 use crate::UI_HEIGHT;
@@ -108,7 +116,9 @@ pub fn install(app: &mut App, cfg: ShootConfig) {
         captured: false,
     })
     .add_systems(PostStartup, redirect_camera)
-    .add_systems(Update, drive);
+    // In `First`, where the window's own key events land: a scripted key
+    // reaches the focused field and React in the frame it is pressed.
+    .add_systems(First, drive.after(TimeSystems));
 }
 
 /// Point the main camera (datascape + UI) at an offscreen image, scaled so
@@ -130,17 +140,40 @@ fn redirect_camera(
         handle,
         scale_factor: h as f32 / UI_HEIGHT,
     };
+    // No camera renders to the window now: Bevy wants to be told whose view
+    // sets the lights' shadow LODs.
     commands
         .entity(*camera)
-        .insert(RenderTarget::Image(target.clone()));
+        .insert((RenderTarget::Image(target.clone()), ShadowLodOrigin));
     shoot.target = Some(target);
 }
 
+/// The keys a `key <name>` step can press.
+fn key(name: &str) -> (KeyCode, Key) {
+    match name {
+        "Enter" => (KeyCode::Enter, Key::Enter),
+        "Escape" => (KeyCode::Escape, Key::Escape),
+        "Space" => (KeyCode::Space, Key::Space),
+        "ArrowUp" => (KeyCode::ArrowUp, Key::ArrowUp),
+        "ArrowDown" => (KeyCode::ArrowDown, Key::ArrowDown),
+        "ArrowLeft" => (KeyCode::ArrowLeft, Key::ArrowLeft),
+        "ArrowRight" => (KeyCode::ArrowRight, Key::ArrowRight),
+        // The one letter that is also a shortcut (START, NEXT).
+        "F" => (KeyCode::KeyF, Key::Character("f".into())),
+        _ => panic!("--do \"<secs> key <name>\": no key {name:?}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn drive(
     time: Res<Time>,
     mut shoot: ResMut<Shoot>,
     mounted: Query<(), With<ReactNode>>,
     events: ReactEvents,
+    window: Single<Entity, With<PrimaryWindow>>,
+    fields: Query<Entity, With<EditableText>>,
+    mut focus: ResMut<InputFocus>,
+    mut keys: MessageWriter<KeyboardInput>,
     mut commands: Commands,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -168,7 +201,28 @@ fn drive(
             break;
         }
         info!("shoot: {action} at {t:.2}s");
-        events.send(&Act { action });
+        if let Some(name) = action.strip_prefix("key ") {
+            let (key_code, logical_key) = key(name);
+            let text = match &logical_key {
+                Key::Character(c) => Some(c.clone()),
+                _ => None,
+            };
+            for state in [ButtonState::Pressed, ButtonState::Released] {
+                keys.write(KeyboardInput {
+                    key_code,
+                    logical_key: logical_key.clone(),
+                    state,
+                    text: text.clone(),
+                    repeat: false,
+                    window: *window,
+                });
+            }
+        } else if action == "focus" {
+            let field = fields.iter().next().expect("focus: no text field");
+            focus.set(field, FocusCause::Navigated);
+        } else {
+            events.send(&Act { action });
+        }
         shoot.next_step += 1;
     }
     if t < shoot.cfg.settle_secs {

@@ -5,19 +5,19 @@
 // average so distance never shimmers. Unlit: glyphs are emissive above 1.0
 // and bloom, the panel fades into the fog color with distance.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
-}
+};
 
 // Glyph color (linear, HDR: rgb > 1 blooms).
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> ink: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> ink: vec4<f32>;
 // Panel color (linear).
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> paper: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> paper: vec4<f32>;
 // x: characters across, y: lines down, z: scroll (lines per second), w: seed.
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var<uniform> grid: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<uniform> grid: vec4<f32>;
 // rgb: fog color (linear), a: fog distance (fully fogged).
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var<uniform> fog: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<uniform> fog: vec4<f32>;
 
 // Characters per block (then a gutter), dots per character cell.
 const BLOCK: u32 = 16u;

@@ -14,7 +14,7 @@
 // the max alpha, which keeps every channel <= alpha. The tears move content
 // into the capture's outset ring (`outset` on the params struct).
 
-#import bevy_react::filter::{FullscreenVertexOutput, sample_source_lod, uniforms}
+import bevy_react::filter::{FullscreenVertexOutput, sample_source_lod, uniforms};
 
 fn pcg(v: u32) -> u32 {
     let state = v * 747796405u + 2891336453u;

@@ -8,7 +8,7 @@
 //
 // PREMULTIPLY: a color op — unpremultiply, curve, premultiply.
 
-#import bevy_react::filter::{FullscreenVertexOutput, premultiply, sample_source, uniforms, unpremultiply}
+import bevy_react::filter::{FullscreenVertexOutput, premultiply, sample_source, uniforms, unpremultiply};
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {

@@ -9,7 +9,7 @@
 // PREMULTIPLY: white (a, a, a, a) and black (0, 0, 0, a) are both valid
 // premultiplied colors.
 
-#import bevy_react::filter::{FullscreenVertexOutput, uniforms}
+import bevy_react::filter::{FullscreenVertexOutput, uniforms};
 
 fn pcg(v: u32) -> u32 {
     let state = v * 747796405u + 2891336453u;

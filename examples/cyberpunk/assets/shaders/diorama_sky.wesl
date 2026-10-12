@@ -5,19 +5,19 @@
 // the zenith, a sun — or a fire's glow — with its halo, a band of cloud lit
 // from below, and stars.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
-}
+};
 
 // rgb, a = how many stars
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> zenith: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> zenith: vec4<f32>;
 // rgb, a = how much cloud
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> horizon: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var<uniform> horizon: vec4<f32>;
 // rgb (HDR), a = the disc's radius in radians (0: a glow without a disc)
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var<uniform> sun: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<uniform> sun: vec4<f32>;
 // toward the sun, w = the halo's width in radians
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var<uniform> sun_dir: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<uniform> sun_dir: vec4<f32>;
 
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);

@@ -46,9 +46,9 @@ the result; see [Web builds](../../docs/guide/tooling/web.md)).
 
 | On screen                         | How                                                                                                                                                                                                                                                                                        |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The world behind the menus        | The datascape: panels of dot-matrix data scrolling in a WGSL material, neon bars and drifting dust, filmed through bloom, depth of field (a large virtual sensor, so the wide shot still focuses shallow), chromatic aberration and a vignette. It is also the UI camera (`datascape.rs`). |
+| The world behind the menus        | The datascape: panels of dot-matrix data scrolling in a WESL material, neon bars and drifting dust, filmed through bloom, depth of field (a large virtual sensor, so the wide shot still focuses shallow), chromatic aberration and a vignette. It is also the UI camera (`datascape.rs`). |
 | The cut corners on every plate    | No clip paths: a linear gradient whose line starts at the corner is transparent for the cut and solid after it, and the same gradient on the border stops both sides at the cut (`chamfer` in `ui/src/theme.ts`).                                                                          |
-| The wordmark breaking up          | `glitch`, a custom WGSL filter over the wordmark's pixels: torn slices and split channels, striking in random bursts that the shader times itself, so React renders once (`filters.rs`, `assets/shaders/glitch.wgsl`). On the title it lies on a `transform3d` plane.                      |
+| The wordmark breaking up          | `glitch`, a custom WESL filter over the wordmark's pixels: torn slices and split channels, striking in random bursts that the shader times itself, so React renders once (`filters.rs`, `assets/shaders/glitch.wesl`). On the title it lies on a `transform3d` plane.                      |
 | Every screen change               | `glitchSwap`, a custom morph filter: bands of the old screen flip to the new one at staggered moments. The morph is armed only while a change is in flight (`App.tsx`).                                                                                                                    |
 | Film grain                        | `grain`, a time-driven filter on an empty full-screen node under the menus: its pass writes fresh noise every frame over the 3D world.                                                                                                                                                     |
 | The difficulty and lifepath cards | Four procedural dioramas, each on its own render layer, filmed by its own camera into a `<portal>`: the burning street (its fire follows `bevy.dioramas.difficulty`), the badlands, a neon alley, the Tenkai lobby (`dioramas/`).                                                          |
@@ -93,7 +93,9 @@ cargo run -p cyberpunk -- --shoot out.png 3 --size 2560x1440 \
 
 `go <screen>` jumps to a screen and `play <lifepath>` straight into the
 game; each screen adds its own verbs (`step`, `tab`, `set`, `hover`…, see
-`useDebug` in `ui/src`). Run the binary directly with
+`useDebug` in `ui/src`). `key <name>` presses a key (`Enter`, `Escape`,
+`Space`, the arrows, `F`) and `focus` puts the keyboard focus in the text
+field on screen. Run the binary directly with
 `BEVY_ASSET_ROOT=examples/cyberpunk`, or assets resolve against `target/`.
 
 ## Credits

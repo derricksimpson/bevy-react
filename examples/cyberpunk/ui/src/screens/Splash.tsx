@@ -116,22 +116,19 @@ export function Splash({ onDone }: { onDone: () => void }) {
         </node>
       </node>
       <node style={{ ...center, opacity: { animated: notice } }}>
-        {/* The width sits on a wrapper: a `<text>` with a width of its own,
-            centered on the cross axis, measures zero tall. */}
-        <node style={{ width: 1280 }}>
-          <text
-            style={{
-              fontSize: 25,
-              color: "#c9463f",
-              lineHeight: 1.45,
-              textAlign: "center",
-            }}
-          >
-            {
-              "CYBERPUNK 2091 is a fan homage to the menus of Cyberpunk 2077, built with bevy-react. It is not affiliated with or endorsed by CD PROJEKT RED. Sable City, Tenkai and everyone in them are made up. Bevy, React, wgpu, V8, taffy, deno_core and cosmic-text are the work of their authors, used under their open-source licenses."
-            }
-          </text>
-        </node>
+        <text
+          style={{
+            width: 1280,
+            fontSize: 25,
+            color: "#c9463f",
+            lineHeight: 1.45,
+            textAlign: "center",
+          }}
+        >
+          {
+            "CYBERPUNK 2091 is a fan homage to the menus of Cyberpunk 2077, built with bevy-react. It is not affiliated with or endorsed by CD PROJEKT RED. Sable City, Tenkai and everyone in them are made up. Bevy, React, wgpu, V8, taffy, deno_core and cosmic-text are the work of their authors, used under their open-source licenses."
+          }
+        </text>
       </node>
     </button>
   );

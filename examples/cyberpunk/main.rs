@@ -13,7 +13,7 @@
 //!   * the graphics, video, gamma and sound settings really change the
 //!     camera, the window and the (synthesized) audio (`settings.rs`,
 //!     `sound.rs`);
-//!   * the glitches are WGSL over React's pixels: a time-driven `glitch`
+//!   * the glitches are WESL over React's pixels: a time-driven `glitch`
 //!     filter and the `glitchSwap` morph every screen change runs through
 //!     (`filters.rs`).
 //!

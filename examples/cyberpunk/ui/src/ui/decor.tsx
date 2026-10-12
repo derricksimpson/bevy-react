@@ -196,15 +196,18 @@ export function LegalFooter() {
       >
         {"Sable City\nResident\nDatabase"}
       </text>
-      {/* The width sits on a wrapper: a `<text>` with its own width in an
-          `alignItems: "center"` row is measured one word a line (TODO). */}
-      <node style={{ width: 520 }}>
-        <text style={{ fontSize: 10.5, color: C.redDim, lineHeight: 1.25 }}>
-          {
-            "The data you enter on a CRD terminal will only be used for the purpose you entered it. Your personal data is protected under the 2088 Privacy Act and the Sable City Charter, except where it is not. In accordance with Gridwatch Memo 4410-B, terminals may retain biometric samples for the duration of your session and the rest of your life."
-          }
-        </text>
-      </node>
+      <text
+        style={{
+          width: 520,
+          fontSize: 10.5,
+          color: C.redDim,
+          lineHeight: 1.25,
+        }}
+      >
+        {
+          "The data you enter on a CRD terminal will only be used for the purpose you entered it. Your personal data is protected under the 2088 Privacy Act and the Sable City Charter, except where it is not. In accordance with Gridwatch Memo 4410-B, terminals may retain biometric samples for the duration of your session and the rest of your life."
+        }
+      </text>
     </node>
   );
 }

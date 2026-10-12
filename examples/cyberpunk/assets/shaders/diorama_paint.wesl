@@ -26,27 +26,26 @@
 //              the glossy paint of a car catching the city around it, so a
 //              dark body still draws its outline. b = strength.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     mesh_view_bindings::globals,
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
-}
+};
 
-#ifdef PREPASS_PIPELINE
-#import bevy_pbr::{
-    prepass_io::{VertexOutput, FragmentOutput},
-    pbr_deferred_functions::deferred_output,
-}
-#else
-#import bevy_pbr::{
+@if(PREPASS_PIPELINE)
+import bevy_pbr::{
+    prepass::io::{VertexOutput, FragmentOutput},
+    deferred::functions::deferred_output,
+};
+@else
+import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
-}
-#endif
+};
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> mode: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var<uniform> spec: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(102) var<uniform> glow: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> mode: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> spec: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> glow: vec4<f32>;
 
 /// What a mode paints: light, roughness (< 0 keeps the material's) and a
 /// color mixed over the base color by its alpha.
@@ -268,13 +267,16 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard(
+        pbr_input.material.flags,
+        pbr_input.material.alpha_cutoff,
+        pbr_input.material.base_color,
+    );
 
     let pos = in.world_position.xyz;
     var uv = vec2<f32>(0.5);
-#ifdef VERTEX_UVS_A
+@if(VERTEX_UVS_A)
     uv = in.uv;
-#endif
     var d = Detail(vec3<f32>(0.0), -1.0, vec4<f32>(0.0));
     switch u32(mode.x + 0.5) {
         case 0u: { d = windows(pos, pbr_input.world_normal); }
@@ -291,12 +293,14 @@ fn fragment(
     }
     pbr_input.material.emissive = vec4<f32>(pbr_input.material.emissive.rgb + d.emit, pbr_input.material.emissive.a);
 
-#ifdef PREPASS_PIPELINE
+    // `@if` scopes one statement: a block would scope `out` too.
+@if(PREPASS_PIPELINE)
     let out = deferred_output(in, pbr_input);
-#else
+@if(!PREPASS_PIPELINE)
     var out: FragmentOutput;
+@if(!PREPASS_PIPELINE)
     out.color = apply_pbr_lighting(pbr_input);
+@if(!PREPASS_PIPELINE)
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-#endif
     return out;
 }

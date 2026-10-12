@@ -35,8 +35,9 @@ export function IdCard({
   onEditing: (editing: boolean) => void;
   style?: BevyStyle;
 }) {
-  // Focus only leaves a text field for another focusable, so finishing an
-  // edit remounts the field (a despawned field drops the focus).
+  // Escape and a click elsewhere blur the field themselves. Enter doesn't
+  // (and React can't blur one), so it remounts the field: a despawned field
+  // drops the focus.
   const [field, setField] = useState(0);
   const [editing, setEditing] = useState(false);
   const edit = (on: boolean) => {
@@ -44,7 +45,7 @@ export function IdCard({
     onEditing(on);
   };
   useKeys((e) => {
-    if (editing && (e.key === "Enter" || e.key === "Escape")) {
+    if (editing && e.key === "Enter") {
       setField(field + 1);
       edit(false);
     }

@@ -2,7 +2,7 @@
 //! over a lit `StandardMaterial` — window grids, neon glyph signs, wet
 //! asphalt, marble, the Tenkai mark, a car's sheen) and the particles (fire,
 //! smoke, embers, rain, dust: each emitter one mesh of quads animated in its
-//! vertex shader, one draw call). Shaders: `assets/shaders/diorama_*.wgsl`.
+//! vertex shader, one draw call). Shaders: `assets/shaders/diorama_*.wesl`.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
@@ -40,7 +40,7 @@ pub struct SkyMaterial {
 
 impl Material for SkyMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/diorama_sky.wgsl".into()
+        "shaders/diorama_sky.wesl".into()
     }
 
     fn enable_prepass() -> bool {
@@ -66,7 +66,7 @@ impl Material for SkyMaterial {
 pub type PaintMaterial = ExtendedMaterial<StandardMaterial, Paint>;
 
 /// Procedural detail over a lit surface; what `spec` means depends on the
-/// mode (see `diorama_paint.wgsl`).
+/// mode (see `diorama_paint.wesl`).
 #[derive(Asset, AsBindGroup, Reflect, Clone, Default)]
 pub struct Paint {
     /// (mode, seed, a, b).
@@ -81,7 +81,7 @@ pub struct Paint {
 
 impl MaterialExtension for Paint {
     fn fragment_shader() -> ShaderRef {
-        "shaders/diorama_paint.wgsl".into()
+        "shaders/diorama_paint.wesl".into()
     }
 }
 
@@ -96,7 +96,7 @@ pub enum Pattern {
     Sheen = 5,
 }
 
-/// One particle emitter (see `diorama_particles.wgsl`).
+/// One particle emitter (see `diorama_particles.wesl`).
 #[derive(Asset, AsBindGroup, Reflect, Clone)]
 pub struct ParticleMaterial {
     /// (kind, amount 0..1, size, speed).
@@ -116,11 +116,11 @@ pub struct ParticleMaterial {
 
 impl Material for ParticleMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/diorama_particles.wgsl".into()
+        "shaders/diorama_particles.wesl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/diorama_particles.wgsl".into()
+        "shaders/diorama_particles.wesl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

@@ -11,13 +11,13 @@
 // (a shifted lookup is linear resampling); the flash raises rgb within alpha.
 // Endpoint guards return the exact samples — the identity contract.
 
-#import bevy_react::filter::{
+import bevy_react::filter::{
     FullscreenVertexOutput,
     morph_progress,
     morph_sample_from,
     morph_sample_to,
     uniforms,
-}
+};
 
 fn pcg(v: u32) -> u32 {
     let state = v * 747796405u + 2891336453u;
