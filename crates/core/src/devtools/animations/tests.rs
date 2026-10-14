@@ -410,4 +410,3 @@ fn the_pause_key_pauses_on_the_tab_only() {
         "off the tab the key does nothing"
     );
 }
-

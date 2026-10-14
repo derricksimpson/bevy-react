@@ -130,8 +130,9 @@ function record(entry: Omit<LogEntry, "seq" | "t">): LogEntry | null {
 function opsSummary(batch: Op[]): string {
   const byKind = new Map<string, number>();
   for (const op of batch) byKind.set(op.op, (byKind.get(op.op) ?? 0) + 1);
+  // ASCII only: the panel's mono face (Bevy's Fira Mono subset) has no ×.
   const parts = [...byKind.entries()].map(([k, n]) =>
-    n > 1 ? `${k}×${n}` : k,
+    n > 1 ? `${k}x${n}` : k,
   );
   return `${batch.length} op${batch.length === 1 ? "" : "s"} (${parts.join(", ")})`;
 }
@@ -278,7 +279,7 @@ export const recorder = {
           name: paired?.name,
           requestId: msg.id,
           pairedSeq: paired?.seq,
-          summary: `${paired?.name ?? "?"} #${msg.id} → ${status}`,
+          summary: `${paired?.name ?? "?"} #${msg.id} -> ${status}`,
           detail: msg.result,
           devtools,
         });

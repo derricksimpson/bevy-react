@@ -21,6 +21,7 @@ import {
   subscribeStyleFields,
 } from "./fields";
 import { mirror } from "./mirror";
+import { Icon } from "./Icon";
 import { theme } from "./theme";
 import { useMirrorVersion } from "./TreeView";
 
@@ -201,32 +202,30 @@ function EditRow({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          padding: { left: toggle ? 4 : 16, right: 8, top: 1, bottom: 1 },
+          padding: { left: toggle ? 8 : 16, right: 8, top: 1, bottom: 1 },
           gap: 6,
         }}
       >
         {toggle && (
-          // ASCII checkbox — the default font may lack real glyphs (tofu).
-          <button style={{ flexShrink: 0 }} onClick={toggle.onToggle}>
-            <text
-              style={{
-                color: theme.textDim,
-                fontSize: 11,
-                fontFamily: theme.mono,
-              }}
-            >
-              {toggle.checked ? "[x]" : "[ ]"}
-            </text>
+          <button
+            style={{
+              width: 12,
+              height: 12,
+              flexShrink: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 2,
+              border: 1,
+              borderColor: toggle.checked ? theme.accent : theme.textDim,
+              backgroundColor: toggle.checked ? theme.accent : "transparent",
+            }}
+            hoverStyle={{ borderColor: theme.text }}
+            onClick={toggle.onToggle}
+          >
+            {toggle.checked && <Icon name="check" size={9} color={theme.bg} />}
           </button>
         )}
-        {warning && (
-          // ASCII marker — the default font may lack a real ⚠ glyph (tofu).
-          <text
-            style={{ color: theme.warn, fontSize: 11, fontFamily: theme.mono }}
-          >
-            (!)
-          </text>
-        )}
+        {warning && <Icon name="warning" size={12} color={theme.warn} />}
         <text
           style={{
             color: warning

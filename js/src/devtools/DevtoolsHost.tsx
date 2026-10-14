@@ -9,12 +9,14 @@
 // and floating (drag by the header, resize by the bottom-right corner).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { addEventListener, request } from "../bridge";
+import { addEventListener } from "../bridge";
 import type { PointerEventData } from "../jsx";
 import {
   onPicked,
   onRestore,
   onToggle,
+  requestKeys,
+  requestWindowSize,
   sendDock,
   sendOpen,
   sendOverlay,
@@ -23,9 +25,19 @@ import {
   sendPick,
   sendSelect,
   sendSettings,
+  type DevtoolsKeys,
 } from "./api";
 import { AnimationsPanel } from "./AnimationsPanel";
+import {
+  type DragHandlers,
+  Header,
+  type Mode,
+  type Tab,
+  TabBar,
+  Tooltip,
+} from "./Chrome";
 import { ConsolePanel } from "./ConsolePanel";
+import { Icon, type IconName } from "./Icon";
 import { Inspector } from "./Inspector";
 import { LayersPanel } from "./LayersPanel";
 import { LogPanel } from "./LogPanel";
@@ -33,9 +45,7 @@ import { mirror } from "./mirror";
 import { recorder } from "./recorder";
 import { StatsBar } from "./StatsBar";
 import { theme } from "./theme";
-import { TreeView } from "./TreeView";
-
-type Tab = "nodes" | "layers" | "animations" | "console" | "bridge";
+import { type Reveal, TreeView } from "./TreeView";
 
 function isTab(v: unknown): v is Tab {
   return (
@@ -46,9 +56,6 @@ function isTab(v: unknown): v is Tab {
     v === "bridge"
   );
 }
-
-/** Panel layout: docked to a window edge, or a floating window. */
-type Mode = "left" | "right" | "float";
 
 // Pixel floors (a proportional panel on a tiny window must stay usable)…
 const MIN_WIDTH = 280;
@@ -68,7 +75,7 @@ const clamp = (v: number, min: number, max: number) =>
  *  keeps receiving `pointerMove` window-wide while the button is held (see
  *  `collect_pointer_events`), so thin handles don't lose the drag. The 0-delta
  *  early-out keeps a stationary held pointer free of re-renders. */
-function useDragDelta(onDelta: (dx: number, dy: number) => void) {
+function useDragDelta(onDelta: (dx: number, dy: number) => void): DragHandlers {
   const last = useRef({ x: 0, y: 0 });
   const active = useRef(false);
   return {
@@ -105,9 +112,9 @@ export function DevtoolsHost() {
   // px against `win` at render; MIN_WIDTH/MIN_HEIGHT floor the result.
   const [widthFrac, setWidthFrac] = useState(0.3);
   const [rect, setRect] = useState({ x: 0.08, y: 0.1, w: 0.33, h: 0.7 });
-  // The UI viewport's logical size: the built-in `window.size` request on
-  // install, then the built-in `resize` stream. The fallback only matters
-  // until the first answer lands.
+  // The whole UI viewport's logical size (`devtools.windowSize` — the app's
+  // `window.size` excludes what a pushing panel takes). The fallback only
+  // matters until the first answer lands.
   const [win, setWin] = useState({ w: 1280, h: 800 });
   // The inspector section's height (px); the tree/inspector separator drags it.
   const [split, setSplit] = useState(260);
@@ -119,18 +126,29 @@ export function DevtoolsHost() {
   // Paint flashing: nodes Bevy re-extracts flash on screen. Mirrored to Bevy
   // via devtools.paintFlash.
   const [paintFlash, setPaintFlash] = useState(false);
-  // The last picked node: TreeView expands its ancestors so it's visible.
-  const [reveal, setReveal] = useState<number | null>(null);
+  // The last picked node: TreeView expands its ancestors and scrolls its row
+  // into view. `seq` counts picks, so picking the same node again re-reveals.
+  const [reveal, setReveal] = useState<Reveal | null>(null);
 
   // Bevy owns the open state (toggle key, restored-open); the panel mirrors it.
   useEffect(() => onToggle((e) => setOpen(e.open)), []);
 
-  // The window size feed the proportional layout resolves against.
+  // The configured keys, for the tooltips (none until Bevy answers).
+  const [keys, setKeys] = useState<DevtoolsKeys | null>(null);
   useEffect(() => {
-    type Size = { width: number; height: number };
-    const set = (e: Size) => setWin({ w: e.width, h: e.height });
-    void request("window.size", null).then((e) => set(e as Size));
-    return addEventListener("resize", (e) => set(e as Size));
+    requestKeys().then(setKeys, () => {});
+  }, []);
+
+  // The window size feed the proportional layout resolves against: pulled on
+  // install and again on every app `resize` (a window resize changes both).
+  useEffect(() => {
+    const pull = () =>
+      requestWindowSize().then(
+        (e) => setWin({ w: e.width, h: e.height }),
+        () => {},
+      );
+    void pull();
+    return addEventListener("resize", pull);
   }, []);
 
   // Pick mode clicked a node on screen: Bevy already selected it and exited
@@ -140,7 +158,7 @@ export function DevtoolsHost() {
       onPicked((e) => {
         setPicking(false);
         setSelected(e.id);
-        setReveal(e.id);
+        setReveal((r) => ({ id: e.id, seq: (r?.seq ?? 0) + 1 }));
         setTab("nodes");
       }),
     [],
@@ -362,8 +380,13 @@ export function DevtoolsHost() {
           onOverlay={toggleOverlay}
           onPaintFlash={togglePaintFlash}
           onClose={close}
+          toggleKey={keys?.toggle}
         />
-        <TabBar tab={tab} onTab={setTab} />
+        <TabBar
+          tab={tab}
+          onTab={setTab}
+          width={floating ? rectPx.w : widthPx}
+        />
         <node style={{ flexGrow: 1, minHeight: 0, flexDirection: "column" }}>
           {tab === "nodes" ? (
             <NodesTab
@@ -376,7 +399,7 @@ export function DevtoolsHost() {
           ) : tab === "layers" ? (
             <LayersPanel />
           ) : tab === "animations" ? (
-            <AnimationsPanel />
+            <AnimationsPanel pauseKey={keys?.pause} />
           ) : tab === "console" ? (
             <ConsolePanel />
           ) : (
@@ -399,6 +422,7 @@ export function DevtoolsHost() {
               border: { right: 3, bottom: 3 },
               borderColor: theme.textDim,
               focusPolicy: "block",
+              zIndex: 3,
             }}
             hoverStyle={{
               borderColor: theme.accent,
@@ -415,6 +439,7 @@ export function DevtoolsHost() {
               width: 5,
               ...(mode === "right" ? { left: 0 } : { right: 0 }),
               focusPolicy: "block",
+              zIndex: 3,
             }}
             hoverStyle={{ backgroundColor: theme.accent }}
             {...edgeDrag}
@@ -425,99 +450,33 @@ export function DevtoolsHost() {
   );
 }
 
-function Header({
-  picking,
-  overlay,
-  paintFlash,
-  mode,
-  reserve,
-  drag,
-  onMode,
-  onReserve,
-  onPick,
-  onOverlay,
-  onPaintFlash,
-  onClose,
-}: {
-  picking: boolean;
-  overlay: boolean;
-  paintFlash: boolean;
-  mode: Mode;
-  reserve: boolean;
-  /** Float mode: drag handlers that move the window. Safe to put on the whole
-   *  header — a press on a child button attributes to the button (buttons
-   *  block), so button clicks never start a window drag. */
-  drag?: ReturnType<typeof useDragDelta>;
-  onMode: (m: Mode) => void;
-  onReserve: () => void;
-  onPick: () => void;
-  onOverlay: () => void;
-  onPaintFlash: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <node
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "spaceBetween",
-        padding: { left: 10, right: 6, top: 6, bottom: 6 },
-        backgroundColor: theme.bgAlt,
-        border: { bottom: 1 },
-        borderColor: theme.border,
-        // Belt-and-braces vs the scroll-clip picking bug (see core
-        // `pick_clip`): fixed sections block hits so scrolled-out tree rows
-        // can never be reached through them even if the core filter regresses.
-        focusPolicy: "block",
-      }}
-      {...(drag ?? {})}
-    >
-      <text style={{ color: theme.text, fontSize: 13 }}>devtools</text>
-      <node style={{ flexDirection: "row", gap: 4 }}>
-        {/* ASCII labels only (icon glyphs are tofu in the default font). */}
-        <IconButton
-          label="L"
-          active={mode === "left"}
-          onClick={() => onMode("left")}
-        />
-        <IconButton
-          label="R"
-          active={mode === "right"}
-          onClick={() => onMode("right")}
-        />
-        <IconButton
-          label="F"
-          active={mode === "float"}
-          onClick={() => onMode("float")}
-        />
-        {mode !== "float" && (
-          <IconButton label="push" active={reserve} onClick={onReserve} />
-        )}
-        <IconButton label="pick" active={picking} onClick={onPick} />
-        <IconButton label="overlay" active={overlay} onClick={onOverlay} />
-        <IconButton label="paint" active={paintFlash} onClick={onPaintFlash} />
-        <IconButton label="x" onClick={onClose} />
-      </node>
-    </node>
-  );
-}
-
-/** A small labeled action button (header actions, log controls). ASCII labels
- *  only — the app's default font may lack icon glyphs (tofu boxes). */
+/** A small toolbar action: an icon and its label (log controls, tree
+ *  expand/collapse), with an optional tooltip — its toolbar must stack above
+ *  what the tooltip overlaps (`zIndex`). */
 export function IconButton({
+  icon,
   label,
   active = false,
+  title,
+  hint,
   onClick,
 }: {
+  icon: IconName;
   label: string;
   active?: boolean;
+  title?: string;
+  /** The tooltip's dim aside: the action's key. */
+  hint?: string;
   onClick: () => void;
 }) {
+  const [hover, setHover] = useState(false);
+  const color = active ? theme.accent : theme.textDim;
   return (
     <button
       style={{
         height: 20,
         padding: { horizontal: 6 },
+        gap: 4,
         alignItems: "center",
         justifyContent: "center",
         borderRadius: 4,
@@ -525,80 +484,14 @@ export function IconButton({
       }}
       hoverStyle={{ backgroundColor: theme.bgActive }}
       onClick={onClick}
+      {...(title && {
+        onPointerEnter: () => setHover(true),
+        onPointerLeave: () => setHover(false),
+      })}
     >
-      <text
-        style={{ color: active ? theme.accent : theme.textDim, fontSize: 11 }}
-      >
-        {label}
-      </text>
-    </button>
-  );
-}
-
-function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  return (
-    <node
-      style={{
-        flexDirection: "row",
-        backgroundColor: theme.bgAlt,
-        border: { bottom: 1 },
-        borderColor: theme.border,
-        focusPolicy: "block",
-      }}
-    >
-      <TabButton
-        label="Nodes"
-        active={tab === "nodes"}
-        onClick={() => onTab("nodes")}
-      />
-      <TabButton
-        label="Layers"
-        active={tab === "layers"}
-        onClick={() => onTab("layers")}
-      />
-      <TabButton
-        label="Animations"
-        active={tab === "animations"}
-        onClick={() => onTab("animations")}
-      />
-      <TabButton
-        label="Console"
-        active={tab === "console"}
-        onClick={() => onTab("console")}
-      />
-      <TabButton
-        label="Bridge"
-        active={tab === "bridge"}
-        onClick={() => onTab("bridge")}
-      />
-    </node>
-  );
-}
-
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      style={{
-        padding: { horizontal: 12, vertical: 5 },
-        border: { bottom: 2 },
-        borderColor: active ? theme.accent : "transparent",
-      }}
-      hoverStyle={{ backgroundColor: theme.bgActive }}
-      onClick={onClick}
-    >
-      <text
-        style={{ color: active ? theme.text : theme.textDim, fontSize: 12 }}
-      >
-        {label}
-      </text>
+      <Icon name={icon} size={12} color={color} />
+      <text style={{ color, fontSize: 11 }}>{label}</text>
+      {title && <Tooltip text={title} hint={hint} show={hover} side="left" />}
     </button>
   );
 }
@@ -727,7 +620,7 @@ function NodesTab({
 }: {
   selected: number | null;
   onSelect: (id: number | null) => void;
-  reveal: number | null;
+  reveal: Reveal | null;
   /** The inspector section's height (px); the separator drags it. */
   split: number;
   onSplit: (update: (s: number) => number) => void;

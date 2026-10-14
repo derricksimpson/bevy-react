@@ -169,8 +169,10 @@ pointer events, so `Ctrl`+wheel can zoom while the plain wheel scrolls.
   distance per line.
 - At most one event per frame, carrying the frame's accumulated delta.
 - The topmost element with `onWheel` whose box contains the pointer gets the
-  event, regardless of `focusPolicy` and of elements without `onWheel` on top
-  of it.
+  event. Elements without `onWheel` on top of it let the wheel through,
+  unless they block the pointer (`focusPolicy: "block"`, the `<button>`
+  default): like a click, the wheel then reaches only that element and its
+  ancestors, never what it covers.
 - That element claims the wheel: scroll containers beneath it, its ancestors
   included, don't scroll, like a DOM `preventDefault`.
 - Scroll containers scroll by themselves; their `onScroll` reports the new

@@ -71,7 +71,7 @@ struct DevtoolsFilterEntry {
 }
 
 /// A layer rect: logical (CSS) px in window space — the same space as
-/// `devtools.window` — plus the physical capture dims so the panel can
+/// `devtools.windowSize` — plus the physical capture dims so the panel can
 /// estimate texture memory (`physical_width * physical_height * 4`).
 #[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
 struct DevtoolsLayerRect {

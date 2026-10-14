@@ -2,10 +2,13 @@
 //! docked panel's window-space reservation.
 
 use bevy::prelude::*;
+use bevy::ui::IsDefaultUiCamera;
 
 use crate::event::ReactEvents;
 use crate::protocol::NodeId;
-use crate::{react_event, react_message};
+use crate::request::Request;
+use crate::window::{ViewportInset, WindowSize, ui_viewport_size};
+use crate::{react_event, react_message, react_request};
 
 use super::{DevtoolsConfig, DevtoolsState, DockSide};
 
@@ -46,6 +49,52 @@ pub(super) struct DevtoolsPanelRootMessage {
 pub(super) struct DevtoolsDockMessage {
     side: Option<String>,
     width: f32,
+}
+
+/// JS → Bevy: the whole UI viewport, which the panel lays out against — the
+/// built-in `window.size` reports what a pushing panel leaves the app (unit
+/// payload; rejects without a viewport).
+#[react_request(name = "devtools.windowSize", response = WindowSize)]
+pub(super) struct DevtoolsWindowSizeGet;
+
+pub(super) fn on_window_size_request(
+    req: On<Request<DevtoolsWindowSizeGet>>,
+    cameras: Query<&Camera, With<IsDefaultUiCamera>>,
+    windows: Query<&Window>,
+) {
+    match ui_viewport_size(&cameras, &windows) {
+        Some(size) => req.respond(WindowSize {
+            width: size.x,
+            height: size.y,
+        }),
+        None => req.respond_err("no UI viewport available"),
+    }
+}
+
+/// JS → Bevy: the configured keys, for the panel's tooltips (unit payload).
+#[react_request(name = "devtools.keys", response = DevtoolsKeys)]
+pub(super) struct DevtoolsKeysGet;
+
+/// [`DevtoolsConfig`]'s keys by their printed names (`"F12"`, `"P"`).
+#[derive(serde::Serialize, ts_rs::TS)]
+pub(super) struct DevtoolsKeys {
+    toggle: String,
+    pause: String,
+}
+
+pub(super) fn on_keys_request(req: On<Request<DevtoolsKeysGet>>, cfg: Res<DevtoolsConfig>) {
+    req.respond(DevtoolsKeys {
+        toggle: key_name(cfg.toggle_key),
+        pause: key_name(cfg.pause_key),
+    });
+}
+
+/// A key as a person reads it: the `KeyCode` name without the `Key`/`Digit`
+/// prefix of letters and digits (`KeyP` → `P`).
+fn key_name(key: KeyCode) -> String {
+    let name = format!("{key:?}");
+    let short = name.strip_prefix("Key").or(name.strip_prefix("Digit"));
+    short.unwrap_or(&name).to_owned()
 }
 
 pub(super) fn on_open_message(msg: On<DevtoolsOpenMessage>, mut state: ResMut<DevtoolsState>) {
@@ -109,17 +158,20 @@ pub(super) fn toggle_on_key(
     events.send(&DevtoolsToggle { open: state.open });
 }
 
-/// Reserve window space for a docked panel: inset the app's [`UiRoot`] margin
-/// on the reserved edge so the whole reconciler tree reflows beside the panel
-/// (the panel pushes the app aside rather than overlapping it), and release it
-/// whenever the reservation ends. Gated
-/// on `state.open`, so every close path (close button, toggle key) releases
-/// the space with no extra bookkeeping.
+/// Reserve window space for a docked panel: narrow the app's [`UiRoot`] by
+/// the panel's width and inset it from the reserved edge, so the whole
+/// reconciler tree reflows beside the panel (the panel pushes the app aside
+/// rather than overlapping it), and release it whenever the reservation ends.
+/// The root is `100vw` wide (`plugin.rs`), so a margin alone would only shift
+/// it. The [`ViewportInset`] tells the app too (`window.size`, `resize`), for
+/// layouts computed from the window's size — as a docked browser devtools
+/// shrinks the page's viewport. Gated on `state.open`, so every close path
+/// (close button, toggle key) releases the space with no extra bookkeeping.
 ///
-/// The margins are compared before writing — an unconditional `Node` deref-mut
-/// would re-run app layout every frame. The reserved width is clamped against
-/// the window so a huge panel can't push the app entirely off-screen
-/// (headless: no window, no clamp — fine for tests).
+/// Compared before writing — an unconditional `Node` deref-mut would re-run
+/// app layout every frame. The reserved width is clamped against the UI
+/// viewport (the one the panel lays out against) so a huge panel can't push
+/// the app entirely off-screen; without a viewport nothing is reserved.
 ///
 /// Known limitation: app-created `<root>` overlays are detached full-window
 /// trees (see `reconcile.rs` `root_base`), so they are not pushed — only the
@@ -128,18 +180,22 @@ pub(super) fn toggle_on_key(
 /// [`UiRoot`]: crate::plugin::UiRoot
 pub(super) fn apply_dock_reservation(
     state: Res<DevtoolsState>,
+    cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
+    mut inset: ResMut<ViewportInset>,
     mut root: Query<&mut Node, With<crate::plugin::UiRoot>>,
 ) {
     let Ok(mut node) = root.single_mut() else {
         return;
     };
-    let reserved = if state.open { state.dock_side } else { None };
-    let width = match windows.single() {
-        Ok(window) => state.dock_width.min(window.width() - 100.0).max(0.0),
-        Err(_) => state.dock_width,
+    let viewport = ui_viewport_size(&cameras, &windows)
+        .map(|size| size.x)
+        .filter(|w| *w > 0.0);
+    let (side, width) = match (state.open.then_some(state.dock_side).flatten(), viewport) {
+        (Some(side), Some(vw)) => (Some(side), state.dock_width.min(vw - 100.0).max(0.0)),
+        _ => (None, 0.0),
     };
-    let (left, right) = match reserved {
+    let (left, right) = match side {
         Some(DockSide::Left) => (Val::Px(width), Val::ZERO),
         Some(DockSide::Right) => (Val::ZERO, Val::Px(width)),
         None => (Val::ZERO, Val::ZERO),
@@ -149,9 +205,12 @@ pub(super) fn apply_dock_reservation(
         right,
         ..node.margin
     };
-    if node.margin != margin {
+    let root_width = Val::Vw(viewport.map_or(100.0, |vw| 100.0 * (1.0 - width / vw)));
+    if node.margin != margin || node.width != root_width {
         node.margin = margin;
+        node.width = root_width;
     }
+    inset.set_if_neq(ViewportInset(width));
 }
 
 #[cfg(test)]
@@ -206,38 +265,57 @@ mod tests {
         assert!(!app.world().resource::<DevtoolsState>().open);
     }
 
-    /// An open panel with a dock side insets the app root's margin on that
-    /// edge; flipping sides swaps the inset; closing releases it. No `Window`
-    /// exists in the harness, so the width is unclamped.
+    /// An open panel with a dock side narrows the app root by its width and
+    /// insets it from that edge; flipping sides swaps the inset; closing
+    /// releases it. The harness window is 1280 logical px wide.
     #[test]
-    fn dock_reservation_insets_uiroot_margin() {
+    fn dock_reservation_narrows_and_insets_uiroot() {
         let (mut app, _rx) = test_app(DevtoolsConfig::default());
+        app.world_mut().spawn(Window::default());
         let root = app
             .world_mut()
-            .spawn((Node::default(), crate::plugin::UiRoot))
+            .spawn((
+                Node {
+                    width: Val::Vw(100.0),
+                    ..default()
+                },
+                crate::plugin::UiRoot,
+            ))
             .id();
-        let margin = |app: &mut App| {
+        let layout = |app: &mut App| {
             let node = app.world().entity(root).get::<Node>().unwrap();
-            (node.margin.left, node.margin.right)
+            (node.margin.left, node.margin.right, node.width)
         };
 
         {
             let mut state = app.world_mut().resource_mut::<DevtoolsState>();
             state.open = true;
             state.dock_side = Some(DockSide::Right);
-            state.dock_width = 300.0;
+            state.dock_width = 320.0;
         }
         app.update();
-        assert_eq!(margin(&mut app), (Val::ZERO, Val::Px(300.0)));
+        assert_eq!(layout(&mut app), (Val::ZERO, Val::Px(320.0), Val::Vw(75.0)));
+        assert_eq!(
+            *app.world().resource::<ViewportInset>(),
+            ViewportInset(320.0)
+        );
 
         app.world_mut().resource_mut::<DevtoolsState>().dock_side = Some(DockSide::Left);
         app.update();
-        assert_eq!(margin(&mut app), (Val::Px(300.0), Val::ZERO));
+        assert_eq!(layout(&mut app), (Val::Px(320.0), Val::ZERO, Val::Vw(75.0)));
 
         // Any close path just flips `open`; the reservation releases for free.
         app.world_mut().resource_mut::<DevtoolsState>().open = false;
         app.update();
-        assert_eq!(margin(&mut app), (Val::ZERO, Val::ZERO));
+        assert_eq!(layout(&mut app), (Val::ZERO, Val::ZERO, Val::Vw(100.0)));
+        assert_eq!(*app.world().resource::<ViewportInset>(), ViewportInset(0.0));
+    }
+
+    #[test]
+    fn key_names_drop_the_letter_and_digit_prefixes() {
+        assert_eq!(key_name(KeyCode::F12), "F12");
+        assert_eq!(key_name(KeyCode::KeyP), "P");
+        assert_eq!(key_name(KeyCode::Digit1), "1");
     }
 
     /// The `devtools.dock` message maps its loose wire shape onto the state:

@@ -7,6 +7,8 @@ export const theme = {
   bgAlt: "#292a2d",
   /** Row/selection highlight. */
   bgActive: "#37383d",
+  /** Tooltip background. */
+  tooltip: "#303134",
   /** Hairline borders between panel regions. */
   border: "#3c4043",
   /** Primary text. */
@@ -25,6 +27,7 @@ export const theme = {
   component: "#c58af9",
   /** Success / ok badges. */
   ok: "#81c995",
-  /** Monospace family for node kinds, values, and the log. */
-  mono: "Noto Sans Mono",
+  /** Monospace family for node kinds, values, and the log: Bevy's built-in
+   *  Fira Mono, which the devtools plugin registers under this name. */
+  mono: "bevy-react devtools mono",
 } as const;

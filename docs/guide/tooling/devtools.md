@@ -69,25 +69,38 @@ contain it, turn off default features and list the ones you use without
 
 ## The panel
 
-The header holds the layout and mode controls:
+The header holds the layout and mode controls, as icons; hover one for its
+name:
 
-- **L**, **R**, **F**: dock the panel to the left or right window edge, or
-  float it. A docked panel resizes from its inner edge; a floating one moves
-  by its header and resizes from its bottom-right corner.
-- **push** (docked only): reserve the panel's width so the app's UI reflows
-  beside it instead of underneath.
-- **pick**: click a node on screen to select it in the tree. Hovering
-  highlights what you would pick. Escape leaves pick mode.
-- **overlay**: show or hide the outline drawn around the selected node.
-- **paint**: flash every node Bevy redraws. See
+- **Dock left**, **Dock right**, **Float**: dock the panel to a window
+  edge, or float it. A docked panel resizes from its inner edge; a floating
+  one moves by its header and resizes from its bottom-right corner.
+- **Push the app aside** (docked only): reserve the panel's width so the
+  app's UI reflows beside it instead of underneath. Like a docked browser
+  devtools, it shrinks the app's viewport: `window.size` and the `resize`
+  event report what is left, so a layout computed from the window's size
+  reflows too. `vw` units and `positionType: "fixed"` nodes still span the
+  whole window.
+- **Pick a node on screen**: click a node on screen to select it in the
+  tree, which opens to it and scrolls it into view. Hovering highlights what
+  you would pick. The click is the inspector's: the app never sees it, so
+  nothing is pressed, clicked or focused. Escape leaves pick mode.
+- **Outline the selection**: show or hide the outline drawn around the
+  selected node.
+- **Paint flashing**: flash every node Bevy redraws. See
   [Paint flashing](#paint-flashing).
-- **x**: close the panel.
+- **Close**: close the panel. Its tooltip shows the toggle key.
+
+A panel too narrow for every tab label shows only the active tab's; the
+others keep their icon and name it on hover.
 
 The footer shows the app's node count and the last op batch: its number, op
 count and Rust-side apply time.
 
-The panel blocks pointer input to the app beneath it. Its own nodes and ops
-are left out of the tree, the counts and the bridge log.
+The panel owns the pointer over it: clicks, hover and the wheel never reach
+the app beneath it, and `PointerCapture` reports the pointer as the UI's
+there, so camera controls that honor it ignore it. Its own nodes and ops are
+left out of the tree, the counts and the bridge log.
 
 ## Nodes
 
@@ -107,7 +120,7 @@ values, exactly what React sent:
 
 - Click a value to edit it. Enter applies, Escape cancels. An invalid value
   stays in the editor with an error and is never sent.
-- The `[x]` box next to a style declaration disables it; ticking it again
+- The checkbox next to a style declaration disables it; ticking it again
   restores the value.
 - **+ add style** takes a `field: value` declaration.
 - Edits are transient. They go through the same path as a React update, and
@@ -120,8 +133,8 @@ An invalid value (an unknown color name, a malformed length, a style
 property the element ignores, an unknown prop) never stops rendering: it
 falls back to a default and reports a warning. Every warning goes to the
 terminal log once per distinct message, in every build. With the devtools
-running, it also flags the offending row in the inspector with `(!)` and the
-warning text, and appears in the Console tab. An unknown style field is
+running, it also flags the offending row in the inspector with a warning
+sign and the warning text, and appears in the Console tab. An unknown style field is
 flagged even before Bevy reports it.
 
 ## Layers
@@ -171,8 +184,8 @@ The **values** and **transitions** chips show or hide each section.
 ### Pause and speed
 
 **pause** freezes the app clock and the speed chips slow it down or speed
-it up. **F11** (the `pause_key`) pauses and resumes too, while the tab is
-shown. This is Bevy's `Time<Virtual>`, so everything that runs on it pauses
+it up. **F11** (the `pause_key`, shown in the button's tooltip) pauses and
+resumes too, while the tab is shown. This is Bevy's `Time<Virtual>`, so everything that runs on it pauses
 or slows down along with the animations: the 3D scene, your own systems,
 time-driven filters. Hot reload and paint flashing keep running.
 
@@ -255,8 +268,8 @@ panel is open.
 
 ## Limits
 
-- Pick mode doesn't swallow the click: the picked node's own `onClick` and
-  other handlers fire as usual.
+- Pick mode keeps only its clicks from the app: hovering still runs the
+  app's hover styles and `onPointerEnter`/`onPointerLeave` handlers.
 - Pick mode only sees the window's UI. Nodes inside a `<surface>` can't be
   picked on screen; select them in the tree.
 - Edits are transient and per node. There is no undo beyond re-enabling a

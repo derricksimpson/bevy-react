@@ -281,6 +281,36 @@ export function requestElements(): Promise<DevtoolsElement[]> {
   return request("devtools.elements", null) as Promise<DevtoolsElement[]>;
 }
 
+/** `DevtoolsConfig`'s keys by their printed names (`"F12"`, `"P"`) — the
+ *  `devtools.keys` response (`devtools/panel.rs`). */
+export interface DevtoolsKeys {
+  toggle: string;
+  pause: string;
+}
+
+/** Pull the whole UI viewport's logical size — the app's `window.size`
+ *  excludes what a pushing panel takes (`devtools/panel.rs`). */
+export function requestWindowSize(): Promise<{
+  width: number;
+  height: number;
+}> {
+  return request("devtools.windowSize", null) as Promise<{
+    width: number;
+    height: number;
+  }>;
+}
+
+/** Pull the configured keys, for the tooltips. */
+export function requestKeys(): Promise<DevtoolsKeys> {
+  return request("devtools.keys", null) as Promise<DevtoolsKeys>;
+}
+
+/** Scroll one of the panel's own nodes into view (the picked node's tree
+ *  row): Bevy does it once the node is laid out (`devtools/reveal.rs`). */
+export function sendReveal(id: number): void {
+  emit("devtools.reveal", { id });
+}
+
 /** Report the panel's layout settings for persistence. Emitted on every
  *  change (per frame during drags) — Bevy debounces the actual file write. */
 export function sendSettings(s: DevtoolsSettings): void {

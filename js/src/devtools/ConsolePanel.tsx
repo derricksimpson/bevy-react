@@ -90,6 +90,7 @@ export function ConsolePanel() {
         }}
       >
         <IconButton
+          icon="clear"
           label="clear"
           onClick={() => {
             // Local list clears immediately; Rust empties the ring. Entries

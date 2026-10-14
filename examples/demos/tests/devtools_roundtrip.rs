@@ -40,7 +40,7 @@ fn devtools_panel_round_trip() {
     let mut root_id: Option<u32> = None;
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
-        if root_id.is_some() && h.tree.find_button_under("x", root_id).is_some() {
+        if root_id.is_some() && h.tree.find_button_under("Close", root_id).is_some() {
             break;
         }
         let Some(batch) = h.recv(Duration::from_millis(200)) else {
@@ -61,8 +61,8 @@ fn devtools_panel_round_trip() {
     );
     let close = h
         .tree
-        .find_button_under("x", Some(root_id))
-        .expect("no close (x) button in the devtools panel");
+        .find_button_under("Close", Some(root_id))
+        .expect("no Close button in the devtools panel");
     eprintln!("OK   panel mounted: <root> id={root_id}, close button id={close}");
 
     // The origin flags must attribute the flushes: the app mount crossed as
@@ -384,6 +384,35 @@ fn devtools_panel_round_trip() {
         "no devtools.consoleClear emit after clicking clear"
     );
     eprintln!("OK   Console tab: clear emitted devtools.consoleClear");
+
+    // Phase 1e: a pick. Bevy reports `devtools.picked` for an app node the
+    // tree shows collapsed; the panel switches to the Nodes tab, expands the
+    // node's ancestors and asks Bevy to scroll its row — a node of the
+    // panel's own — into view.
+    let picked = h
+        .tree
+        .find_button("How it works?")
+        .expect("no How it works? nav button");
+    h.event("devtools.picked", serde_json::json!({ "id": picked }));
+    let row = wait_emit(&mut h, "devtools.reveal")["id"]
+        .as_u64()
+        .expect("a node id") as u32;
+    assert!(
+        h.tree.is_under(row, root_id),
+        "the row to reveal must be one of the panel's own nodes"
+    );
+    eprintln!("OK   pick: the picked node's row (#{row}) asked to be revealed");
+
+    // Back to the Console tab, which the close below expects to unmount.
+    let console_tab = h
+        .tree
+        .find_button_under("Console", Some(root_id))
+        .expect("no Console tab button");
+    h.click(console_tab);
+    assert_eq!(
+        wait_emit(&mut h, "devtools.consoleOpen"),
+        serde_json::json!({ "on": true })
+    );
 
     // Phase 2: click the panel's own close button.
     h.click(close);

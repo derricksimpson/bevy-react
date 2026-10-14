@@ -25,9 +25,7 @@
 //!   (event-driven — one per applied APP op batch while open; an idle app
 //!   sends nothing, and the panel's own repaints are excluded via the
 //!   per-batch origin flags so the panel never observes itself),
-//!   `devtools.picked { id }`, `devtools.window { width, height }` (the UI
-//!   viewport's logical size — once when the panel opens and on every resize
-//!   while it is open; the panel's layout is proportional, so JS needs it),
+//!   `devtools.picked { id }`,
 //!   `devtools.layers { layers }` (the current layer set — the implicit base
 //!   layer plus every [`crate::layer::LayersRegistry`] row; streamed only
 //!   while the panel's Layers tab is active and diffed against the last
@@ -48,7 +46,14 @@
 //!   `devtools.consoleClear {}` (empty the console ring),
 //!   `devtools.dock { side, width }` (the panel's space reservation — see
 //!   [`apply_dock_reservation`]), `devtools.settings { … }` (the persisted
-//!   layout blob — see [`settings::DevtoolsSettings`]).
+//!   layout blob — see [`settings::DevtoolsSettings`]),
+//!   `devtools.reveal { id }` (scroll a panel node — the picked node's tree
+//!   row — into view, once laid out: see [`reveal`]).
+//! - JS → Bevy requests: `devtools.styleFields` and `devtools.elements` (the
+//!   editor's tables, pulled at install), `devtools.keys` (the configured
+//!   keys, for the tooltips), `devtools.windowSize` (the whole UI viewport
+//!   the panel lays out against — the app's `window.size` excludes what a
+//!   pushing panel takes; the panel re-pulls it on every `resize`).
 //! - Settings persistence: layout settings — including whether the panel was
 //!   open, so it reopens where you left it — round-trip through a JSON file
 //!   (default `.bevy-react-devtools.json` in the working directory —
@@ -73,6 +78,7 @@ use crate::message::ReactAppExt;
 use crate::protocol::NodeId;
 
 mod animations;
+mod assets;
 mod console;
 mod element_fields;
 #[cfg(test)]
@@ -81,6 +87,7 @@ mod layers;
 mod paint_flash;
 mod panel;
 mod pick;
+mod reveal;
 mod settings;
 mod stats;
 mod style_fields;
@@ -101,13 +108,14 @@ use paint_flash::{
     PaintFlashes, RepaintFeed, drive_paint_flash, on_paint_flash_message, record_repaints,
 };
 use panel::{
-    apply_dock_reservation, on_dock_message, on_open_message, on_overlay_message,
-    on_panel_root_message, toggle_on_key,
+    apply_dock_reservation, on_dock_message, on_keys_request, on_open_message, on_overlay_message,
+    on_panel_root_message, on_window_size_request, toggle_on_key,
 };
 use pick::{
-    drive_pick_mode, on_highlight_message, on_pick_message, on_select_message, position_highlight,
-    spawn_highlight_overlay,
+    claim_pointer_over_panel, drive_pick_mode, on_highlight_message, on_pick_message,
+    on_select_message, position_highlight, spawn_highlight_overlay, swallow_pick_gestures,
 };
+use reveal::{PendingReveal, on_reveal_message, scroll_to_revealed};
 use settings::{
     DevtoolsPersistence, flush_settings_on_exit, load_settings, on_settings_message, save_settings,
     send_restore,
@@ -188,6 +196,7 @@ impl Plugin for DevtoolsPlugin {
         // without `InputPlugin` (wiring-only tests) must not panic on them.
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
+        assets::register(app);
         // `emit_layers` reads the layer registries and `emit_animations` the
         // shared-value table; idempotent in the full app (`plugin.rs` and the
         // animations plugin init them too), load-bearing for headless
@@ -230,6 +239,8 @@ impl Plugin for DevtoolsPlugin {
         .insert_resource(self.config.clone())
         .init_resource::<AnimationsSample>()
         .init_resource::<TakenClock>()
+        .init_resource::<PendingReveal>()
+        .init_resource::<crate::window::ViewportInset>()
         // Panel → Bevy state sync. Registration is what routes the emits;
         // none of this reaches an app's generated `bevy.ts` because the
         // bindings exporter never adds this plugin.
@@ -240,6 +251,7 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_overlay_message)
         .add_react_handler(on_paint_flash_message)
         .add_react_handler(on_panel_root_message)
+        .add_react_handler(on_reveal_message)
         .add_react_handler(on_dock_message)
         .add_react_handler(on_settings_message)
         .add_react_handler(on_layers_open_message)
@@ -252,10 +264,23 @@ impl Plugin for DevtoolsPlugin {
         // The editor's style-field and element tables, pulled once at panel
         // install.
         .add_react_request_handler(on_style_fields_request)
+        .add_react_request_handler(on_keys_request)
+        .add_react_request_handler(on_window_size_request)
         .add_react_request_handler(on_elements_request)
         // Registered in the plugin's OWN tuples — `plugin.rs`'s Update tuple
         // sits at Bevy's 20-arity cap.
         .add_systems(Startup, spawn_highlight_overlay)
+        // Pick mode's presses never reach the app: filtered between
+        // bevy_picking's input and everything reading it. The message type
+        // is registered here too (idempotent) for apps and harnesses
+        // without picking input.
+        .add_message::<bevy::picking::pointer::PointerInput>()
+        .add_systems(
+            First,
+            swallow_pick_gestures
+                .after(bevy::picking::PickingSystems::Input)
+                .before(bevy::picking::PickingSystems::PostInput),
+        )
         .add_systems(
             Update,
             (
@@ -293,7 +318,7 @@ impl Plugin for DevtoolsPlugin {
         // systems ordered `.after(PointerCaptureSet)`.
         .add_systems(
             Update,
-            drive_pick_mode
+            (drive_pick_mode, claim_pointer_over_panel)
                 .in_set(crate::plugin::PointerCaptureSet)
                 .after(crate::reconcile::collect_pointer_events),
         )
@@ -310,6 +335,8 @@ impl Plugin for DevtoolsPlugin {
                 // pipeline (taffy solve + computed transform/clip
                 // propagation), not just the Layout set.
                 mark_post_layout.after(UiSystems::PostLayout),
+                // Where the picked node's tree row landed is known only now.
+                scroll_to_revealed.after(UiSystems::PostLayout),
                 emit_batch_stats.after(mark_post_layout),
                 // After the layer geometry sync so the rects are this
                 // frame's; a no-op ordering in harnesses that don't schedule

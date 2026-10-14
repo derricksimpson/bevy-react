@@ -21,13 +21,18 @@ import {
   type DevtoolsAnimations,
 } from "./api";
 import { TransitionRow, ValueRow } from "./AnimationRows";
-import { Chip, ScrollArea } from "./DevtoolsHost";
+import { Chip, IconButton, ScrollArea } from "./DevtoolsHost";
 import { theme } from "./theme";
 import { useMirrorVersion } from "./TreeView";
 
 const SPEEDS = [0.1, 0.25, 0.5, 1, 2];
 
-export function AnimationsPanel() {
+export function AnimationsPanel({
+  pauseKey,
+}: {
+  /** The configured pause key, once Bevy has said (the pause tooltip). */
+  pauseKey?: string;
+}) {
   // Node labels and bound fields come from the mirror; re-render when it moves.
   useMirrorVersion();
   const [table, setTable] = useState<DevtoolsAnimations | null>(null);
@@ -72,10 +77,15 @@ export function AnimationsPanel() {
           // Blocks scrolled-out rows stacked beneath (see Header note in
           // DevtoolsHost).
           focusPolicy: "block",
+          // Over the rows, which the pause tooltip overlaps.
+          zIndex: 1,
         }}
       >
-        <Chip
+        <IconButton
+          icon={clock.paused ? "play" : "pause"}
           label={clock.paused ? "resume" : "pause"}
+          title={clock.paused ? "Resume the app clock" : "Pause the app clock"}
+          hint={pauseKey}
           active={clock.paused}
           onClick={() => setClock(!clock.paused, clock.speed)}
         />

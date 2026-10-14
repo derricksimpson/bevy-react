@@ -8,7 +8,7 @@ export function SecondaryButton(props: ButtonProps) {
   const style: BevyStyle = {
     backgroundGradient: Gradients.surface,
     borderColor: Colors.lineStrong,
-    border: 1,
+    border: { top: 1 },
     ...props.style,
   };
 

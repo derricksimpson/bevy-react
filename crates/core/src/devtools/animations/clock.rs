@@ -24,7 +24,8 @@ pub(in crate::devtools) struct TakenClock(Option<(bool, f32)>);
 impl TakenClock {
     /// Remember the clock as the app had it, the first time the tab moves it.
     fn take(&mut self, time: &Time<Virtual>) {
-        self.0.get_or_insert((time.is_paused(), time.relative_speed()));
+        self.0
+            .get_or_insert((time.is_paused(), time.relative_speed()));
     }
 }
 

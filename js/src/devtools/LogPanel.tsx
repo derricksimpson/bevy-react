@@ -86,11 +86,12 @@ function Controls({
       }}
     >
       <IconButton
+        icon={paused ? "play" : "pause"}
         label={paused ? "resume" : "pause"}
         active={paused}
         onClick={() => recorder.setPaused(!paused)}
       />
-      <IconButton label="clear" onClick={() => recorder.clear()} />
+      <IconButton icon="clear" label="clear" onClick={() => recorder.clear()} />
       {ALL_KINDS.map((kind) => (
         <Chip
           key={kind}

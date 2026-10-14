@@ -22,6 +22,8 @@
 //! lays out against, which stays correct when that camera renders offscreen
 //! (the demos' `--shoot` mode) — falling back to the primary window. A
 //! scale-factor change alters the logical size, so it fires `"resize"` too.
+//! A docked devtools panel that pushes the app aside takes its width off
+//! ([`ViewportInset`]), as a docked browser devtools shrinks the page's.
 //!
 //! Naming note: the per-node `<canvas>` `"resize"` rides `Outbound::UiEvent`
 //! keyed by node id; this event rides `Outbound::Event` keyed by name. The JS
@@ -59,6 +61,23 @@ pub struct Resize(pub WindowSize);
 #[react_request(name = "window.size", response = WindowSize)]
 pub struct WindowSizeGet;
 
+/// Logical px of the UI viewport's width given to a docked panel that pushes
+/// the app aside (the devtools' "push", its only writer): the app lays out in
+/// what is left, and [`Resize`] / [`WindowSizeGet`] report that.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+pub(crate) struct ViewportInset(pub(crate) f32);
+
+/// The viewport the app sees: [`ui_viewport_size`] less the [`ViewportInset`].
+fn app_viewport_size(
+    cameras: &Query<&Camera, With<IsDefaultUiCamera>>,
+    windows: &Query<&Window>,
+    inset: Option<&ViewportInset>,
+) -> Option<Vec2> {
+    let inset = inset.map_or(0.0, |i| i.0);
+    ui_viewport_size(cameras, windows).map(|size| Vec2::new((size.x - inset).max(0.0), size.y))
+}
+
 /// The UI's layout viewport in logical px: the default UI camera's target —
 /// which detached `<root>`s (the devtools panel) lay out against, and which
 /// stays correct when that camera renders offscreen (the demos' `--shoot`
@@ -89,13 +108,14 @@ pub(crate) fn send_resize_events(
     stats: Res<OpApplyStats>,
     cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
+    inset: Option<Res<ViewportInset>>,
     events: ReactEvents,
     mut last: Local<Option<Vec2>>,
 ) {
     if stats.applied_count == 0 {
         return;
     }
-    let Some(size) = ui_viewport_size(&cameras, &windows) else {
+    let Some(size) = app_viewport_size(&cameras, &windows, inset.as_deref()) else {
         return;
     };
     if *last != Some(size) {
@@ -113,8 +133,9 @@ pub(crate) fn handle_window_size_request(
     req: On<Request<WindowSizeGet>>,
     cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
+    inset: Option<Res<ViewportInset>>,
 ) {
-    match ui_viewport_size(&cameras, &windows) {
+    match app_viewport_size(&cameras, &windows, inset.as_deref()) {
         Some(size) => req.respond(WindowSize {
             width: size.x,
             height: size.y,
@@ -193,6 +214,25 @@ mod tests {
         expect_resize(&mut rx, 1024.0, 768.0);
         app.update();
         assert!(rx.try_recv().is_err());
+    }
+
+    /// A docked panel pushing the app aside narrows the size the app sees,
+    /// and resends it; releasing the space restores it.
+    #[test]
+    fn a_viewport_inset_narrows_the_reported_size() {
+        let (mut app, mut rx) = test_app();
+        spawn_window(&mut app, 800, 600);
+        app.world_mut().resource_mut::<OpApplyStats>().applied_count = 1;
+        app.update();
+        expect_resize(&mut rx, 800.0, 600.0);
+
+        app.insert_resource(ViewportInset(300.0));
+        app.update();
+        expect_resize(&mut rx, 500.0, 600.0);
+
+        app.insert_resource(ViewportInset(0.0));
+        app.update();
+        expect_resize(&mut rx, 800.0, 600.0);
     }
 
     /// Route one raw request through the registry, applying the queued trigger

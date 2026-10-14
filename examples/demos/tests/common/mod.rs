@@ -284,7 +284,9 @@ fn answer_requests(request_rx: Receiver<RawRequest>, outbound_tx: UnboundedSende
     std::thread::spawn(move || {
         for req in request_rx {
             let value = match req.name.as_str() {
-                "window.size" => serde_json::json!({ "width": WINDOW.0, "height": WINDOW.1 }),
+                "window.size" | "devtools.windowSize" => {
+                    serde_json::json!({ "width": WINDOW.0, "height": WINDOW.1 })
+                }
                 "crowdedCubes.cubes" => serde_json::json!({
                     "cubes": [
                         { "entity": 4_294_967_297u64, "label": "#0" },

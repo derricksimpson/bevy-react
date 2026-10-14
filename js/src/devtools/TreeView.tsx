@@ -4,8 +4,8 @@
 // the React component that emitted the node, where the dev build could
 // attribute it (`owners.ts`).
 
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { sendHighlight } from "./api";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { sendHighlight, sendReveal } from "./api";
 import { Chip, IconButton } from "./DevtoolsHost";
 import { mirror, type MirrorNode } from "./mirror";
 import { theme } from "./theme";
@@ -20,6 +20,14 @@ const AUTO_EXPAND_DEPTH = 2;
 
 /** The default expansion for rows without an explicit user toggle. */
 type Baseline = "auto" | "all" | "none";
+
+/** The newest pick a row has sent: a row remounting later (its parent
+ *  re-expanded, the tab shown again) doesn't scroll back to it. */
+let revealed = 0;
+
+/** A node to bring into view (pick mode's selection); `seq` tells one pick
+ *  of a node from the next. */
+export type Reveal = { id: number; seq: number };
 
 /** The tree root `id` belongs to: the nearest `<root>` ancestor, else main (0). */
 function rootOf(id: number): number {
@@ -40,8 +48,9 @@ export function TreeView({
 }: {
   selected: number | null;
   onSelect: (id: number | null) => void;
-  /** Expand this node's ancestors so it is visible (pick mode's selection). */
-  reveal: number | null;
+  /** Expand this node's ancestors and scroll its row into view (pick mode's
+   *  selection). */
+  reveal: Reveal | null;
 }) {
   useMirrorVersion();
   // Which root's tree is shown: 0 = the main window tree, else a `<root>` id.
@@ -62,10 +71,10 @@ export function TreeView({
   useEffect(() => {
     if (reveal == null) return;
     // Show the tree the picked node lives in, with its ancestors expanded.
-    setActiveRoot(rootOf(reveal));
+    setActiveRoot(rootOf(reveal.id));
     setOverrides((prev) => {
       const next = new Map(prev);
-      let cursor = mirror.get(reveal)?.parent ?? null;
+      let cursor = mirror.get(reveal.id)?.parent ?? null;
       while (cursor != null && cursor !== 0) {
         next.set(cursor, true);
         cursor = mirror.get(cursor)?.parent ?? null;
@@ -104,8 +113,16 @@ export function TreeView({
           />
         ))}
         <node style={{ flexGrow: 1 }} />
-        <IconButton label="expand" onClick={() => setAll("all")} />
-        <IconButton label="collapse" onClick={() => setAll("none")} />
+        <IconButton
+          icon="expandAll"
+          label="expand"
+          onClick={() => setAll("all")}
+        />
+        <IconButton
+          icon="collapseAll"
+          label="collapse"
+          onClick={() => setAll("none")}
+        />
       </node>
       {topLevel.length === 0 ? (
         <text style={{ color: theme.textDim, fontSize: 12, margin: 10 }}>
@@ -124,6 +141,7 @@ export function TreeView({
               overrides={overrides}
               baseline={baseline}
               toggle={toggle}
+              reveal={reveal}
             />
           ))}
         </node>
@@ -141,6 +159,7 @@ function TreeRows({
   overrides,
   baseline,
   toggle,
+  reveal,
   parentOwner,
 }: {
   id: number;
@@ -151,6 +170,7 @@ function TreeRows({
   overrides: ReadonlyMap<number, boolean>;
   baseline: Baseline;
   toggle: (id: number, expand: boolean) => void;
+  reveal: Reveal | null;
   /** The owner of the row above, for the boundary rule (see `Row`). */
   parentOwner?: string;
 }) {
@@ -170,9 +190,10 @@ function TreeRows({
       <Row
         node={node}
         depth={depth}
-        caret={hasChildren ? (expanded ? "-" : "+") : " "}
+        caret={hasChildren ? expanded : undefined}
         hint={foreignRoot ? "detached" : undefined}
         selected={selected === id}
+        reveal={reveal?.id === id ? reveal.seq : undefined}
         parentOwner={parentOwner}
         onCaret={hasChildren ? () => toggle(id, !expanded) : undefined}
         onSelect={() => onSelect(id)}
@@ -189,6 +210,7 @@ function TreeRows({
             overrides={overrides}
             baseline={baseline}
             toggle={toggle}
+            reveal={reveal}
             parentOwner={node.owner}
           />
         ))}
@@ -202,15 +224,19 @@ function Row({
   caret,
   hint,
   selected,
+  reveal,
   onCaret,
   onSelect,
   parentOwner,
 }: {
   node: MirrorNode;
   depth: number;
-  caret: string;
+  /** Expanded or collapsed; absent on a leaf. */
+  caret?: boolean;
   hint?: string;
   selected: boolean;
+  /** The pick to bring this row into view for (its `Reveal.seq`). */
+  reveal?: number;
   onCaret?: () => void;
   onSelect: () => void;
   parentOwner?: string;
@@ -221,8 +247,23 @@ function Row({
   // other, so a node React could not attribute under one it could shows `<?>`
   // once and its descendants stay blank.
   const showOwner = node.owner !== parentOwner;
+  // A picked row reports its own node id, once per pick, for Bevy to scroll
+  // into view — JS can't measure where it landed. A host `ref` resolves to
+  // the instance (`getPublicInstance`: `{ id }`); `<node>`'s typing has none.
+  const revealRef = useMemo(
+    () =>
+      reveal === undefined
+        ? undefined
+        : (instance: { id: number } | null) => {
+            if (!instance || reveal <= revealed) return;
+            revealed = reveal;
+            sendReveal(instance.id);
+          },
+    [reveal],
+  );
   return (
     <node
+      {...(revealRef && ({ ref: revealRef } as object))}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -237,10 +278,15 @@ function Row({
       onPointerLeave={() => sendHighlight(null)}
     >
       <button
-        style={{ width: 12, alignItems: "center" }}
+        style={{
+          width: 12,
+          height: 12,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
         onClick={onCaret ?? onSelect}
       >
-        <text style={{ color: theme.textDim, fontSize: 10 }}>{caret}</text>
+        {caret !== undefined && <Chevron open={caret} />}
       </button>
       {showOwner && (
         <text
@@ -308,4 +354,24 @@ export function rowLabel(node: MirrorNode): string {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}...` : s;
+}
+
+/** A tree caret: two borders of a small square, turned to point right
+ *  (collapsed) or down — drawn, not an icon, so a long tree costs no
+ *  texture per row. The nudge centers the point's visual weight. */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <node
+      style={{
+        width: 5,
+        height: 5,
+        border: { right: 1.5, bottom: 1.5 },
+        borderColor: theme.textDim,
+        transform: {
+          rotate: open ? 45 : -45,
+          ...(open ? { translateY: -1 } : { translateX: -1 }),
+        },
+      }}
+    />
+  );
 }

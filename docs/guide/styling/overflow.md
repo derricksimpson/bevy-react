@@ -81,6 +81,9 @@ Absolutely positioned children scroll with the rest.
   scrolls, `20` by default. Trackpads report pixels, which are used as is.
 - A node with an `onWheel` handler under the cursor takes the wheel: no
   container beneath it scrolls. See [Mouse events](../events/mouse.md).
+- A node that blocks the pointer (`focusPolicy: "block"`, a `<button>`)
+  passes the wheel only to its ancestors: a button in a scrolled list
+  still scrolls it, while one lying over another container doesn't.
 - When a container scrolls, `PointerCapture::wheel_captured` is set for the
   frame, so a world system gating on it (a zoom camera) ignores that wheel.
 - On a touch screen, dragging a finger over a container scrolls it with the

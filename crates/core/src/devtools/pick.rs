@@ -1,8 +1,9 @@
 //! Pick mode ("click a node on screen to select it") and the on-screen
 //! highlight overlay (pick hover, tree-row hover, persistent selection box).
 
+use bevy::ecs::message::MessageMutator;
 use bevy::picking::hover::HoverMap;
-use bevy::picking::pointer::PointerId;
+use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
@@ -70,8 +71,8 @@ pub(super) fn on_highlight_message(
 /// pointer is consulted: `<surface>` subtrees (in-world virtual pointer) are
 /// out of pick mode's scope.
 ///
-/// Known limitation (documented): the picking click still reaches the app's own
-/// `onClick` handlers — pick mode does not suppress the click.
+/// The press is the inspector's alone: [`swallow_pick_gestures`] keeps it from
+/// bevy_picking, so the app never sees it.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn drive_pick_mode(
     mut state: ResMut<DevtoolsState>,
@@ -137,6 +138,81 @@ pub(super) fn drive_pick_mode(
         state.selected = Some(id);
         events.send(&DevtoolsPicked { id });
     }
+}
+
+/// The open panel owns the pointer over it: world input (a camera's wheel
+/// zoom, its orbit drag) ignores the mouse there, as over interactive UI.
+/// The panel's nodes already keep the UI beneath it from the pointer and the
+/// wheel (`focusPolicy: "block"`); this is the world's half.
+pub(super) fn claim_pointer_over_panel(
+    state: Res<DevtoolsState>,
+    hover_map: Option<Res<HoverMap>>,
+    capture: Option<ResMut<PointerCapture>>,
+    bridge: Option<Res<JsBridge>>,
+    child_of: Query<&ChildOf>,
+) {
+    if mouse_over_panel(&state, hover_map.as_deref(), bridge.as_deref(), &child_of)
+        && let Some(mut capture) = capture
+    {
+        capture.over_ui = true;
+        capture.wheel_captured = true;
+    }
+}
+
+/// Pick mode's clicks are the inspector's, never the app's: as bevy_picking's
+/// input arrives (`First`), a mouse press while picking — anywhere but on the
+/// panel, whose own buttons stay live — and that press's release become
+/// no-ops (a zero `Move`, which bevy_picking skips), so nothing under the
+/// pointer is pressed, clicked, focused or dragged. [`drive_pick_mode`] still
+/// reads the raw button. The release is swallowed after pick mode ends (the
+/// press that picks ends it). Over the panel is last frame's hover, the
+/// newest there is this early.
+pub(super) fn swallow_pick_gestures(
+    state: Res<DevtoolsState>,
+    hover_map: Option<Res<HoverMap>>,
+    bridge: Option<Res<JsBridge>>,
+    child_of: Query<&ChildOf>,
+    mut input: MessageMutator<PointerInput>,
+    mut held: Local<Vec<PointerButton>>,
+) {
+    let picking = state.open
+        && state.pick
+        && !mouse_over_panel(&state, hover_map.as_deref(), bridge.as_deref(), &child_of);
+    for event in input.read() {
+        if event.pointer_id != PointerId::Mouse {
+            continue;
+        }
+        match event.action {
+            PointerAction::Press(button) if picking => held.push(button),
+            PointerAction::Release(button) if held.contains(&button) => {
+                held.retain(|b| *b != button);
+            }
+            _ => continue,
+        }
+        event.action = PointerAction::Move { delta: Vec2::ZERO };
+    }
+}
+
+/// Whether the mouse hovers the open panel (anything under its `<root>`).
+fn mouse_over_panel(
+    state: &DevtoolsState,
+    hover_map: Option<&HoverMap>,
+    bridge: Option<&JsBridge>,
+    child_of: &Query<&ChildOf>,
+) -> bool {
+    let panel = state
+        .panel_root
+        .filter(|_| state.open)
+        .and_then(|id| bridge.and_then(|b| b.nodes.get(&id).copied()));
+    let Some(panel) = panel else {
+        return false;
+    };
+    hover_map
+        .and_then(|hover_map| hover_map.get(&PointerId::Mouse))
+        .is_some_and(|hits| {
+            hits.keys()
+                .any(|&e| climb(e, child_of, |a| a == panel).is_some())
+        })
 }
 
 /// Marks the single pre-spawned highlight overlay entity: the translucent box
@@ -393,6 +469,82 @@ mod tests {
             Some(7),
             "an app node in front of the panel must win"
         );
+    }
+
+    /// Over the open panel the pointer is the UI's (no world zoom or drag);
+    /// over the app beside it, it is not.
+    #[test]
+    fn the_pointer_over_the_panel_is_claimed() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let (mut world, _rx) = pick_world(false);
+        world.resource_mut::<DevtoolsState>().pick = false;
+        world.init_resource::<PointerCapture>();
+        let panel_root = world.spawn((RRoot, ReactNode(100))).id();
+        let panel_node = world.spawn((ReactNode(101), ChildOf(panel_root))).id();
+        let app_node = world.spawn(ReactNode(7)).id();
+        report_panel_root(&mut world, 100, panel_root);
+
+        set_mouse_hits(&mut world, &[(app_node, 1.0)]);
+        world.run_system_once(claim_pointer_over_panel).unwrap();
+        assert!(!world.resource::<PointerCapture>().is_captured());
+
+        set_mouse_hits(&mut world, &[(panel_node, 1.0)]);
+        world.run_system_once(claim_pointer_over_panel).unwrap();
+        let capture = world.resource::<PointerCapture>();
+        assert!(capture.over_ui && capture.wheel_captured);
+    }
+
+    /// While picking, a mouse press over the app — and its release, after the
+    /// pick ended pick mode — never reach bevy_picking; over the panel, and
+    /// outside pick mode, they do.
+    #[test]
+    fn pick_gestures_are_swallowed_but_the_panel_stays_live() {
+        use bevy::picking::pointer::Location;
+
+        let (mut world, _rx) = pick_world(false);
+        world.init_resource::<Messages<PointerInput>>();
+        let panel_root = world.spawn((RRoot, ReactNode(100))).id();
+        let panel_node = world.spawn((ReactNode(101), ChildOf(panel_root))).id();
+        let app_node = world.spawn(ReactNode(7)).id();
+        report_panel_root(&mut world, 100, panel_root);
+        let location = Location {
+            target: bevy::camera::NormalizedRenderTarget::None {
+                width: 1,
+                height: 1,
+            },
+            position: Vec2::ZERO,
+        };
+        // One system across frames: it remembers the presses it swallowed.
+        let filter = world.register_system(swallow_pick_gestures);
+        // One frame: the action bevy_picking sees after the filter.
+        let frame = |world: &mut World, action: PointerAction| {
+            world.write_message(PointerInput::new(
+                PointerId::Mouse,
+                location.clone(),
+                action,
+            ));
+            world.run_system(filter).unwrap();
+            let messages = world.resource::<Messages<PointerInput>>();
+            let mut cursor = messages.get_cursor();
+            cursor.read(messages).last().unwrap().action
+        };
+        let swallowed = |action: PointerAction| matches!(action, PointerAction::Move { delta } if delta == Vec2::ZERO);
+        let press = PointerAction::Press(PointerButton::Primary);
+        let release = PointerAction::Release(PointerButton::Primary);
+
+        set_mouse_hits(&mut world, &[(app_node, 1.0)]);
+        assert!(swallowed(frame(&mut world, press)));
+        // The pick ended pick mode; its release is still the inspector's.
+        world.resource_mut::<DevtoolsState>().pick = false;
+        assert!(swallowed(frame(&mut world, release)));
+        // Outside pick mode the app gets the mouse back.
+        assert!(!swallowed(frame(&mut world, press)));
+        assert!(!swallowed(frame(&mut world, release)));
+        // Over the panel its own buttons stay live.
+        world.resource_mut::<DevtoolsState>().pick = true;
+        set_mouse_hits(&mut world, &[(panel_node, 1.0)]);
+        assert!(!swallowed(frame(&mut world, press)));
     }
 
     /// A left click on a hovered app node selects it, exits pick mode, and
