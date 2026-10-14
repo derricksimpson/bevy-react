@@ -5,12 +5,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-15
+
 ### Added
 
+- **Devtools Animations tab.** Lists the shared values with a running
+  driver (each driver stage's progress, the nodes bound to it) and every
+  style transition in flight. **pause** and the speed chips drive Bevy's
+  `Time<Virtual>`; while paused, a slider on each row scrubs that
+  animation. `DevtoolsConfig::pause_key` (F11) pauses from the keyboard.
+- **Rust drives shared values.** `SharedValues::set(id, value)` is public:
+  send a shared value's `x.id` to Rust and set it from your own clock.
+- **Animations of your own in the devtools** (Rust extensions): implement
+  `ext::AnimationRuns` on a component and register it with
+  `app.add_react_animation_runs::<C>()`. `Run`, `RunLength` and
+  `run_length` are public in `animations`.
 - **`examples/synth`**, a node graph editor for a modular synth you can
-  hear: ten modules played live on the audio thread, cables with spring
+  hear: fifteen modules played live on the audio thread, cables with spring
   physics and flowing signals drawn by a Bevy shader under the UI, pop-in
   and drag animations, an Add menu, a minimap, presets and a crisp zoom.
+  It also runs in the browser.
+
+### Changed
+
+- **A shared value lives as long as its component.** Unmounting the
+  component that called `useSharedValue` frees the value and stops its
+  driver; the completion callback fires with `false`. It used to stay in
+  Bevy until a full reload.
+- **The wheel stops at pointer-blocking nodes.** A node with
+  `focusPolicy: "block"` (the `<button>` default) passes the wheel only to
+  its ancestors, like a click: a button in a scrolled list still scrolls
+  it, one lying over another container doesn't.
+- **Devtools panel.** Pick mode keeps its click from the app (nothing is
+  pressed, clicked or focused). The panel owns the wheel and hover over it,
+  and `PointerCapture` reports the pointer as the UI's there. Icons replace
+  the letter buttons; a narrow panel shows only the active tab's label.
+- **Performance.** Unchanged from 0.8.0: the table-ops benchmark is within
+  noise.
+
+### Fixed
+
+- The devtools' **push** moved the app aside without telling it:
+  `window.size` and the `resize` event now report the width left beside
+  the docked panel, so the app lays out in it.
 
 ## [0.8.0] - 2026-10-12
 
@@ -483,7 +520,8 @@ No behavior change, but worth knowing when reading or patching the crate:
 
 Last release before this changelog was introduced.
 
-[Unreleased]: https://github.com/tulustul/bevy-react/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/tulustul/bevy-react/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/tulustul/bevy-react/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/tulustul/bevy-react/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/tulustul/bevy-react/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tulustul/bevy-react/compare/v0.5.1...v0.6.0

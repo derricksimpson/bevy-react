@@ -240,6 +240,7 @@ export function Hints() {
   const items: [string, string][] = [
     ["Drag a socket", "patch"],
     ["Right-click", "add"],
+    ["WASD", "pan"],
     ["Space", "play"],
     ["F", "fit"],
     ["Del", "remove"],

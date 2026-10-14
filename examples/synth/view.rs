@@ -11,7 +11,7 @@
 use bevy::prelude::*;
 use bevy::text::RemSize;
 use bevy::ui::Val2;
-use bevy_react::{ReactAppExt, ReactApplySet, ReactNodes, react_message};
+use bevy_react::{ReactAppExt, ReactApplySet, ReactEvents, ReactNodes, react_event, react_message};
 
 /// `RemSize` at zoom 1, logical px: the graph's lengths are written in rem
 /// of this (`REM` in `ui/src/theme.ts`).
@@ -32,6 +32,18 @@ pub struct SetView {
     /// How long the glide takes, ms; `0` snaps (a drag pans with the hand).
     pub glide: f32,
 }
+
+/// Bevy → React: W A S D held this frame pan the view by `(x, y)` window
+/// px. React owns the view, so it moves it; Bevy only reads the keys
+/// (`ButtonInput` lets go of them when the window loses focus).
+#[react_event(name = "view.pan")]
+pub struct PanView {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// The keys' pan speed, window px per second at any zoom.
+const KEY_PAN: f32 = 900.0;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Xf {
@@ -66,12 +78,38 @@ impl Plugin for ViewPlugin {
             })
             // Before layout reads the root's transform, after this frame's
             // ops mounted it.
-            .add_systems(Update, glide.after(ReactApplySet));
+            .add_systems(Update, (glide.after(ReactApplySet), key_pan));
     }
 }
 
 pub fn register_bindings(app: &mut App) {
-    app.add_react_handler(on_set);
+    app.add_react_handler(on_set).add_react_event::<PanView>();
+}
+
+/// The camera moves with the key — W shows what is above — so the graph
+/// moves against it. Off under a modifier: Ctrl+A, Ctrl+D and Shift+A are
+/// shortcuts.
+fn key_pan(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, events: ReactEvents) {
+    use KeyCode::*;
+    let modifiers = [
+        ShiftLeft,
+        ShiftRight,
+        ControlLeft,
+        ControlRight,
+        AltLeft,
+        AltRight,
+        SuperLeft,
+        SuperRight,
+    ];
+    if keys.any_pressed(modifiers) {
+        return;
+    }
+    let axis = |pos, neg| keys.pressed(pos) as i8 as f32 - keys.pressed(neg) as i8 as f32;
+    let dir = Vec2::new(axis(KeyA, KeyD), axis(KeyW, KeyS));
+    if dir != Vec2::ZERO {
+        let d = dir.normalize() * KEY_PAN * time.delta_secs();
+        events.send(&PanView { x: d.x, y: d.y });
+    }
 }
 
 fn on_set(set: On<SetView>, mut view: ResMut<View>, mut rem: ResMut<RemSize>) {

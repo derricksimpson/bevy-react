@@ -37,9 +37,9 @@ intact.
   back in); drag the tempo sideways. Turn the knobs, flip the tabs, drag the
   sequencer's steps and the mixer's faders, click a step's light to mute
   it, click the beat's pads to change the groove.
-- **Navigate**: drag empty space to pan, the wheel zooms at the pointer, F
-  fits the patch, L (or Arrange) lays it out left to right, and the minimap
-  flies the view.
+- **Navigate**: drag empty space or hold W A S D to pan, the wheel zooms at
+  the pointer, F fits the patch, L (or Arrange) lays it out left to right,
+  and the minimap flies the view.
 - **Presets** in the top bar (‹ and › step through them, the name opens
   the list), each at its own tempo:
   - Night Drive: a detuned saw arpeggio through a plucked filter, dotted

@@ -16,7 +16,7 @@ import {
   reduce,
 } from "./graph/model";
 import { PRESETS, WIRE_DELAY, instantiate } from "./graph/presets";
-import { useDebug, useLatest, useWindowSize } from "./hooks";
+import { useDebug, useEvent, useLatest, useWindowSize } from "./hooks";
 import { LiveContext } from "./widgets";
 
 /** Where the graph shows: right of the palette, under the top bar. */
@@ -182,6 +182,13 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // W A S D: Bevy reports what the held keys pan each frame (`view.rs`);
+  // a short glide smooths over frames the message lands late.
+  useEvent("view.pan", ({ x, y }) => {
+    if (menuOpen()) return;
+    setView((v) => ({ ...v, x: v.x + x, y: v.y + y, glide: 90 }));
+  });
 
   // `--shoot` verbs (see shoot.rs).
   useDebug("preset", ([i]) => load(Number(i)));

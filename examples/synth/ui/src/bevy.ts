@@ -156,6 +156,7 @@ export type Module = { id: string, kind: Kind,
  */
 params: { [key in string]?: number }, };
 export type OutlineParams = { width: number | string, color: string, softness: number | string, };
+export type PanView = { x: number, y: number, };
 export type PinchParams = { 
 /**
  * Pinch center, 0..1 across the node rect (0 = left edge).
@@ -293,6 +294,7 @@ export interface ReactEvents {
   keyDown: KeyDown;
   keyUp: KeyUp;
   resize: Resize;
+  "view.pan": PanView;
 }
 
 /** Every registered filter name and its params type, split by family.
