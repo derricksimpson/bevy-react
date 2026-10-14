@@ -28,6 +28,9 @@ cargo run --release -p demos
 
 npm run build:prod -w minimal
 cargo run --release -p minimal
+
+npm run build:prod -w synth
+cargo run --release -p synth
 ```
 
 ### 4. Verify the web build works

@@ -16,6 +16,7 @@ members = [
     "examples/civilization",
     "examples/cyberpunk",
     "examples/coldwake",
+    "examples/synth",
 ]
 
 [workspace.package]

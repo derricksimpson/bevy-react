@@ -5,6 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`examples/synth`**, a node graph editor for a modular synth you can
+  hear: ten modules played live on the audio thread, cables with spring
+  physics and flowing signals drawn by a Bevy shader under the UI, pop-in
+  and drag animations, an Add menu, a minimap, presets and a crisp zoom.
+
 ## [0.8.0] - 2026-10-12
 
 ### Added

@@ -285,3 +285,8 @@ elements, styles or filters should depend on `bevy-react` with
   one you face and an app-drawn cursor clicks and scrolls it, with filters
   and morphs inside them, `<portal>` previews, `<canvas>` and `<svg>`.
   [Play it in the browser](https://tulustul.github.io/bevy-react/coldwake/).
+- [`examples/synth`](https://github.com/tulustul/bevy-react/tree/main/examples/synth):
+  a node graph editor for a modular synth you can hear — cables drawn by a
+  Bevy shader between named-node sockets, the patch played on the audio
+  thread, shared-value springs and beat lights, frosted `backdropFilter`
+  panels and crisp `rem` zoom.

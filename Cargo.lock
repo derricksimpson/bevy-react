@@ -6075,6 +6075,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "synth"
+version = "0.8.0"
+dependencies = [
+ "bevy",
+ "bevy-react",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "sys-locale"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

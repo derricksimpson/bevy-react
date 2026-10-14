@@ -194,7 +194,11 @@ impl SharedValues {
         });
     }
 
-    pub(crate) fn set(&mut self, id: SharedId, value: f32) {
+    /// Set a shared value (JS `sharedValue.id`) — what `sv.value = x` does,
+    /// for a value Rust drives: whatever animation was running stops (its
+    /// callback settles unfinished). Set it before [`AnimationSet::Apply`]
+    /// to show this frame.
+    pub fn set(&mut self, id: SharedId, value: f32) {
         let s = self.values.entry(id).or_insert(SharedValueState {
             current: value,
             active: None,

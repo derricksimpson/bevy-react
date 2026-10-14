@@ -89,6 +89,16 @@ the one he faces and makes the mouse its cursor.
 ![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/coldwake-suit.webp)
 ![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/coldwake-map.webp)
 
+[**Synth**](https://github.com/tulustul/bevy-react/tree/main/examples/synth)
+is a node graph editor for a modular synth you can hear: drag cables between
+sockets and they snap, whip and glow, cards pop in and lean as you drag
+them, and the whole patch plays, blinking and pulsing in time. Bevy draws
+the cables under the UI, following the sockets React lays out, keeps the
+text crisp at every zoom, and runs the synth on the audio thread.
+
+![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/synth-patch.webp)
+![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/synth-plug.webp)
+
 ## Getting started
 
 ```sh

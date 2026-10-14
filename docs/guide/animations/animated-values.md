@@ -57,6 +57,23 @@ Shared values and their running animations survive a
 [hot reload](../tooling/hot-reload.md) that keeps component state. A full
 reload clears them.
 
+Rust can read and drive a shared value too. Send its `x.id` in a message;
+the `SharedValues` resource's `get(id)` returns the live reading, and
+`set(id, value)` sets it the way `x.value = value` does (a running
+animation stops). Set it before `AnimationSet::Apply` to show it the same
+frame. The synth example drives its step lights from the audio clock this
+way:
+
+```rust
+use bevy_react::animations::{AnimationSet, SharedValues};
+
+fn show(clock: Res<Clock>, mut values: ResMut<SharedValues>) {
+    values.set(clock.lights, clock.position);
+}
+
+app.add_systems(Update, show.before(AnimationSet::Apply));
+```
+
 ## Drivers
 
 | Driver                                | Moves the value                                         |

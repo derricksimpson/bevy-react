@@ -10,6 +10,7 @@
     "examples/civilization/ui",
     "examples/cyberpunk/ui",
     "examples/coldwake/ui",
+    "examples/synth/ui",
     "docs"
   ],
   "scripts": {
