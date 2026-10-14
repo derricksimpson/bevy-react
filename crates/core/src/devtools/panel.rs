@@ -84,10 +84,11 @@ fn exit_interactions(state: &mut DevtoolsState) {
     state.tree_hover = None;
     state.pick_hover = None;
     // Belt-and-braces: the JS panel also reports `layersOpen: false` /
-    // `consoleOpen: false` when those tabs unmount, but every close path must
-    // kill the streams even if the message is lost.
+    // `consoleOpen: false` / `animationsOpen: false` when those tabs unmount,
+    // but every close path must kill the streams even if the message is lost.
     state.layers_tab_open = false;
     state.console_tab_open = false;
+    state.animations_tab_open = false;
     state.console_last_seq = None;
 }
 

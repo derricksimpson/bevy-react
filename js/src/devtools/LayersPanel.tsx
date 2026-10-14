@@ -305,7 +305,7 @@ function LayerRow({
 
 /** A non-interactive label pill (promotion reasons, "inactive") — a plain
  *  node, not the clickable `Chip`, so it doesn't read as a button. */
-function ReasonPill({ label }: { label: string }) {
+export function ReasonPill({ label }: { label: string }) {
   return (
     <node
       style={{

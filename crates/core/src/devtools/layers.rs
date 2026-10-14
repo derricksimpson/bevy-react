@@ -125,7 +125,7 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
 /// rounding in f32 and widening afterwards would resurrect the noise on the
 /// JSON wire (`0.4f32 as f64` prints `0.4000000059604645`; the f64-rounded
 /// value prints `0.4`).
-fn round3(v: f32) -> f64 {
+pub(super) fn round3(v: f32) -> f64 {
     (f64::from(v) * 1000.0).round() / 1000.0
 }
 
@@ -344,6 +344,7 @@ pub(super) fn emit_layers(
 mod tests {
     use super::*;
     use crate::devtools::DevtoolsConfig;
+    use crate::devtools::animations::DevtoolsAnimationsOpenMessage;
     use crate::devtools::console::DevtoolsConsoleOpenMessage;
     use crate::devtools::panel::DevtoolsOpenMessage;
     use crate::devtools::test_util::{drain_events, test_app};
@@ -706,8 +707,8 @@ mod tests {
         );
     }
 
-    /// The `devtools.layersOpen`/`devtools.consoleOpen` messages flip their
-    /// state flags, and every panel-close path clears them (via
+    /// The `devtools.layersOpen`/`consoleOpen`/`animationsOpen` messages flip
+    /// their state flags, and every panel-close path clears them (via
     /// `exit_interactions`) so a lost unmount message can't leave a stream
     /// armed.
     #[test]
@@ -720,10 +721,13 @@ mod tests {
             .trigger(DevtoolsLayersOpenMessage { on: true });
         app.world_mut()
             .trigger(DevtoolsConsoleOpenMessage { on: true });
+        app.world_mut()
+            .trigger(DevtoolsAnimationsOpenMessage { on: true });
         {
             let state = app.world().resource::<DevtoolsState>();
             assert!(state.layers_tab_open);
             assert!(state.console_tab_open);
+            assert!(state.animations_tab_open);
         }
         // Simulate a streamed watermark, then close.
         app.world_mut()
@@ -740,6 +744,10 @@ mod tests {
         assert!(
             !state.console_tab_open,
             "closing the panel must kill the console stream"
+        );
+        assert!(
+            !state.animations_tab_open,
+            "closing the panel must kill the animations stream"
         );
         assert_eq!(
             state.console_last_seq, None,

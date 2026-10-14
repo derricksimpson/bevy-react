@@ -1,13 +1,14 @@
 ---
-description: The built-in devtools inspector, toggled with F12 in debug builds, with a node tree, live style editing, layers, console and bridge log.
+description: The built-in devtools inspector, toggled with F12 in debug builds, with a node tree, live style editing, layers, animations, console and bridge log.
 ---
 
 # Devtools
 
 The devtools are an inspector for the live UI, drawn with bevy-react itself
 in an overlay above your app. They show the node tree as React built it,
-let you edit styles and props in place, list the composited layers, collect
-console output and warnings, and log every message that crosses the bridge.
+let you edit styles and props in place, list the composited layers and the
+running animations, collect console output and warnings, and log every
+message that crosses the bridge.
 They run in debug builds only.
 
 ## Usage
@@ -138,6 +139,28 @@ list with, for each layer:
 A layer whose node is not currently rendered is marked `inactive`. Hovering
 a row outlines its node on screen. The tab streams data only while it is
 shown.
+
+## Animations
+
+The Animations tab lists the [shared values](../animations/animated-values.md)
+with a running driver; the **idle** chip adds the idle ones a node is bound
+to. For each:
+
+- its id, its current reading, and a meter showing where the reading sits
+  between where the driver started and the values it aims for;
+- one line per driver stage, outermost first, with its progress: the run of
+  a `withRepeat` (`repeat 3 of inf, reverse`), the step of a `withSequence`,
+  the time left of a `withDelay`, how far a `withTiming` is, the velocity of
+  a `withSpring`;
+- the nodes bound to it and the fields they bind. Hovering one outlines it
+  on screen. A running value with no nodes drives nothing on screen.
+
+The meters are bound to the shared values themselves, so Bevy moves them
+every frame like any animated style; the numbers are sampled ten times a
+second. A value Rust drives with `SharedValues::set` has no driver: it is
+listed under **idle**, without a meter, while a node is bound to it. The tab
+lists at most 200 values and streams data only while it is shown.
+[Style transitions](../animations/style-transitions.md) are not listed.
 
 ## Paint flashing
 

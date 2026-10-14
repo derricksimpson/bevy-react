@@ -142,6 +142,32 @@ fn interrupting_a_tokened_driver_settles_unfinished() {
     assert!(values.take_settled().is_empty());
 }
 
+/// Releasing a value (its component unmounted) forgets it and stops its
+/// driver — the tick's idle gate sees nothing left to run — and a
+/// token-tagged driver settles unfinished, so its JS callback is not left
+/// pending. An unknown id is a no-op.
+#[test]
+fn release_forgets_the_value_and_stops_its_driver() {
+    let mut values = SharedValues::default();
+    values.animate(1, &timing(100.0, 1.0), Some(7));
+    values.declare(2, 5.0);
+    values.release(1);
+    assert_eq!(values.get(1), None);
+    assert!(!values.has_active(), "the released driver no longer ticks");
+    assert_eq!(
+        values.take_settled(),
+        vec![AnimationSettled {
+            id: 1,
+            token: 7,
+            finished: false
+        }]
+    );
+    values.release(1);
+    values.release(9);
+    assert!(values.take_settled().is_empty());
+    assert_eq!(values.get(2), Some(5.0), "other values are untouched");
+}
+
 #[test]
 fn driver_deserializes_from_js_wire_shape() {
     // The exact JSON `animated.ts` produces for a nested driver.
@@ -175,6 +201,8 @@ fn command_and_binding_deserialize() {
     assert!(matches!(cmd, AnimationCommand::Declare { id: 3, .. }));
     let cmd: AnimationCommand = serde_json::from_str(r#"{ "kind": "clear" }"#).unwrap();
     assert!(matches!(cmd, AnimationCommand::Clear));
+    let cmd: AnimationCommand = serde_json::from_str(r#"{ "kind": "release", "id": 4 }"#).unwrap();
+    assert!(matches!(cmd, AnimationCommand::Release { id: 4 }));
 
     // `animate` decodes with and without the completion-callback token (the
     // JS side omits the key entirely when no callback was passed).

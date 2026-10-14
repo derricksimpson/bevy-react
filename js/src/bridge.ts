@@ -51,6 +51,7 @@ export type AnimationCommand =
   | { kind: "set"; id: number; value: number }
   | { kind: "animate"; id: number; driver: unknown; token?: number }
   | { kind: "cancel"; id: number }
+  | { kind: "release"; id: number }
   | { kind: "clear" };
 
 // Mirrors `protocol::Outbound` on the Rust side (internally tagged with `t`).
@@ -196,7 +197,7 @@ export function reset(): void {
 }
 
 // Send an animation command to the animations plugin (declare/set/animate/
-// cancel/clear). Synchronous and fire-and-forget, like `emit`. Low-level — apps
+// cancel/release/clear). Synchronous and fire-and-forget, like `emit`. Low-level — apps
 // use the `useSharedValue` / `with*` helpers from `./animated`.
 export function animate(cmd: AnimationCommand): void {
   ops.op_animate(cmd);

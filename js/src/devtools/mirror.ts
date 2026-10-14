@@ -189,6 +189,41 @@ function applyOp(op: Op, devtools: boolean): void {
   }
 }
 
+/** Style variants never bind: Rust ignores an `{ animated }` wrapper there
+ *  (with a `styleBinding` warning). */
+const VARIANT_PROPS = new Set([
+  "hoverStyle",
+  "pressStyle",
+  "focusStyle",
+  "focusVisibleStyle",
+]);
+
+/** The wire paths in a node's base style and attributes whose `{ animated }`
+ *  wrapper reads shared value `id` (`opacity`, `transform.translateX`,
+ *  `filter[0].params.radius`) — the devtools Animations tab's field labels. */
+export function boundFields(node: MirrorNode, id: number): string[] {
+  const out: string[] = [];
+  const walk = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      value.forEach((v, i) => walk(v, `${path}[${i}]`));
+    } else if (value !== null && typeof value === "object") {
+      if ("animated" in value) {
+        const binding = value.animated as { id?: unknown } | null;
+        if (binding?.id === id) out.push(path);
+        return;
+      }
+      for (const [k, v] of Object.entries(value)) {
+        walk(v, path ? `${path}.${k}` : k);
+      }
+    }
+  };
+  walk(node.style, "");
+  for (const [k, v] of Object.entries(node.props)) {
+    if (!VARIANT_PROPS.has(k)) walk(v, k);
+  }
+  return out;
+}
+
 /** Match one warning against its node's retained values and store the flags.
  *  Returns whether a visible (non-devtools-node) flag changed — the caller's
  *  notify signal. Idempotent: an unchanged message never reports a change, so

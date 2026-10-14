@@ -53,8 +53,8 @@ export interface DevtoolsWarning {
  *  open, so it reopens on the next launch. */
 export interface DevtoolsSettings {
   open: boolean;
-  /** The active tab ("nodes" | "layers" | "console" | "bridge"); validated on
-   *  restore. */
+  /** The active tab ("nodes" | "layers" | "animations" | "console" |
+   *  "bridge"); validated on restore. */
   tab: string;
   mode: string;
   width_frac: number;
@@ -126,6 +126,31 @@ export interface DevtoolsLayers {
   layers: DevtoolsLayerRow[];
 }
 
+/** One shared value in a `devtools.animations` payload. */
+export interface DevtoolsAnimationRow {
+  /** The shared value's id (`SharedValue.id`). */
+  id: number;
+  /** The live reading, rounded to 3 decimals Rust-side. */
+  value: number;
+  /** One line per driver stage, outermost first, with its live phase —
+   *  opaque strings displayed verbatim. Empty when no driver runs. */
+  driver: string[];
+  /** What the running driver sweeps (where it started and every value it
+   *  aims for); `null` when idle or a single point. */
+  range: [number, number] | null;
+  /** The app nodes bound to this value. */
+  nodes: number[];
+}
+
+/** Bevy→JS `devtools.animations`: every running driver, then every idle
+ *  value an app node reads, by id. Sampled every 100 ms while the Animations
+ *  tab is active and diffed Rust-side — an idle table sends nothing. `total`
+ *  counts the values before Rust's row cap. */
+export interface DevtoolsAnimations {
+  values: DevtoolsAnimationRow[];
+  total: number;
+}
+
 /** One row in a `devtools.console` payload: an entry from the Rust-side
  *  console ring — JS `console.*` output (source "js"), or a Rust diag
  *  message / JS-runtime failure (source "rust"). */
@@ -176,6 +201,12 @@ export function onRestore(cb: (s: DevtoolsSettings) => void): () => void {
  *  tab is active. */
 export function onLayers(cb: (e: DevtoolsLayers) => void): () => void {
   return addEventListener("devtools.layers", cb as (v: unknown) => void);
+}
+
+/** The shared-value table (see [`DevtoolsAnimations`]); streamed while the
+ *  Animations tab is active. */
+export function onAnimations(cb: (e: DevtoolsAnimations) => void): () => void {
+  return addEventListener("devtools.animations", cb as (v: unknown) => void);
 }
 
 /** Console entries (see [`DevtoolsConsole`]); streamed while the Console tab
@@ -289,6 +320,12 @@ export function sendLayersOpen(on: boolean): void {
  *  (same mount/unmount contract as [`sendLayersOpen`]). */
 export function sendConsoleOpen(on: boolean): void {
   emit("devtools.consoleOpen", { on });
+}
+
+/** The Animations tab was shown/hidden — gates the Rust-side animations
+ *  stream (same mount/unmount contract as [`sendLayersOpen`]). */
+export function sendAnimationsOpen(on: boolean): void {
+  emit("devtools.animationsOpen", { on });
 }
 
 /** The Console tab's clear button — empty the Rust-side console ring (the

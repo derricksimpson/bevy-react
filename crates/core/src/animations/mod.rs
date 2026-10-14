@@ -151,6 +151,10 @@ struct SharedValueState {
     active: Option<Runner>,
     /// Correlation token of the active driver's JS completion callback, if any.
     token: Option<u64>,
+    /// The reading the active driver started from (the devtools Animations
+    /// tab spans its meter over it and the driver's targets).
+    #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+    from: f32,
 }
 
 impl SharedValueState {
@@ -184,6 +188,15 @@ impl SharedValues {
         self.active > 0
     }
 
+    /// Every value as `(id, reading, running driver + the reading it started
+    /// from)` — the devtools Animations tab's view of the table.
+    #[cfg(feature = "devtools")]
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (SharedId, f32, Option<(&Runner, f32)>)> {
+        self.values
+            .iter()
+            .map(|(&id, s)| (id, s.current, s.active.as_ref().map(|r| (r, s.from))))
+    }
+
     pub(crate) fn declare(&mut self, id: SharedId, initial: f32) {
         // Idempotent: only the first declaration sets the initial reading, so a
         // value survives React re-renders (matching `useSharedValue`).
@@ -191,6 +204,7 @@ impl SharedValues {
             current: initial,
             active: None,
             token: None,
+            from: initial,
         });
     }
 
@@ -203,6 +217,7 @@ impl SharedValues {
             current: value,
             active: None,
             token: None,
+            from: value,
         });
         self.settled.extend(s.interrupted(id));
         s.current = value;
@@ -216,6 +231,7 @@ impl SharedValues {
             current: 0.0,
             active: None,
             token: None,
+            from: 0.0,
         });
         self.settled.extend(s.interrupted(id));
         let from = s.current;
@@ -224,12 +240,22 @@ impl SharedValues {
         }
         s.active = Some(build_runner(driver, from));
         s.token = token;
+        s.from = from;
     }
 
     fn cancel(&mut self, id: SharedId) {
         if let Some(s) = self.values.get_mut(&id) {
             self.settled.extend(s.interrupted(id));
             if s.active.take().is_some() {
+                self.active -= 1;
+            }
+        }
+    }
+
+    fn release(&mut self, id: SharedId) {
+        if let Some(mut s) = self.values.remove(&id) {
+            self.settled.extend(s.interrupted(id));
+            if s.active.is_some() {
                 self.active -= 1;
             }
         }
@@ -285,6 +311,7 @@ fn drain_animation_commands(
             AnimationCommand::Set { id, value } => values.set(id, value),
             AnimationCommand::Animate { id, driver, token } => values.animate(id, &driver, token),
             AnimationCommand::Cancel { id } => values.cancel(id),
+            AnimationCommand::Release { id } => values.release(id),
             AnimationCommand::Clear => values.clear(),
         }
     }

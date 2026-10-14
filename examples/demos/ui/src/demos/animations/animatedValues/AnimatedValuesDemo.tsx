@@ -34,6 +34,10 @@ x.value = withTiming(200, { duration: 800 });
           A trailing function on a driver is its completion callback.
         </ListItem>
         <ListItem>Click a card for the details of each driver.</ListItem>
+        <ListItem>
+          Press <InlineCode>F12</InlineCode> and open the devtools Animations
+          tab to watch every running driver, its stage and the nodes it drives.
+        </ListItem>
       </List>
     </>
   ),

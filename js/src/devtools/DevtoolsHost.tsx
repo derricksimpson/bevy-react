@@ -24,6 +24,7 @@ import {
   sendSelect,
   sendSettings,
 } from "./api";
+import { AnimationsPanel } from "./AnimationsPanel";
 import { ConsolePanel } from "./ConsolePanel";
 import { Inspector } from "./Inspector";
 import { LayersPanel } from "./LayersPanel";
@@ -34,10 +35,16 @@ import { StatsBar } from "./StatsBar";
 import { theme } from "./theme";
 import { TreeView } from "./TreeView";
 
-type Tab = "nodes" | "layers" | "console" | "bridge";
+type Tab = "nodes" | "layers" | "animations" | "console" | "bridge";
 
 function isTab(v: unknown): v is Tab {
-  return v === "nodes" || v === "layers" || v === "console" || v === "bridge";
+  return (
+    v === "nodes" ||
+    v === "layers" ||
+    v === "animations" ||
+    v === "console" ||
+    v === "bridge"
+  );
 }
 
 /** Panel layout: docked to a window edge, or a floating window. */
@@ -368,6 +375,8 @@ export function DevtoolsHost() {
             />
           ) : tab === "layers" ? (
             <LayersPanel />
+          ) : tab === "animations" ? (
+            <AnimationsPanel />
           ) : tab === "console" ? (
             <ConsolePanel />
           ) : (
@@ -546,6 +555,11 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         label="Layers"
         active={tab === "layers"}
         onClick={() => onTab("layers")}
+      />
+      <TabButton
+        label="Animations"
+        active={tab === "animations"}
+        onClick={() => onTab("animations")}
       />
       <TabButton
         label="Console"

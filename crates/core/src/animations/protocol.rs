@@ -87,6 +87,9 @@ pub enum AnimationCommand {
     },
     /// Stop a value's active driver, freezing it where it is.
     Cancel { id: SharedId },
+    /// Forget a value: the component that declared it unmounted. A running
+    /// driver stops (its callback settles unfinished); ids are never reused.
+    Release { id: SharedId },
     /// Drop every shared value (sent on reconciler reset / hot reload).
     Clear,
 }
@@ -112,6 +115,17 @@ pub enum Binding {
         input: Vec<f32>,
         output: Vec<[f32; 4]>,
     },
+}
+
+impl Binding {
+    /// The shared value this binding reads.
+    pub fn id(&self) -> SharedId {
+        match self {
+            Self::Shared { id }
+            | Self::Interpolate { id, .. }
+            | Self::InterpolateColor { id, .. } => *id,
+        }
+    }
 }
 
 /// Identity of one continuous, animation-driveable style property. This is the

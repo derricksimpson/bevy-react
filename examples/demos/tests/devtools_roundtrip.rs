@@ -10,7 +10,10 @@
 
 use std::time::{Duration, Instant};
 
+use bevy_react::animations::Binding;
+use bevy_react::protocol::animatable::Animatable;
 use bevy_react::protocol::op::Op;
+use bevy_react::style::props::TRANSFORM;
 
 mod common;
 use common::Harness;
@@ -145,8 +148,105 @@ fn devtools_panel_round_trip() {
     }
     eprintln!("OK   Layers tab rendered the payload (reason pill + filter chain)");
 
-    // Phase 1c: the Console tab. Clicking it unmounts the Layers panel
+    // Phase 1c: the Animations tab. Clicking it unmounts the Layers panel
     // (whose cleanup reports `layersOpen { on: false }`) and mounts the
+    // Animations panel (which announces `animationsOpen { on: true }`). In a
+    // hand-built payload the running value renders with its driver line and
+    // a meter bound to the shared value itself; the idle one waits behind
+    // the "idle" chip until it is clicked.
+    let animations_tab = h
+        .tree
+        .find_button_under("Animations", Some(root_id))
+        .expect("no Animations tab button in the devtools panel");
+    h.click(animations_tab);
+
+    let mut saw_animations_open = false;
+    let mut saw_layers_unmount = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !(saw_animations_open && saw_layers_unmount) {
+        h.recv(Duration::from_millis(50));
+        while let Ok(msg) = h.emits.try_recv() {
+            if msg.name == "devtools.animationsOpen" {
+                assert_eq!(
+                    msg.value,
+                    serde_json::json!({ "on": true }),
+                    "opening the tab must announce on: true"
+                );
+                saw_animations_open = true;
+            }
+            if msg.name == "devtools.layersOpen" && msg.value == serde_json::json!({ "on": false })
+            {
+                saw_layers_unmount = true;
+            }
+        }
+    }
+    assert!(
+        saw_animations_open,
+        "no devtools.animationsOpen emit after opening the Animations tab"
+    );
+    assert!(
+        saw_layers_unmount,
+        "the Layers panel's unmount (tab switch) never reported layersOpen: false"
+    );
+    eprintln!("OK   Animations tab: animationsOpen {{ on: true }} emitted (Layers unmounted)");
+
+    h.event(
+        "devtools.animations",
+        serde_json::json!({
+            "values": [
+                { "id": 9001, "value": 0.5, "driver": ["timing 0 -> 1, 300ms linear, 50%"],
+                  "range": [0.0, 1.0], "nodes": [] },
+                { "id": 9002, "value": 2.0, "driver": [], "range": null, "nodes": [] },
+            ],
+            "total": 2,
+        }),
+    );
+    let meter = h.wait_op(Duration::from_secs(10), |op| match op {
+        Op::Create { props, .. } => match props.style.as_ref()?.get(&TRANSFORM)?.translate_x {
+            // The app's own values are allocated from 1, never this high.
+            Some(Animatable::Animated(ref slot)) if slot.binding.id() == 9001 => {
+                Some(slot.binding.clone())
+            }
+            _ => None,
+        },
+        _ => None,
+    });
+    assert_eq!(
+        meter,
+        Some(Binding::Interpolate {
+            id: 9001,
+            input: vec![0.0, 1.0],
+            output: vec![-72.0, 0.0],
+        }),
+        "the running value's meter must bind the shared value over its range"
+    );
+    let rendered =
+        |h: &common::Harness, text: &str| h.tree.text_of.values().any(|t| t.trim() == text);
+    assert!(
+        rendered(&h, "timing 0 -> 1, 300ms linear, 50%"),
+        "the running row's driver line did not render"
+    );
+    assert!(
+        !rendered(&h, "sv 9002"),
+        "an idle value must wait behind the chip"
+    );
+    let idle_chip = h
+        .tree
+        .find_button_under("idle", Some(root_id))
+        .expect("no idle chip in the Animations tab");
+    h.click(idle_chip);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !rendered(&h, "sv 9002") {
+        assert!(
+            Instant::now() < deadline,
+            "the idle chip never revealed the idle value"
+        );
+        h.recv(Duration::from_millis(100));
+    }
+    eprintln!("OK   Animations tab rendered the payload (bound meter, idle behind its chip)");
+
+    // Phase 1d: the Console tab. Clicking it unmounts the Animations panel
+    // (whose cleanup reports `animationsOpen { on: false }`) and mounts the
     // Console panel (which announces `consoleOpen { on: true }`). A
     // hand-built `devtools.console` payload must render both a js and a rust
     // row, and the clear button must emit `devtools.consoleClear`.
@@ -157,9 +257,9 @@ fn devtools_panel_round_trip() {
     h.click(console_tab);
 
     let mut saw_console_open = false;
-    let mut saw_layers_unmount = false;
+    let mut saw_animations_unmount = false;
     let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && !(saw_console_open && saw_layers_unmount) {
+    while Instant::now() < deadline && !(saw_console_open && saw_animations_unmount) {
         h.recv(Duration::from_millis(50));
         while let Ok(msg) = h.emits.try_recv() {
             if msg.name == "devtools.consoleOpen" {
@@ -170,9 +270,10 @@ fn devtools_panel_round_trip() {
                 );
                 saw_console_open = true;
             }
-            if msg.name == "devtools.layersOpen" && msg.value == serde_json::json!({ "on": false })
+            if msg.name == "devtools.animationsOpen"
+                && msg.value == serde_json::json!({ "on": false })
             {
-                saw_layers_unmount = true;
+                saw_animations_unmount = true;
             }
         }
     }
@@ -181,10 +282,10 @@ fn devtools_panel_round_trip() {
         "no devtools.consoleOpen emit after opening the Console tab"
     );
     assert!(
-        saw_layers_unmount,
-        "the Layers panel's unmount (tab switch) never reported layersOpen: false"
+        saw_animations_unmount,
+        "the Animations panel's unmount (tab switch) never reported animationsOpen: false"
     );
-    eprintln!("OK   Console tab: consoleOpen {{ on: true }} emitted (Layers unmounted)");
+    eprintln!("OK   Console tab: consoleOpen {{ on: true }} emitted (Animations unmounted)");
 
     h.event(
         "devtools.console",

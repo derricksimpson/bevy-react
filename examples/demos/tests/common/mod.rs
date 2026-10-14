@@ -126,7 +126,7 @@ pub struct Harness {
     pub tree: Tree,
     outbound: UnboundedSender<Outbound>,
     // Held open: dropping the reload sender would look like shutdown.
-    _reload: UnboundedSender<()>,
+    reload: UnboundedSender<()>,
 }
 
 impl Harness {
@@ -147,7 +147,7 @@ impl Harness {
         let (request_tx, request_rx) = crossbeam_channel::unbounded();
         let (anim_tx, anims) = crossbeam_channel::unbounded();
         let (outbound, outbound_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (_reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
         answer_requests(request_rx, outbound.clone());
         let senders = HostSenders {
             ops: ops_tx,
@@ -171,13 +171,19 @@ impl Harness {
             flushes,
             tree: Tree::default(),
             outbound,
-            _reload,
+            reload,
         })
     }
 
     /// Send the JS side one Bevy→JS message.
     pub fn send(&self, msg: Outbound) {
         self.outbound.send(msg).expect("JS thread gone");
+    }
+
+    /// Hot-reload: re-run the app bundle in the live isolate — a React Fast
+    /// Refresh, every component function swapped.
+    pub fn reload(&self) {
+        self.reload.send(()).expect("JS thread gone");
     }
 
     /// Report a UI event.

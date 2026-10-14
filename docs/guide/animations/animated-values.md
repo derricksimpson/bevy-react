@@ -52,6 +52,11 @@ one per component instance. `initial` is used only on the first render.
   nodes, and you can pass it to other components as a prop.
 - Assign drivers in event handlers and effects. An assignment during render
   restarts the animation on every render.
+- A shared value lives as long as the component that created it. When that
+  component unmounts, the value is freed and a running driver stops; its
+  completion callback fires with `false`. Removing only the nodes bound to
+  it frees nothing: a driver keeps running, driving nothing, until the
+  component unmounts or `cancelAnimation` stops it.
 
 Shared values and their running animations survive a
 [hot reload](../tooling/hot-reload.md) that keeps component state. A full
@@ -215,6 +220,9 @@ idle value costs nothing. Transform, opacity and color bindings do not
 trigger a relayout. Layout bindings (sizes, positions, gaps, `aspectRatio`, `borderRadius`)
 relayout the UI on every frame they change, so prefer `transform` for pure
 motion.
+
+The devtools [Animations](../tooling/devtools.md#animations) tab lists every
+running driver and every bound value live, with the nodes each one drives.
 
 ## Limits
 

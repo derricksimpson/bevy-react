@@ -296,7 +296,7 @@ function Row({
   );
 }
 
-function rowLabel(node: MirrorNode): string {
+export function rowLabel(node: MirrorNode): string {
   if (node.kind === "#text") return `"${truncate(node.text ?? "", 28)}"`;
   // A named element shows its `name` (a `<root>`'s doubles as its devtools
   // root-selector label).

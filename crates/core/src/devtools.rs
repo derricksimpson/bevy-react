@@ -34,14 +34,18 @@
 //!   payload, so an idle app sends nothing),
 //!   `devtools.console { entries }` (the [`crate::console_log`] ring — JS
 //!   console output, diag messages, JS-runtime failures; the full backlog
-//!   when the Console tab opens, then increments while it stays open).
+//!   when the Console tab opens, then increments while it stays open),
+//!   `devtools.animations { values, total }` (the shared-value table's running
+//!   drivers and bound values — sampled every 100 ms while the Animations
+//!   tab is shown, diffed like the layers).
 //! - JS → Bevy messages: `devtools.open { open }`, `devtools.pick { on }`,
 //!   `devtools.select { id }`, `devtools.highlight { id }`,
 //!   `devtools.overlay { on }`, `devtools.paintFlash { on }` (paint
 //!   flashing — see [`paint_flash`]), `devtools.panelRoot { id }`,
 //!   `devtools.layersOpen { on }` (the Layers tab was shown/hidden — gates
-//!   the layer stream), `devtools.consoleOpen { on }` (likewise for the
-//!   console stream), `devtools.consoleClear {}` (empty the console ring),
+//!   the layer stream), `devtools.consoleOpen { on }` and
+//!   `devtools.animationsOpen { on }` (likewise for their streams),
+//!   `devtools.consoleClear {}` (empty the console ring),
 //!   `devtools.dock { side, width }` (the panel's space reservation — see
 //!   [`apply_dock_reservation`]), `devtools.settings { … }` (the persisted
 //!   layout blob — see [`settings::DevtoolsSettings`]).
@@ -68,6 +72,7 @@ use bevy::ui::UiSystems;
 use crate::message::ReactAppExt;
 use crate::protocol::NodeId;
 
+mod animations;
 mod console;
 mod element_fields;
 #[cfg(test)]
@@ -82,6 +87,7 @@ mod style_fields;
 #[cfg(test)]
 mod test_util;
 
+use animations::{emit_animations, on_animations_open_message};
 use console::{
     emit_console, emit_runtime_warnings, on_console_clear_message, on_console_open_message,
 };
@@ -174,11 +180,13 @@ impl Plugin for DevtoolsPlugin {
         // without `InputPlugin` (wiring-only tests) must not panic on them.
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
-        // `emit_layers` reads the layer registries; idempotent in the full app
-        // (`plugin.rs` inits them too), load-bearing for headless harnesses
-        // that build this plugin without `ReactUiPlugin`.
+        // `emit_layers` reads the layer registries and `emit_animations` the
+        // shared-value table; idempotent in the full app (`plugin.rs` and the
+        // animations plugin init them too), load-bearing for headless
+        // harnesses that build this plugin without `ReactUiPlugin`.
         app.init_resource::<crate::layer::LayersRegistry>();
         app.init_resource::<crate::layer::LayerMembership>();
+        app.init_resource::<crate::animations::SharedValues>();
         // Start collecting apply-time invalid-value warnings (see
         // `crate::diag`): armed for the app's whole lifetime, panel open or
         // not, so warnings from the initial mount are waiting when it opens.
@@ -223,6 +231,7 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_layers_open_message)
         .add_react_handler(on_console_open_message)
         .add_react_handler(on_console_clear_message)
+        .add_react_handler(on_animations_open_message)
         // The editor's style-field and element tables, pulled once at panel
         // install.
         .add_react_request_handler(on_style_fields_request)
@@ -245,6 +254,8 @@ impl Plugin for DevtoolsPlugin {
                 // Same loose ordering: console-ring entries pushed later this
                 // frame drain next frame.
                 emit_console,
+                // This frame's readings.
+                emit_animations.after(crate::animations::AnimationSet::Tick),
             ),
         )
         // A quit right after a layout drag must not lose the change: flush
@@ -325,6 +336,9 @@ pub(crate) struct DevtoolsState {
     /// Whether the panel's Console tab is currently shown (reported via
     /// `devtools.consoleOpen`). Gates the `devtools.console` stream.
     pub console_tab_open: bool,
+    /// Whether the panel's Animations tab is currently shown (reported via
+    /// `devtools.animationsOpen`). Gates the `devtools.animations` stream.
+    pub animations_tab_open: bool,
     /// The console stream watermark: the highest [`crate::console_log`] seq
     /// already sent. `None` = send the full backlog next frame. Lives in the
     /// resource (not a `Local`) so the `consoleOpen` handler can reset it on
@@ -354,6 +368,7 @@ impl Default for DevtoolsState {
             dock_width: 0.0,
             layers_tab_open: false,
             console_tab_open: false,
+            animations_tab_open: false,
             console_last_seq: None,
         }
     }

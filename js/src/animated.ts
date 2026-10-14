@@ -19,7 +19,7 @@
 // Rust side (the same contract `bridge.ts` keeps with `protocol::Op`). Keep them
 // in sync.
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { animate, registerAnimationCallback } from "./bridge";
 
 /** Easing curve names understood by `withTiming` (mirrors Rust `Easing`). */
@@ -138,12 +138,14 @@ let nextSharedId = 1;
 
 /**
  * Declare a shared value with an `initial` reading. Stable across re-renders
- * (the id is allocated once per component instance).
+ * (the id is allocated once per component instance). The Bevy-side value
+ * lives as long as the component: unmounting releases it, stopping its
+ * driver.
  */
-// TODO(review): this performs a bridge side-effect (`animate({kind:"declare"})`) DURING
-// render. It's safe today only because StrictMode is off and the root is driven synchronously;
-// under StrictMode or a discarded/double-invoked render it would allocate (and leak) a shared
-// id in the Bevy table until the next `clear`. Move the declare into an effect.
+// The declare happens DURING render, so a binding in the same commit reads
+// the value on its first frame. A render React discards before committing (an
+// abandoned concurrent render) still leaks its id until the next `clear`: no
+// effect of it ever runs to release it.
 export function useSharedValue(initial: number): SharedValue {
   const ref = useRef<SharedValue | null>(null);
   if (ref.current === null) {
@@ -151,7 +153,30 @@ export function useSharedValue(initial: number): SharedValue {
     animate({ kind: "declare", id, initial });
     ref.current = makeSharedValue(id, initial);
   }
+  const { id } = ref.current;
+  useEffect(() => {
+    releasing.delete(id);
+    return () => releaseSoon(id);
+  }, [id]);
   return ref.current;
+}
+
+// Releases wait for a microtask. A hot reload swaps every component function,
+// which makes React re-run every effect — cleanup, then setup — on components
+// that stay mounted (StrictMode's double invoke does the same), and their
+// values and running animations must survive that. The re-run setup lands in
+// the same synchronous effects flush, before the microtask, and takes its id
+// back; only a real unmount reaches Bevy.
+const releasing = new Set<number>();
+
+function releaseSoon(id: number): void {
+  if (releasing.size === 0) queueMicrotask(flushReleases);
+  releasing.add(id);
+}
+
+function flushReleases(): void {
+  for (const id of releasing) animate({ kind: "release", id });
+  releasing.clear();
 }
 
 function makeSharedValue(id: number, initial: number): SharedValue {

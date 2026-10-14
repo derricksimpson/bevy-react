@@ -30,9 +30,10 @@ use super::{DevtoolsConfig, DevtoolsState};
 pub(crate) struct DevtoolsSettings {
     /// Whether the panel was open — persisted so it reopens on relaunch.
     open: bool,
-    /// The active tab ("nodes" | "layers" | "console" | "bridge") — persisted
-    /// so the panel reopens where you left it. Loose string; JS validates on
-    /// restore, unknown values fall back to the default tab.
+    /// The active tab ("nodes" | "layers" | "animations" | "console" |
+    /// "bridge") — persisted so the panel reopens where you left it. Loose
+    /// string; JS validates on restore, unknown values fall back to the
+    /// default tab.
     tab: String,
     mode: String,
     width_frac: f32,
