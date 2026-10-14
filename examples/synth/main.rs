@@ -47,6 +47,8 @@ fn main() {
     let mut window = Window {
         title: "Synth · bevy-react".into(),
         resolution: WindowResolution::new(1440, 900),
+        // The web build's canvas fills the page (`ui/index.html`).
+        fit_canvas_to_parent: true,
         ..default()
     };
     if let Some(cfg) = &shoot {

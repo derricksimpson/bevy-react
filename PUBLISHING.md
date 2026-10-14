@@ -91,4 +91,5 @@ npm run deploy:demos
 npm run deploy:civilization
 npm run deploy:cyberpunk
 npm run deploy:coldwake
+npm run deploy:synth
 ```

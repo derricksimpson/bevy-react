@@ -13,6 +13,11 @@ npm run build -w synth   # build the React bundles
 cargo run -p synth
 ```
 
+It also runs in the browser:
+[play it on GitHub Pages](https://tulustul.github.io/bevy-react/synth/),
+or build the wasm version yourself with `npm run build:web -w synth` (it
+serves the result; see [Web builds](../../docs/guide/tooling/web.md)).
+
 `npm run watch -w synth` rebuilds on save; edits hot-reload with the patch
 intact.
 

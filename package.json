@@ -25,11 +25,12 @@
     "generate": "npm run style:generate && npm run elements:generate && npm run reference:generate",
     "docs": "tsx docs/src/build.ts",
     "screenshots": "node screenshots/capture.mjs",
-    "deploy:docs": "tsx docs/src/build.ts && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages --remove '{*,!(demo|cyberpunk|civilization|coldwake)/**}'",
+    "deploy:docs": "tsx docs/src/build.ts && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages --remove '{*,!(demo|cyberpunk|civilization|coldwake|synth)/**}'",
     "deploy:demos": "npm run build:web:prod -w demos -- --build-only && gh-pages -d examples/demos/ui/dist -e demo --no-history -b gh-pages",
     "deploy:cyberpunk": "npm run build:web:prod -w cyberpunk -- --build-only && gh-pages -d examples/cyberpunk/ui/dist -e cyberpunk --no-history -b gh-pages",
     "deploy:civilization": "npm run build:web:prod -w civilization -- --build-only && gh-pages -d examples/civilization/ui/dist -e civilization --no-history -b gh-pages",
-    "deploy:coldwake": "npm run build:web:prod -w coldwake -- --build-only && gh-pages -d examples/coldwake/ui/dist -e coldwake --no-history -b gh-pages"
+    "deploy:coldwake": "npm run build:web:prod -w coldwake -- --build-only && gh-pages -d examples/coldwake/ui/dist -e coldwake --no-history -b gh-pages",
+    "deploy:synth": "npm run build:web:prod -w synth -- --build-only && gh-pages -d examples/synth/ui/dist -e synth --no-history -b gh-pages"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

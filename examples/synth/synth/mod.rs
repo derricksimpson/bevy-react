@@ -15,9 +15,11 @@ mod voices;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::audio::{AddAudioSource, ChannelCount, Decodable, SampleRate, Source};
+// `std`'s panics on the web.
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use bevy_react::animations::{AnimationSet, SharedId, SharedValues};
 use bevy_react::{ReactAppExt, react_message};

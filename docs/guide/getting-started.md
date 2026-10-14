@@ -290,3 +290,4 @@ elements, styles or filters should depend on `bevy-react` with
   Bevy shader between named-node sockets, the patch played on the audio
   thread, shared-value springs and beat lights, frosted `backdropFilter`
   panels and crisp `rem` zoom.
+  [Play it in the browser](https://tulustul.github.io/bevy-react/synth/).

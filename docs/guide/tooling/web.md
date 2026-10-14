@@ -163,8 +163,9 @@ served as is.
 
 The demos app and the
 [Cyberpunk](https://tulustul.github.io/bevy-react/cyberpunk/),
-[Civilization](https://tulustul.github.io/bevy-react/civilization/) and
-[Coldwake](https://tulustul.github.io/bevy-react/coldwake/) showcases
+[Civilization](https://tulustul.github.io/bevy-react/civilization/),
+[Coldwake](https://tulustul.github.io/bevy-react/coldwake/) and
+[Synth](https://tulustul.github.io/bevy-react/synth/) showcases
 build for the web with one script,
 [`examples/build-web.mjs`](../../../examples/build-web.mjs): it builds both
 bundles with `buildVendor` and `buildApp` from `bevy-react/build-lib`,

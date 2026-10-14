@@ -95,6 +95,7 @@ sockets and they snap, whip and glow, cards pop in and lean as you drag
 them, and the whole patch plays, blinking and pulsing in time. Bevy draws
 the cables under the UI, following the sockets React lays out, keeps the
 text crisp at every zoom, and runs the synth on the audio thread.
+[Play it in your browser](https://tulustul.github.io/bevy-react/synth/).
 
 ![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/synth-patch.webp)
 ![](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/synth-plug.webp)
