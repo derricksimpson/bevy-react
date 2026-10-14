@@ -41,6 +41,7 @@ mod apply;
 mod eval;
 pub(crate) mod props;
 pub mod protocol;
+mod run;
 mod runner;
 
 pub(crate) use apply::apply_animated_nodes;
@@ -52,6 +53,7 @@ pub use protocol::{
     AnimatableProperty, AnimatedBindings, AnimationCommand, Binding, Driver, Easing, SharedId,
     ValueKind,
 };
+pub use run::{Run, RunLength, run_length};
 pub use runner::{Runner, build_runner};
 
 /// Adds the animation orchestration: the [`SharedValues`] table, the per-frame
@@ -148,13 +150,9 @@ pub struct SharedValues {
 
 struct SharedValueState {
     current: f32,
-    active: Option<Runner>,
+    active: Option<Run>,
     /// Correlation token of the active driver's JS completion callback, if any.
     token: Option<u64>,
-    /// The reading the active driver started from (the devtools Animations
-    /// tab spans its meter over it and the driver's targets).
-    #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
-    from: f32,
 }
 
 impl SharedValueState {
@@ -188,13 +186,24 @@ impl SharedValues {
         self.active > 0
     }
 
-    /// Every value as `(id, reading, running driver + the reading it started
-    /// from)` — the devtools Animations tab's view of the table.
+    /// Every value as `(id, reading, running driver)` — the devtools
+    /// Animations tab's view of the table.
     #[cfg(feature = "devtools")]
-    pub(crate) fn entries(&self) -> impl Iterator<Item = (SharedId, f32, Option<(&Runner, f32)>)> {
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (SharedId, f32, Option<&Run>)> {
         self.values
             .iter()
-            .map(|(&id, s)| (id, s.current, s.active.as_ref().map(|r| (r, s.from))))
+            .map(|(&id, s)| (id, s.current, s.active.as_ref()))
+    }
+
+    /// Move a running value's driver to `t` seconds since it started (the
+    /// devtools scrubber; see [`Run::seek`]). No-op for an idle value.
+    #[cfg(feature = "devtools")]
+    pub(crate) fn seek(&mut self, id: SharedId, t: f32) {
+        if let Some(s) = self.values.get_mut(&id)
+            && let Some(run) = s.active.as_mut()
+        {
+            s.current = run.seek(t);
+        }
     }
 
     pub(crate) fn declare(&mut self, id: SharedId, initial: f32) {
@@ -204,7 +213,6 @@ impl SharedValues {
             current: initial,
             active: None,
             token: None,
-            from: initial,
         });
     }
 
@@ -217,7 +225,6 @@ impl SharedValues {
             current: value,
             active: None,
             token: None,
-            from: value,
         });
         self.settled.extend(s.interrupted(id));
         s.current = value;
@@ -231,16 +238,14 @@ impl SharedValues {
             current: 0.0,
             active: None,
             token: None,
-            from: 0.0,
         });
         self.settled.extend(s.interrupted(id));
         let from = s.current;
         if s.active.is_none() {
             self.active += 1;
         }
-        s.active = Some(build_runner(driver, from));
+        s.active = Some(Run::new(driver.clone(), from));
         s.token = token;
-        s.from = from;
     }
 
     fn cancel(&mut self, id: SharedId) {
@@ -274,8 +279,8 @@ impl SharedValues {
             return;
         }
         for (&id, s) in self.values.iter_mut() {
-            if let Some(runner) = s.active.as_mut() {
-                let (value, finished) = runner.step(dt);
+            if let Some(run) = s.active.as_mut() {
+                let (value, finished) = run.step(dt);
                 s.current = value;
                 if finished {
                     s.active = None;

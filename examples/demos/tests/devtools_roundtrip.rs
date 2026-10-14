@@ -190,17 +190,7 @@ fn devtools_panel_round_trip() {
     );
     eprintln!("OK   Animations tab: animationsOpen {{ on: true }} emitted (Layers unmounted)");
 
-    h.event(
-        "devtools.animations",
-        serde_json::json!({
-            "values": [
-                { "id": 9001, "value": 0.5, "driver": ["timing 0 -> 1, 300ms linear, 50%"],
-                  "range": [0.0, 1.0], "nodes": [] },
-                { "id": 9002, "value": 2.0, "driver": [], "range": null, "nodes": [] },
-            ],
-            "total": 2,
-        }),
-    );
+    h.event("devtools.animations", animations_payload(false));
     let meter = h.wait_op(Duration::from_secs(10), |op| match op {
         Op::Create { props, .. } => match props.style.as_ref()?.get(&TRANSFORM)?.translate_x {
             // The app's own values are allocated from 1, never this high.
@@ -244,6 +234,65 @@ fn devtools_panel_round_trip() {
         h.recv(Duration::from_millis(100));
     }
     eprintln!("OK   Animations tab rendered the payload (bound meter, idle behind its chip)");
+
+    // The transition line reads its spec and progress while playing; the
+    // pause chip asks Rust to pause the app clock; once the stream reports
+    // it paused, every running row gets a scrubber, and pressing one asks
+    // Rust to move that run.
+    assert!(
+        rendered(&h, "opacity: 300ms easeOut, 33%"),
+        "the transition line did not render"
+    );
+    let pause = h
+        .tree
+        .find_button_under("pause", Some(root_id))
+        .expect("no pause chip in the Animations tab");
+    h.click(pause);
+    let clock = wait_emit(&mut h, "devtools.animationsClock");
+    assert_eq!(clock, serde_json::json!({ "paused": true, "speed": 1 }));
+    h.event("devtools.animations", animations_payload(true));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !rendered(&h, "100 / 300 ms") {
+        assert!(
+            Instant::now() < deadline,
+            "a paused tab never showed the transition's scrubber"
+        );
+        h.recv(Duration::from_millis(100));
+    }
+    assert!(
+        rendered(&h, "150 / 300 ms"),
+        "the running value's scrubber did not render"
+    );
+    // The scrubber row holds the track and the time label.
+    let label = *h
+        .tree
+        .text_of
+        .iter()
+        .find(|(_, t)| t.trim() == "100 / 300 ms")
+        .expect("scrubber label")
+        .0;
+    let label_box = h.tree.parent_of[&label];
+    let row = h.tree.parent_of[&label_box];
+    let track = *h
+        .tree
+        .parent_of
+        .iter()
+        .find(|&(child, parent)| *parent == row && *child != label_box)
+        .expect("scrubber track")
+        .0;
+    h.ui_event(bevy_react::protocol::outbound::UiEvent {
+        id: track,
+        kind: "pointerDown".into(),
+        x: Some(0.5),
+        y: Some(0.5),
+        button: Some(0),
+        ..Default::default()
+    });
+    let seek = wait_emit(&mut h, "devtools.seekRun");
+    assert_eq!(seek["node"], 9100);
+    assert_eq!(seek["label"], "opacity");
+    assert!((seek["t"].as_f64().unwrap() - 0.15).abs() < 1e-9, "{seek}");
+    eprintln!("OK   Animations tab: pause asks for the clock, a paused scrubber seeks");
 
     // Phase 1d: the Console tab. Clicking it unmounts the Animations panel
     // (whose cleanup reports `animationsOpen { on: false }`) and mounts the
@@ -383,4 +432,38 @@ fn devtools_panel_round_trip() {
     );
     eprintln!("OK   close: devtools.open {{ open: false }} emitted, <root> removed");
     eprintln!("PASS devtools end-to-end");
+}
+
+/// A hand-built `devtools.animations` payload: a running and an idle value,
+/// one node's opacity transition, and the clock.
+fn animations_payload(paused: bool) -> serde_json::Value {
+    serde_json::json!({
+        "values": [
+            { "id": 9001, "value": 0.5, "driver": ["timing 0 -> 1, 300ms linear, 50%"],
+              "range": [0.0, 1.0], "time": [0.15, 0.0, 0.3], "nodes": [] },
+            { "id": 9002, "value": 2.0, "driver": [], "range": null, "time": null, "nodes": [] },
+        ],
+        "total": 2,
+        "transitions": [
+            { "node": 9100, "lines": [
+                { "label": "opacity", "spec": "300ms easeOut", "time": [0.1, 0.0, 0.3] },
+            ] },
+        ],
+        "transitions_total": 1,
+        "clock": { "paused": paused, "speed": 1.0 },
+    })
+}
+
+/// The next emit named `name`, within 10 s.
+fn wait_emit(h: &mut Harness, name: &str) -> serde_json::Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        h.recv(Duration::from_millis(50));
+        while let Ok(msg) = h.emits.try_recv() {
+            if msg.name == name {
+                return msg.value;
+            }
+        }
+    }
+    panic!("no {name} emit");
 }

@@ -49,6 +49,21 @@ pub struct ShapeTransitionState {
     channel: ShapeChannel,
 }
 
+/// The devtools Animations tab's view: each eased attr's run, under its
+/// attribute name.
+impl bevy_react_core::ext::AnimationRuns for ShapeTransitionState {
+    fn visit_runs(
+        &mut self,
+        f: &mut dyn FnMut(&'static str, &mut bevy_react_core::animations::Run),
+    ) {
+        for (slot, (name, ..)) in self.channel.slots.iter_mut().zip(NUMERIC_ATTRS) {
+            if let Some(run) = slot.as_mut().and_then(|s| s.ch.runner.as_mut()) {
+                f(name, run);
+            }
+        }
+    }
+}
+
 /// Stamp (or clear) a shape entity's transition state from its assembled
 /// attrs: present exactly while `attrs.transition` is. Persists across
 /// re-sends (the state carries the in-flight channels). Called by the
@@ -289,6 +304,30 @@ mod tests {
             tick,
             "a settled transition must not tick Changed<SvgShape>"
         );
+    }
+
+    /// The devtools see the in-flight attr under its name, and a seek
+    /// lands on the next (paused, zero-step) drive.
+    #[test]
+    fn runs_are_listed_and_seekable() {
+        use bevy_react_core::ext::AnimationRuns;
+        let (mut world, mut schedule) = world();
+        let e = spawn_shape(&mut world, ShapeKind::Circle, specced());
+        schedule.run(&mut world); // seed at 30
+        set_cx(&mut world, e, 70.0);
+        advance(&mut world, 0.25);
+        schedule.run(&mut world);
+
+        let mut state = world.get_mut::<ShapeTransitionState>(e).unwrap();
+        let mut lines = Vec::new();
+        state.visit_runs(&mut |label, run| {
+            lines.push((label, run.timeline()));
+            run.seek(0.75);
+        });
+        assert_eq!(lines, [("cx", (0.25, 0.0, 1.0))]);
+        advance(&mut world, 0.0);
+        schedule.run(&mut world);
+        assert!((cx(&world, e) - 60.0).abs() < 1e-3, "seeked to 3/4");
     }
 
     /// A second retarget mid-flight redirects smoothly: the new ease starts

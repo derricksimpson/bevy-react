@@ -42,8 +42,20 @@ impl ScrollTransitionState {
     }
 }
 
+/// The devtools Animations tab's view: both axes under the `scroll` key.
+impl crate::ext::AnimationRuns for ScrollTransitionState {
+    fn visit_runs(&mut self, f: &mut dyn FnMut(&'static str, &mut crate::animations::Run)) {
+        for run in [&mut self.x.runner, &mut self.y.runner]
+            .into_iter()
+            .filter_map(Option::as_mut)
+        {
+            f("scroll", run);
+        }
+    }
+}
+
 /// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`
-/// using the same per-channel [`Runner`](crate::animations::Runner) as
+/// using the same per-channel [`Run`](crate::animations::Run) as
 /// [`drive_transitions`](super::drive_transitions). Writes only on a
 /// frame the eased value actually moved, so a settled offset doesn't spam
 /// `Changed<ScrollPosition>` (and thus `onScroll`). The target is pre-clamped by the

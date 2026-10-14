@@ -223,6 +223,7 @@ motion.
 
 The devtools [Animations](../tooling/devtools.md#animations) tab lists every
 running driver and every bound value live, with the nodes each one drives.
+Pause it to scrub a driver with a slider.
 
 ## Limits
 

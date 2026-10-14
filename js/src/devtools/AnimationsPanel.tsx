@@ -1,35 +1,38 @@
 // The Animations tab: the shared-value table — every running driver (and,
-// behind the "idle" chip, every idle value an app node reads) — with each
-// driver stage's live phase and the nodes the value drives.
+// behind the "idle" chip, every idle value an app node reads) — and every
+// node with transitions in flight, plus the playback controls: pause (also
+// the devtools pause key, F11 by default) and speed drive the app clock, and
+// a paused tab scrubs each run on its own.
 //
 // Two clocks. The readouts arrive as `devtools.animations` events, sampled by
-// Rust every 100 ms while this panel is mounted (the mount effect announces
-// `devtools.animationsOpen`, its cleanup withdraws it — the LayersPanel
-// contract). The meters don't wait for them: each is bound to its shared
-// value itself, `{ animated }` like any app style, so the animation engine
-// slides it every frame with no bridge traffic and no re-render.
+// Rust every 100 ms of real time while this panel is mounted (the mount
+// effect announces `devtools.animationsOpen`, its cleanup withdraws it — the
+// LayersPanel contract; Rust hands the app clock back on that withdrawal).
+// The meters don't wait for them: each is bound to its shared value itself,
+// `{ animated }` like any app style, so the animation engine slides it every
+// frame with no bridge traffic and no re-render.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   onAnimations,
+  sendAnimationsClock,
   sendAnimationsOpen,
   sendHighlight,
-  type DevtoolsAnimationRow,
   type DevtoolsAnimations,
 } from "./api";
+import { TransitionRow, ValueRow } from "./AnimationRows";
 import { Chip, ScrollArea } from "./DevtoolsHost";
-import { ReasonPill } from "./LayersPanel";
-import { boundFields, mirror } from "./mirror";
 import { theme } from "./theme";
-import { rowLabel, useMirrorVersion } from "./TreeView";
+import { useMirrorVersion } from "./TreeView";
 
-/** The meter's width — px, because a bound length is always px. */
-const METER = 72;
+const SPEEDS = [0.1, 0.25, 0.5, 1, 2];
 
 export function AnimationsPanel() {
   // Node labels and bound fields come from the mirror; re-render when it moves.
   useMirrorVersion();
   const [table, setTable] = useState<DevtoolsAnimations | null>(null);
+  const [values, setValues] = useState(true);
+  const [transitions, setTransitions] = useState(true);
   // Idle bound values (finished, hover-driven, set from Rust) are opt-in:
   // the tab is about what is running.
   const [idle, setIdle] = useState(false);
@@ -47,15 +50,20 @@ export function AnimationsPanel() {
     };
   }, []);
 
-  const values = table?.values ?? [];
-  const running = values.filter((row) => row.driver.length > 0);
-  const shown = idle ? values : running;
-  const hidden = (table?.total ?? 0) - values.length;
+  // Rust's clock, never a local guess: the pause key and the app itself
+  // move it too, and the stream reports any change the next frame.
+  const clock = table?.clock ?? { paused: false, speed: 1 };
+  const setClock = sendAnimationsClock;
+  const rows = table?.values ?? [];
+  const running = rows.filter((row) => row.driver.length > 0);
+  const shown = idle ? rows : running;
+  const nodes = table?.transitions ?? [];
   return (
     <>
       <node
         style={{
           flexDirection: "row",
+          flexWrap: "wrap",
           alignItems: "center",
           gap: 6,
           padding: { horizontal: 6, vertical: 4 },
@@ -66,156 +74,103 @@ export function AnimationsPanel() {
           focusPolicy: "block",
         }}
       >
-        <Chip label="idle" active={idle} onClick={() => setIdle(!idle)} />
-        <text style={{ color: theme.textDim, fontSize: 10 }}>
-          {`${running.length} running, ${values.length - running.length} idle`}
-        </text>
+        <Chip
+          label={clock.paused ? "resume" : "pause"}
+          active={clock.paused}
+          onClick={() => setClock(!clock.paused, clock.speed)}
+        />
+        {SPEEDS.map((speed) => (
+          <Chip
+            key={speed}
+            label={`${speed}x`}
+            active={clock.speed === speed}
+            onClick={() => setClock(clock.paused, speed)}
+          />
+        ))}
+        <node style={{ width: 1, height: 12, backgroundColor: theme.border }} />
+        <Chip
+          label="values"
+          active={values}
+          onClick={() => setValues(!values)}
+        />
+        <Chip
+          label="transitions"
+          active={transitions}
+          onClick={() => setTransitions(!transitions)}
+        />
+        {/* Values only: inert (and dim) while values are filtered out. */}
+        <Chip
+          label="idle"
+          active={values && idle}
+          onClick={() => values && setIdle(!idle)}
+        />
       </node>
       <ScrollArea>
         {!table ? (
           <Note text="waiting for animation data" />
-        ) : shown.length === 0 ? (
-          <Note
-            text={idle ? "no running or bound values" : "nothing running"}
-          />
         ) : (
-          shown.map((row) => <AnimationRow key={row.id} row={row} />)
+          <>
+            {values && (
+              <Section
+                title={`Shared values: ${running.length} running, ${rows.length - running.length} idle`}
+              >
+                {shown.length === 0 ? (
+                  <Note
+                    text={
+                      idle ? "no running or bound values" : "nothing running"
+                    }
+                  />
+                ) : (
+                  shown.map((row) => (
+                    <ValueRow key={row.id} row={row} paused={clock.paused} />
+                  ))
+                )}
+                <More hidden={table.total - rows.length} />
+              </Section>
+            )}
+            {transitions && (
+              <Section title={`Transitions: ${table.transitions_total} nodes`}>
+                {nodes.length === 0 ? (
+                  <Note text="nothing in flight" />
+                ) : (
+                  nodes.map((row) => (
+                    <TransitionRow
+                      key={row.node}
+                      row={row}
+                      paused={clock.paused}
+                    />
+                  ))
+                )}
+                <More hidden={table.transitions_total - nodes.length} />
+              </Section>
+            )}
+          </>
         )}
-        {hidden > 0 && <Note text={`+${hidden} more`} />}
       </ScrollArea>
     </>
   );
 }
 
-function AnimationRow({ row }: { row: DevtoolsAnimationRow }) {
-  const running = row.driver.length > 0;
-  const mono = { fontSize: 10, fontFamily: theme.mono } as const;
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <node
-      style={{
-        flexDirection: "column",
-        padding: { horizontal: 10, vertical: 4 },
-        border: { bottom: 1 },
-        borderColor: theme.border,
-      }}
-    >
-      <node style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <node
-          style={{
-            width: 8,
-            height: 8,
-            flexShrink: 0,
-            borderRadius: 4,
-            backgroundColor: running ? theme.ok : theme.border,
-          }}
-        />
-        <text
-          style={{
-            color: running ? theme.text : theme.textDim,
-            fontSize: 11,
-            fontFamily: theme.mono,
-          }}
-        >
-          {`sv ${row.id}`}
-        </text>
-        {!running && <ReasonPill label="idle" />}
-        <node style={{ flexGrow: 1 }} />
-        {row.range && <Meter id={row.id} range={row.range} />}
-        {/* A fixed, right-aligned column: the meters line up whatever the
-            reading's width. */}
-        <node style={{ width: 52, flexShrink: 0, justifyContent: "flexEnd" }}>
-          <text style={{ color: theme.text, ...mono }}>
-            {String(row.value)}
-          </text>
-        </node>
-      </node>
-      {/* Outermost stage first; each nested stage indents under its parent. */}
-      {row.driver.map((line, i) => (
-        <text
-          key={i}
-          style={{
-            color: theme.textDim,
-            ...mono,
-            margin: { left: 14 + i * 10, top: 2 },
-          }}
-        >
-          {line}
-        </text>
-      ))}
-      {row.nodes.map((id) => (
-        <BoundNode key={id} id={id} shared={row.id} />
-      ))}
-    </node>
-  );
-}
-
-/** Where the reading sits in `range`, bound to the shared value: the engine
- *  slides the fill every frame — a translate, so no relayout — while the
- *  number beside it is a 100 ms sample. */
-function Meter({ id, range }: { id: number; range: [number, number] }) {
-  return (
-    <node
-      style={{
-        width: METER,
-        height: 4,
-        flexShrink: 0,
-        backgroundColor: theme.bgActive,
-        overflowX: "hidden",
-      }}
-    >
+    <node style={{ flexDirection: "column" }}>
       <node
         style={{
-          width: METER,
-          height: 4,
-          backgroundColor: theme.accent,
-          transform: {
-            translateX: {
-              animated: {
-                type: "interpolate",
-                id,
-                input: range,
-                output: [-METER, 0],
-              },
-            },
-          },
+          padding: { horizontal: 10, vertical: 3 },
+          backgroundColor: theme.bgAlt,
+          border: { bottom: 1 },
+          borderColor: theme.border,
         }}
-      />
+      >
+        <text style={{ color: theme.textDim, fontSize: 10 }}>{title}</text>
+      </node>
+      {children}
     </node>
   );
 }
 
-/** One app node the value drives, with the fields it binds. Hovering
- *  outlines the node on screen (the tree-row highlight channel). */
-function BoundNode({ id, shared }: { id: number; shared: number }) {
-  const node = mirror.get(id);
-  const fields = node ? boundFields(node, shared).join(", ") : "";
-  return (
-    <node
-      style={{
-        flexDirection: "row",
-        gap: 6,
-        margin: { left: 14, top: 2 },
-        padding: { horizontal: 4 },
-        borderRadius: 3,
-      }}
-      hoverStyle={{ backgroundColor: theme.bgActive }}
-      onPointerEnter={() => sendHighlight(id)}
-      onPointerLeave={() => sendHighlight(null)}
-    >
-      <text
-        style={{ color: theme.accent, fontSize: 10, fontFamily: theme.mono }}
-      >
-        {`${node ? rowLabel(node) : ""} #${id}`.trim()}
-      </text>
-      {fields !== "" && (
-        <text
-          style={{ color: theme.textDim, fontSize: 10, fontFamily: theme.mono }}
-        >
-          {fields}
-        </text>
-      )}
-    </node>
-  );
+function More({ hidden }: { hidden: number }) {
+  return hidden > 0 ? <Note text={`+${hidden} more`} /> : null;
 }
 
 function Note({ text }: { text: string }) {

@@ -46,6 +46,7 @@ app.add_plugins(ReactPlugins.set(
 | --------------- | --------------------------- | --------------------------------------------- |
 | `enabled`       | `true`                      | `false` leaves the inspector out entirely     |
 | `toggle_key`    | `KeyCode::F12`              | The key that opens and closes the panel       |
+| `pause_key`     | `KeyCode::F11`              | Pauses and resumes on the Animations tab      |
 | `settings_path` | `.bevy-react-devtools.json` | Where the panel layout persists; `None` = off |
 
 The settings file is relative to the working directory and holds only the
@@ -142,7 +143,9 @@ shown.
 
 ## Animations
 
-The Animations tab lists the [shared values](../animations/animated-values.md)
+The Animations tab lists what is animating right now, in two sections.
+
+**Shared values** lists the [shared values](../animations/animated-values.md)
 with a running driver; the **idle** chip adds the idle ones a node is bound
 to. For each:
 
@@ -155,12 +158,45 @@ to. For each:
 - the nodes bound to it and the fields they bind. Hovering one outlines it
   on screen. A running value with no nodes drives nothing on screen.
 
+**Transitions** lists every node with a
+[style transition](../animations/style-transitions.md) in flight, with one
+line per `transition` key: `transform`, `opacity`, `layout`, `filter`, and
+so on. A shared element's flight is one `sharedElement` line. Svg shape
+attributes eased by a shape's `transition` are listed by attribute name.
+Each line shows the spec's timing and how far the run is. Hovering the node
+outlines it on screen.
+
+The **values** and **transitions** chips show or hide each section.
+
+### Pause and speed
+
+**pause** freezes the app clock and the speed chips slow it down or speed
+it up. **F11** (the `pause_key`) pauses and resumes too, while the tab is
+shown. This is Bevy's `Time<Virtual>`, so everything that runs on it pauses
+or slows down along with the animations: the 3D scene, your own systems,
+time-driven filters. Hot reload and paint flashing keep running.
+
+While paused, every running row gets a slider over its timeline. Drag it to
+move that animation alone, from where it started to where it ends. A spring
+ends when it settles. A `withRepeat` that never ends shows its current
+cycle. A run moved to its end holds there until you resume, and its
+completion callback fires once the clock moves again. Resuming plays every
+animation on from where its slider left it.
+
+An animation that starts while paused, such as a hover transition, waits at
+its start, so you can pause, trigger it, and step through it. Setting a
+value directly (`sv.value = x`, `SharedValues::set`, a style without a
+transition) still applies at once.
+
+Leaving the tab, or closing the panel, gives the clock back as the tab
+found it. The panel's own clock state is never saved.
+
 The meters are bound to the shared values themselves, so Bevy moves them
 every frame like any animated style; the numbers are sampled ten times a
-second. A value Rust drives with `SharedValues::set` has no driver: it is
-listed under **idle**, without a meter, while a node is bound to it. The tab
-lists at most 200 values and streams data only while it is shown.
-[Style transitions](../animations/style-transitions.md) are not listed.
+second of real time. A value Rust drives with `SharedValues::set` has no
+driver: it is listed under **idle**, without a meter, while a node is bound
+to it. Each section lists at most 200 rows. The tab streams data only while
+it is shown.
 
 ## Paint flashing
 
@@ -225,7 +261,12 @@ panel is open.
   picked on screen; select them in the tree.
 - Edits are transient and per node. There is no undo beyond re-enabling a
   disabled declaration.
+- Pausing doesn't pause JavaScript: `setTimeout`, promises and event handlers
+  keep running on wall time. Values your Rust code sets from its own clock,
+  such as an audio thread, keep moving too.
 
 ![The devtools panel docked over the demos app: the Nodes tab shows the expanded element tree with component names such as Navigation2 and Pinchable, a selected text node, and its style in the inspector below.](../../../screenshots/devtools-nodes.png)
 
 ![The Bridge tab: a live log of ops, UI events and messages, with one op batch expanded to its timing breakdown and its JSON payload.](../../../screenshots/devtools-bridge.png)
+
+![The Animations tab while paused: a toggle switch's transform spring and its button's backgroundColor fade, each scrubbed partway along its slider.](../../../screenshots/devtools-animations.png)

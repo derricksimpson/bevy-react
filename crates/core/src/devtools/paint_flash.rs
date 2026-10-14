@@ -118,7 +118,8 @@ pub(super) struct PaintFlashes {
 pub(super) fn drive_paint_flash(
     state: Res<DevtoolsState>,
     feed: Res<RepaintFeed>,
-    time: Res<Time>,
+    // Real time: flashes fade while the Animations tab pauses the app clock.
+    time: Res<Time<Real>>,
     bridge: Option<Res<JsBridge>>,
     targets: Query<(&ComputedNode, &UiGlobalTransform), With<ReactNode>>,
     cameras: Query<&ComputedUiTargetCamera>,

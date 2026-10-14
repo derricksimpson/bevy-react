@@ -12,7 +12,7 @@ const SPRING_REST_SPEED: f32 = 0.01;
 const SPRING_SUBSTEP: f32 = 0.001;
 const SPRING_MAX_SUBSTEPS: u32 = 64;
 
-fn ease(easing: Easing, t: f32) -> f32 {
+pub(super) fn ease(easing: Easing, t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     match easing {
         Easing::Linear => t,
@@ -55,6 +55,9 @@ pub enum Runner {
         mass: f32,
         pos: f32,
         vel: f32,
+        /// Seconds stepped so far (a spring has no clock of its own; the
+        /// devtools scrubber reads where it is).
+        elapsed: f32,
     },
     Repeat {
         template: Box<Driver>,
@@ -69,8 +72,13 @@ pub enum Runner {
         steps: Vec<Driver>,
         index: usize,
         child: Box<Runner>,
+        /// The reading the sequence started from (its steps' lengths
+        /// depend on it — a spring's on the distance it travels).
+        from: f32,
     },
     Delay {
+        /// The full hold, `remaining` its unspent part.
+        delay: f32,
         remaining: f32,
         animation: Box<Driver>,
         from: f32,
@@ -86,7 +94,7 @@ pub fn build_runner(driver: &Driver, from: f32) -> Runner {
 
 /// Build a runner; `target` overrides the natural endpoint for scalar drivers
 /// (used by reverse-repeat to ping-pong). Composite drivers ignore it.
-fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> Runner {
+pub(super) fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> Runner {
     match driver {
         Driver::Timing {
             to,
@@ -115,6 +123,7 @@ fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> 
             mass: mass.max(1e-4),
             pos: from,
             vel: 0.0,
+            elapsed: 0.0,
         },
         Driver::Repeat {
             animation,
@@ -142,9 +151,11 @@ fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> 
                 steps: steps.clone(),
                 index: 0,
                 child: Box::new(build_runner(&steps[0], from)),
+                from,
             }
         }
         Driver::Delay { delay, animation } => Runner::Delay {
+            delay: delay.max(0.0),
             remaining: delay.max(0.0),
             animation: animation.clone(),
             from,
@@ -155,7 +166,7 @@ fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> 
 
 /// The value a driver settles on if run to completion from `from` (used to derive
 /// repeat endpoints).
-fn terminal_value(driver: &Driver, from: f32) -> f32 {
+pub(super) fn terminal_value(driver: &Driver, from: f32) -> f32 {
     match driver {
         Driver::Timing { to, .. } => *to,
         Driver::Spring { to, .. } => *to,
@@ -206,7 +217,9 @@ impl Runner {
                 mass,
                 pos,
                 vel,
+                elapsed,
             } => {
+                *elapsed += dt;
                 let n = ((dt / SPRING_SUBSTEP).ceil() as u32).clamp(1, SPRING_MAX_SUBSTEPS);
                 let h = dt / n as f32;
                 for _ in 0..n {
@@ -259,6 +272,7 @@ impl Runner {
                 steps,
                 index,
                 child,
+                ..
             } => {
                 let (v, done) = child.step(dt);
                 if !done {
@@ -276,6 +290,7 @@ impl Runner {
                 animation,
                 from,
                 child,
+                ..
             } => {
                 if let Some(child) = child {
                     return child.step(dt);

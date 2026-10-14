@@ -251,6 +251,7 @@ fn spawn_script_cursor(
 
 fn drive_shoot(
     time: Res<Time>,
+    real: Res<Time<Real>>,
     mut shoot: ResMut<Shoot>,
     events: ReactEvents,
     mut commands: Commands,
@@ -291,7 +292,7 @@ fn drive_shoot(
     if let Some(secs) = shoot.config.record {
         info!("recording {:?} for {secs}s", shoot.config.label);
         shoot.recording = Some(Recording {
-            start: time.elapsed_secs(),
+            start: real.elapsed_secs(),
             total: (secs * RECORD_FPS).ceil() as u32,
             requested: 0,
             received: 0,
@@ -328,7 +329,9 @@ fn drive_shoot(
 /// One `--record` frame: advance the pointer script, request the frames due by
 /// now, and exit once every frame is on disk.
 fn drive_recording(
-    time: Res<Time>,
+    // Wall time: a recording keeps going while the app clock is paused (the
+    // devtools Animations tab's pause).
+    time: Res<Time<Real>>,
     mut shoot: ResMut<Shoot>,
     mut commands: Commands,
     mut input: MessageWriter<PointerInput>,

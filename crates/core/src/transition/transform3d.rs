@@ -42,6 +42,26 @@ pub(super) struct Transform3dChannels {
 }
 
 impl Transform3dChannels {
+    /// Every field's run in flight (the devtools scrubber).
+    pub(super) fn runs_mut(&mut self) -> impl Iterator<Item = &mut crate::animations::Run> {
+        [
+            &mut self.perspective.runner,
+            &mut self.translate_x.runner,
+            &mut self.translate_y.runner,
+            &mut self.translate_z.runner,
+            &mut self.rotate_x.runner,
+            &mut self.rotate_y.runner,
+            &mut self.rotate_z.runner,
+            &mut self.scale.runner,
+            &mut self.scale_x.runner,
+            &mut self.scale_y.runner,
+            &mut self.origin_x.runner,
+            &mut self.origin_y.runner,
+        ]
+        .into_iter()
+        .filter_map(Option::as_mut)
+    }
+
     pub(super) fn in_flight(&self) -> bool {
         [
             &self.perspective,

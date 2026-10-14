@@ -272,6 +272,9 @@ also feed `onScroll` back into the same controlled axis, or the round trip
 fights the ease: drive the target from your own state and read `onScroll`
 into a separate one. See [Overflow](../styling/overflow.md).
 
+The devtools [Animations](../tooling/devtools.md#animations) tab lists every
+transition in flight. Pause it to step through a transition with a slider.
+
 ## Limits
 
 - Channels group properties (one `transform` spec for every transform

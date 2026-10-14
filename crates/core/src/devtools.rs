@@ -87,7 +87,11 @@ mod style_fields;
 #[cfg(test)]
 mod test_util;
 
-use animations::{emit_animations, on_animations_open_message};
+use animations::{
+    AnimationsSample, TakenClock, collect_transitions, emit_animations, gate_animations_sample,
+    on_animations_open_message, on_clock_message, on_seek_run_message, on_seek_value_message,
+    pause_on_key, restore_clock, sample_due,
+};
 use console::{
     emit_console, emit_runtime_warnings, on_console_clear_message, on_console_open_message,
 };
@@ -135,6 +139,9 @@ pub struct DevtoolsConfig {
     pub enabled: bool,
     /// The key that toggles the panel. Default: `F12`.
     pub toggle_key: KeyCode,
+    /// The key that pauses and resumes the app clock while the panel shows
+    /// its Animations tab (the tab's pause chip). Default: `F11`.
+    pub pause_key: KeyCode,
     /// Where the panel's layout settings (dock mode/width, float rect, the
     /// reserve and overlay toggles, tree/inspector split, whether the panel
     /// is open) persist across runs; `None` disables persistence. Default:
@@ -148,6 +155,7 @@ impl Default for DevtoolsConfig {
         Self {
             enabled: true,
             toggle_key: KeyCode::F12,
+            pause_key: KeyCode::F11,
             settings_path: Some(std::path::PathBuf::from(".bevy-react-devtools.json")),
         }
     }
@@ -187,6 +195,10 @@ impl Plugin for DevtoolsPlugin {
         app.init_resource::<crate::layer::LayersRegistry>();
         app.init_resource::<crate::layer::LayerMembership>();
         app.init_resource::<crate::animations::SharedValues>();
+        // The tab lists the core's transitions through the same seam a
+        // feature crate's animation state uses.
+        app.add_react_animation_runs::<crate::transition::TransitionState>()
+            .add_react_animation_runs::<crate::transition::ScrollTransitionState>();
         // Start collecting apply-time invalid-value warnings (see
         // `crate::diag`): armed for the app's whole lifetime, panel open or
         // not, so warnings from the initial mount are waiting when it opens.
@@ -216,6 +228,8 @@ impl Plugin for DevtoolsPlugin {
         .insert_resource(DevtoolsPersistence::from_loaded(loaded))
         .init_resource::<DevtoolsTimers>()
         .insert_resource(self.config.clone())
+        .init_resource::<AnimationsSample>()
+        .init_resource::<TakenClock>()
         // Panel → Bevy state sync. Registration is what routes the emits;
         // none of this reaches an app's generated `bevy.ts` because the
         // bindings exporter never adds this plugin.
@@ -232,6 +246,9 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_console_open_message)
         .add_react_handler(on_console_clear_message)
         .add_react_handler(on_animations_open_message)
+        .add_react_handler(on_clock_message)
+        .add_react_handler(on_seek_value_message)
+        .add_react_handler(on_seek_run_message)
         // The editor's style-field and element tables, pulled once at panel
         // install.
         .add_react_request_handler(on_style_fields_request)
@@ -254,8 +271,16 @@ impl Plugin for DevtoolsPlugin {
                 // Same loose ordering: console-ring entries pushed later this
                 // frame drain next frame.
                 emit_console,
+                restore_clock,
+                pause_on_key,
                 // This frame's readings.
-                emit_animations.after(crate::animations::AnimationSet::Tick),
+                (
+                    gate_animations_sample,
+                    collect_transitions.run_if(sample_due),
+                    emit_animations.run_if(sample_due),
+                )
+                    .chain()
+                    .after(crate::animations::AnimationSet::Tick),
             ),
         )
         // A quit right after a layout drag must not lose the change: flush

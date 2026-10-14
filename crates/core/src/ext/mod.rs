@@ -27,6 +27,9 @@
 //! And one resource: [`VirtualPointers`] — the picking pointers a feature
 //! drives over UI the window cursor cannot reach, which the core keeps out
 //! of the window's `PointerCapture`.
+//!
+//! A feature that runs its own animations implements [`AnimationRuns`] on
+//! their state, so the devtools Animations tab lists and scrubs them.
 
 use bevy::prelude::*;
 
@@ -387,6 +390,7 @@ pub struct ElementOverrideSet;
 pub struct MeasureStampSet;
 
 mod registry;
+mod runs;
 
 #[cfg(test)]
 pub(crate) use registry::install_builtin_registry;
@@ -395,3 +399,5 @@ pub use registry::{
     ExtRegistry, ExtRegistrySlot, FeatureHint, KNOWN_FEATURES, builtin_registry, core_registry,
     feature_hint, set_thread_registry, with_thread_registry,
 };
+pub(crate) use runs::AnimationRunSources;
+pub use runs::AnimationRuns;

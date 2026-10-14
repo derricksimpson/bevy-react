@@ -440,6 +440,11 @@ impl LayoutChannel {
     pub fn in_flight(&self) -> bool {
         self.channel.runner.is_some()
     }
+
+    /// The rect ease's run, while one is in flight (the devtools scrubber).
+    pub(super) fn run_mut(&mut self) -> Option<&mut crate::animations::Run> {
+        self.channel.runner.as_mut()
+    }
 }
 
 /// The post-layout delta an animating node shows this frame: a translation

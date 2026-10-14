@@ -62,6 +62,11 @@ impl GradientChannel {
         self.channel.runner.is_some()
     }
 
+    /// The ease's run, while one is in flight (the devtools scrubber).
+    pub(super) fn run_mut(&mut self) -> Option<&mut crate::animations::Run> {
+        self.channel.runner.as_mut()
+    }
+
     /// Rest at `other`'s reading (wire + last write), runner dropped — the
     /// shared-element seed; the next stamp retargets from it.
     pub(super) fn seed_from(&mut self, other: &Self) {

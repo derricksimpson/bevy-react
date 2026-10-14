@@ -51,6 +51,11 @@ const PAGE: ExplanationData = {
         spring (<InlineCode>stiffness</InlineCode> +{" "}
         <InlineCode>damping</InlineCode>).
       </Paragraph>
+      <Paragraph>
+        Press <InlineCode>F12</InlineCode> and open the devtools Animations tab
+        to watch every transition in flight. Pause it, flip a switch below, and
+        drag its sliders to step through the spring and the color fade.
+      </Paragraph>
     </>
   ),
 };

@@ -149,6 +149,11 @@ pub trait ReactAppExt {
     /// [`add_react_element`](Self::add_react_element) for several elements.
     fn add_react_elements(&mut self, elements: &[&'static crate::element::Element]) -> &mut Self;
 
+    /// Let the devtools Animations tab list and scrub the runs a component
+    /// type animates (see [`AnimationRuns`](crate::ext::AnimationRuns)).
+    /// Idempotent; inert without the devtools.
+    fn add_react_animation_runs<C: crate::ext::AnimationRuns>(&mut self) -> &mut Self;
+
     /// Register a style property: `property.name` in any `style` object
     /// decodes through its codec (see [`crate::style`]). The core registers
     /// its own properties through this same call. Panics on a name already
@@ -305,6 +310,13 @@ pub trait ReactAppExt {
 }
 
 impl ReactAppExt for App {
+    fn add_react_animation_runs<C: crate::ext::AnimationRuns>(&mut self) -> &mut Self {
+        self.world_mut()
+            .get_resource_or_init::<crate::ext::AnimationRunSources>()
+            .add::<C>();
+        self
+    }
+
     fn add_react_element(&mut self, element: &'static crate::element::Element) -> &mut Self {
         self.world_mut()
             .get_resource_or_init::<crate::ext::ExtRegistry>()

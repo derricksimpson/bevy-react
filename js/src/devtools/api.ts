@@ -138,17 +138,41 @@ export interface DevtoolsAnimationRow {
   /** What the running driver sweeps (where it started and every value it
    *  aims for); `null` when idle or a single point. */
   range: [number, number] | null;
+  /** The running driver's scrubber stretch, `[at, start, end]` seconds
+   *  since it started (a loop's: its current cycle); `null` when idle. */
+  time: [number, number, number] | null;
   /** The app nodes bound to this value. */
   nodes: number[];
 }
 
+/** One line of a transition row: the runs one label groups (a `transition`
+ *  key — `transform`, `layout`, `sharedElement` — or an svg attribute). */
+export interface DevtoolsRunLine {
+  label: string;
+  /** Its timing as the spec reads (`300ms easeOut`). */
+  spec: string;
+  /** `[at, start, end]` seconds, like a value's `time`. */
+  time: [number, number, number];
+}
+
+/** One node with transitions in flight. */
+export interface DevtoolsTransitionRow {
+  node: number;
+  lines: DevtoolsRunLine[];
+}
+
 /** Bevy→JS `devtools.animations`: every running driver, then every idle
- *  value an app node reads, by id. Sampled every 100 ms while the Animations
- *  tab is active and diffed Rust-side — an idle table sends nothing. `total`
- *  counts the values before Rust's row cap. */
+ *  value an app node reads, by id; every node with transitions in flight,
+ *  by id; and the app clock the tab's controls drive. Sampled every 100 ms
+ *  (real time) while the Animations tab is active and diffed Rust-side — an
+ *  idle app sends nothing. `total` / `transitions_total` count before
+ *  Rust's row caps. */
 export interface DevtoolsAnimations {
   values: DevtoolsAnimationRow[];
   total: number;
+  transitions: DevtoolsTransitionRow[];
+  transitions_total: number;
+  clock: { paused: boolean; speed: number };
 }
 
 /** One row in a `devtools.console` payload: an entry from the Rust-side
@@ -326,6 +350,22 @@ export function sendConsoleOpen(on: boolean): void {
  *  stream (same mount/unmount contract as [`sendLayersOpen`]). */
 export function sendAnimationsOpen(on: boolean): void {
   emit("devtools.animationsOpen", { on });
+}
+
+/** Pause/resume the app clock (`Time<Virtual>`) and set its speed. The tab
+ *  hands the clock back as it found it when it unmounts (Rust-side). */
+export function sendAnimationsClock(paused: boolean, speed: number): void {
+  emit("devtools.animationsClock", { paused, speed });
+}
+
+/** Move a shared value's running driver to `t` seconds since it started. */
+export function sendSeekValue(id: number, t: number): void {
+  emit("devtools.seekValue", { id, t });
+}
+
+/** Move a node's runs under `label` to `t` seconds since each started. */
+export function sendSeekRun(node: number, label: string, t: number): void {
+  emit("devtools.seekRun", { node, label, t });
 }
 
 /** The Console tab's clear button — empty the Rust-side console ring (the

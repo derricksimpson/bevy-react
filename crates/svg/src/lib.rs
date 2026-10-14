@@ -93,6 +93,8 @@ impl Plugin for SvgPlugin {
         // Per-pointer refined svg shape hits — the picking refinement's
         // handoff to the event-position sync.
         app.init_resource::<pick::SvgPointerShapeHits>();
+        // The devtools Animations tab lists and scrubs the attr transitions.
+        app.add_react_animation_runs::<transition::ShapeTransitionState>();
         app.add_systems(
             PreUpdate,
             pick::refine_svg_pointer_hits.in_set(PickRefineSet),

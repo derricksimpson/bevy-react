@@ -312,6 +312,39 @@
         "6.5 move 1500 1500"
       ],
       "crop": [807, 1350, 1113, 0]
+    },
+    {
+      "out": "devtools-animations.png",
+      "demo": "Style transitions",
+      "size": [1280, 900],
+      "scale": 1.5,
+      "settle": 4,
+      "record": 4,
+      "devtools": {
+        "open": true,
+        "tab": "animations",
+        "mode": "right",
+        "width_frac": 0.36,
+        "overlay": false,
+        "reserve": false,
+        "split": 294.76382
+      },
+      "inputs": [
+        "0.3 move 847 71",
+        "0.6 press",
+        "0.7 release",
+        "1.2 move 731 739",
+        "1.5 press",
+        "1.6 release",
+        "2.0 move 976 190",
+        "2.3 press",
+        "2.4 release",
+        "2.7 move 1076 241",
+        "3.0 press",
+        "3.1 release",
+        "3.4 move 1500 1500"
+      ],
+      "crop": [691, 400, 1229, 0]
     }
   ]
 }

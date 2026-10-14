@@ -77,7 +77,9 @@ struct BundleWatch {
     reload_tx: tokio::sync::mpsc::UnboundedSender<()>,
 }
 
-fn watch_bundle(time: Res<Time>, mut watch: ResMut<BundleWatch>) {
+/// On real time: a paused app clock (the devtools Animations tab) must not
+/// stop hot reload.
+fn watch_bundle(time: Res<Time<Real>>, mut watch: ResMut<BundleWatch>) {
     watch.timer.tick(time.delta());
     if !watch.timer.just_finished() {
         return;

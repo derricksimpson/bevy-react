@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use crate::animations::{Lerp, Runner, build_runner};
+use crate::animations::{Lerp, Run};
 use crate::protocol::units::{Length, Rect};
 use crate::protocol::visual::CornerRadii;
 
@@ -349,7 +349,7 @@ pub(super) struct MorphChannel {
     /// `None` until seeded / while the style has no morph.
     pub(super) key: Option<serde_json::Value>,
     /// The active progress runner (0→1); `None` when idle.
-    pub(super) runner: Option<Runner>,
+    pub(super) runner: Option<Run>,
     /// Mirrors [`MorphState::freeze_seq`](crate::filters::MorphState::freeze_seq);
     /// owned here so a retarget can bump
     /// it even when the state component doesn't exist yet.
@@ -399,7 +399,7 @@ impl MorphChannel {
                 // capture rect wherever it is each frame.
                 (Some(_), Some(_), true) => {
                     self.seq = self.seq.wrapping_add(1);
-                    self.runner = Some(build_runner(&spec.to_driver(1.0), 0.0));
+                    self.runner = Some(Run::new(spec.to_driver(1.0), 0.0));
                     MorphAction::Freeze(crate::filters::MorphState {
                         active: true,
                         progress: 0.0,
@@ -440,7 +440,7 @@ impl MorphChannel {
 pub struct Channel {
     pub current: f32,
     pub target: f32,
-    pub runner: Option<Runner>,
+    pub runner: Option<Run>,
 }
 
 impl Channel {
@@ -458,7 +458,7 @@ impl Channel {
         if target != self.target {
             self.target = target;
             match spec {
-                Some(s) => self.runner = Some(build_runner(&s.to_driver(target), self.current)),
+                Some(s) => self.runner = Some(Run::new(s.to_driver(target), self.current)),
                 None => {
                     self.current = target;
                     self.runner = None;
@@ -505,7 +505,7 @@ pub(super) struct EasedChannel<T, I> {
     pub(super) current: T,
     pub(super) target: T,
     pub(super) interp: I,
-    pub(super) runner: Option<Runner>,
+    pub(super) runner: Option<Run>,
 }
 
 impl<T: Clone + PartialEq, I: Interp<T>> EasedChannel<T, I> {
@@ -524,7 +524,7 @@ impl<T: Clone + PartialEq, I: Interp<T>> EasedChannel<T, I> {
     pub(super) fn arm(&mut self, target: T, spec: &ChannelTransition) {
         self.interp.arm(&self.current, &target);
         self.target = target;
-        self.runner = Some(build_runner(&spec.to_driver(1.0), 0.0));
+        self.runner = Some(Run::new(spec.to_driver(1.0), 0.0));
     }
 
     /// Move a running ease's start: the interp re-arms from `start` toward
