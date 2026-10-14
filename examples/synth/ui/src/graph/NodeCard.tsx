@@ -154,7 +154,11 @@ export const NodeCard = memo(function NodeCard({
           backgroundGradient: {
             type: "linear",
             angle: 180,
-            stops: [{ color: "#181d2b" }, { color: "#11151f" }],
+            // See-through: the wires run under the cards.
+            stops: [
+              { color: alpha("#181d2b", 0.72) },
+              { color: alpha("#11151f", 0.8) },
+            ],
           },
           boxShadow: selected
             ? [
