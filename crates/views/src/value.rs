@@ -46,7 +46,7 @@ impl fmt::Display for Value {
         match self {
             Value::Null => f.write_str("null"),
             Value::Bool(b) => write!(f, "{b}"),
-            Value::Num(n) => f.write_str(&js_number(*n)),
+            Value::Num(n) => write_number(f, *n),
             Value::Str(s) => f.write_str(s),
         }
     }
@@ -67,6 +67,19 @@ impl From<bool> for Value {
 impl From<&str> for Value {
     fn from(s: &str) -> Self {
         Value::str(s)
+    }
+}
+
+/// `String(n)` written to `out`: integers and ordinary decimals go straight
+/// through; only the exotic forms build a temporary string.
+fn write_number(out: &mut impl fmt::Write, n: f64) -> fmt::Result {
+    if n.fract() == 0.0 && n.abs() < 9.0e15 {
+        // Whole numbers, `-0` included (JS prints it as `0`).
+        write!(out, "{}", n as i64)
+    } else if n.is_finite() && n.abs() >= 1e-6 && n.abs() < 1e21 {
+        write!(out, "{n}")
+    } else {
+        out.write_str(&js_number(n))
     }
 }
 

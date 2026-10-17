@@ -171,18 +171,26 @@ impl Runtime {
 
         // Creates carry the statics plus every binding's first value.
         for (ix, node) in t.nodes.iter().enumerate() {
-            let mut props: Vec<(&'static str, Value)> = node.props.clone();
-            props.extend(
-                compiled.handler_props[ix]
-                    .iter()
-                    .map(|p| (*p, Value::Bool(true))),
-            );
-            let mut style = node.style.clone();
+            // Exact capacities: the statics, the handlers, the dynamic keys.
+            let (mut dyn_props, mut dyn_style) = (0, 0);
+            for &b in &compiled.node_bindings[ix] {
+                match t.bindings[usize::from(b)].target {
+                    Target::Prop(..) => dyn_props += 1,
+                    Target::Style(..) => dyn_style += 1,
+                    Target::Text(_) => {}
+                }
+            }
+            let handler_props = &compiled.handler_props[ix];
+            let mut props = Vec::with_capacity(node.props.len() + handler_props.len() + dyn_props);
+            props.extend(node.props.iter().cloned());
+            props.extend(handler_props.iter().map(|p| (*p, Value::Bool(true))));
+            let mut style = Vec::with_capacity(node.style.len() + dyn_style);
+            style.extend(node.style.iter().cloned());
             let mut text = node.text.map(Arc::from);
             for &b in &compiled.node_bindings[ix] {
                 let v = sent[usize::from(b)].clone();
                 match t.bindings[usize::from(b)].target {
-                    Target::Text(_) => text = Some(Arc::from(v.to_string())),
+                    Target::Text(_) => text = Some(text_of(&v)),
                     Target::Prop(_, key) => upsert(&mut props, key, v),
                     Target::Style(_, key) => upsert(&mut style, key, v),
                 }
@@ -370,7 +378,7 @@ impl Runtime {
                     let cmd = match binding.target {
                         Target::Text(n) => Command::UpdateText {
                             id: inst.node(usize::from(n)),
-                            text: Arc::from(v.to_string()),
+                            text: text_of(&v),
                         },
                         Target::Prop(n, key) => Command::SetProp {
                             id: inst.node(usize::from(n)),
@@ -513,4 +521,13 @@ fn lookup_mut(table: &mut [Slot], id: InstanceId) -> Option<&mut Instance> {
     (slot.generation == id.generation())
         .then_some(slot.inst.as_mut())
         .flatten()
+}
+
+/// A text binding's string: the evaluated `Arc<str>` itself when it already
+/// is one (a template literal), else the value's text.
+fn text_of(v: &Value) -> Arc<str> {
+    match v {
+        Value::Str(s) => Arc::clone(s),
+        other => Arc::from(other.to_string()),
+    }
 }

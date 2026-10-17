@@ -1,9 +1,14 @@
 //! Evaluating an [`Expr`] against an instance's slots.
 
+use std::cell::Cell;
 use std::fmt::Write;
 
 use crate::ir::{BinOp, Expr, UnOp};
 use crate::value::{Value, to_fixed};
+
+thread_local! {
+    static SCRATCH: Cell<String> = const { Cell::new(String::new()) };
+}
 
 /// Evaluate `expr` with `slots` as the instance state. Pure: same slots, same
 /// value. An out-of-range slot reads as `null` (a compiler bug, not a panic).
@@ -12,11 +17,22 @@ pub fn eval(expr: &Expr, slots: &[Value]) -> Value {
         Expr::Const(v) => v.clone(),
         Expr::Slot(s) => slots.get(usize::from(*s)).cloned().unwrap_or(Value::Null),
         Expr::Concat(parts) => {
-            let mut out = String::new();
+            // One buffer per thread, reused: a template literal then costs the
+            // one allocation of its result. (A nested literal finds the cell
+            // empty and makes its own.)
+            let mut out = SCRATCH.with(Cell::take);
+            out.clear();
             for p in parts {
-                let _ = write!(out, "{}", eval(p, slots));
+                match p {
+                    Expr::Const(Value::Str(s)) => out.push_str(s),
+                    _ => {
+                        let _ = write!(out, "{}", eval(p, slots));
+                    }
+                }
             }
-            Value::str(&out)
+            let result = Value::str(&out);
+            SCRATCH.with(|c| c.set(out));
+            result
         }
         Expr::Cond(c, then, otherwise) => {
             if eval(c, slots).truthy() {

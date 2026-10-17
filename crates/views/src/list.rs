@@ -7,11 +7,11 @@
 //! through [`keyed::diff`](crate::keyed::diff); field changes go through the
 //! item instance's slots, so they ride the next flush like any state write.
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::command::NodeId;
 use crate::compiled::Compiled;
+use crate::fast::{FastMap, FastSet, set_with_capacity};
 use crate::ir::{Selector, SlotId, Window};
 use crate::keyed::Key;
 use crate::runtime::{InstanceId, Runtime};
@@ -68,7 +68,7 @@ pub(crate) struct ListState {
     /// The mounted rows' keys, in order (all of the list unless windowed).
     pub(crate) keys: Vec<Key>,
     pub(crate) selectors: Vec<Selector>,
-    pub(crate) items: HashMap<Key, InstanceId>,
+    pub(crate) items: FastMap<Key, InstanceId>,
     /// A list staged by [`Runtime::set_list`], applied at the next flush. Its
     /// `fields: None` entries are unchanged relative to the **applied** list.
     pub(crate) pending: Option<Vec<ListItem>>,
@@ -79,7 +79,7 @@ pub(crate) struct ListState {
     /// Windowed lists: every key in order (`keys` is the mounted slice).
     pub(crate) all: Vec<Key>,
     /// Windowed lists: the fields of the rows that are not mounted.
-    pub(crate) store: HashMap<Key, Vec<Value>>,
+    pub(crate) store: FastMap<Key, Vec<Value>>,
 }
 
 /// A windowed list's slots and applied range.
@@ -104,7 +104,7 @@ impl ListState {
             item,
             keys: Vec::new(),
             selectors,
-            items: HashMap::new(),
+            items: FastMap::default(),
             pending: None,
             window: window.map(|w| WindowState {
                 top: w.top,
@@ -114,7 +114,7 @@ impl ListState {
             }),
             pending_range: None,
             all: Vec::new(),
-            store: HashMap::new(),
+            store: FastMap::default(),
         }
     }
 
@@ -160,7 +160,7 @@ impl ListState {
                 // unique and all known, so no hashing.
                 let same_order = same_keys(self.all_keys(), &items);
                 if !same_order {
-                    let mut seen = HashSet::with_capacity(items.len());
+                    let mut seen: FastSet<&Key> = set_with_capacity(items.len());
                     for it in &items {
                         if !seen.insert(&it.key) {
                             return Err(ListError::DuplicateKey(it.key.clone()));
@@ -194,8 +194,8 @@ impl ListState {
                     }
                     return Ok(false); // `prev` now holds the merge
                 }
-                let mut seen = HashSet::with_capacity(items.len());
-                let before: HashMap<&Key, &Option<Vec<Value>>> =
+                let mut seen: FastSet<&Key> = set_with_capacity(items.len());
+                let before: FastMap<&Key, &Option<Vec<Value>>> =
                     prev.iter().map(|p| (&p.key, &p.fields)).collect();
                 for it in &items {
                     if !seen.insert(&it.key) {

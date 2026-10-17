@@ -6,7 +6,7 @@
 //! keys not seen before are inserted. So a swap of two rows is two moves, a
 //! removal is no move, and a reversal of n rows is n − 1 moves.
 
-use std::collections::{HashMap, HashSet};
+use crate::fast::{FastMap, map_with_capacity, set_with_capacity};
 use std::sync::Arc;
 
 /// A list item's identity (the JSX `key`: a number or a string).
@@ -53,8 +53,25 @@ pub struct KeyedDiff {
 
 /// Diff two key orders. Both must be free of duplicates (the runtime checks).
 pub fn diff(old: &[Key], new: &[Key]) -> KeyedDiff {
-    let old_index: HashMap<&Key, usize> = old.iter().enumerate().map(|(i, k)| (k, i)).collect();
-    let kept: HashSet<&Key> = new.iter().collect();
+    // Nothing to compare: everything leaves, or everything arrives in order.
+    if new.is_empty() {
+        return KeyedDiff {
+            removed: (0..old.len()).collect(),
+            steps: Vec::new(),
+        };
+    }
+    if old.is_empty() {
+        return KeyedDiff {
+            removed: Vec::new(),
+            steps: (0..new.len())
+                .map(|new| Step::Insert { new, before: None })
+                .collect(),
+        };
+    }
+    let mut old_index: FastMap<&Key, usize> = map_with_capacity(old.len());
+    old_index.extend(old.iter().enumerate().map(|(i, k)| (k, i)));
+    let mut kept = set_with_capacity(new.len());
+    kept.extend(new.iter());
     let removed = (0..old.len())
         .filter(|&i| !kept.contains(&old[i]))
         .collect();
@@ -175,6 +192,23 @@ mod tests {
     fn reversal_keeps_one() {
         let d = diff(&keys(&[0, 1, 2, 3, 4]), &keys(&[4, 3, 2, 1, 0]));
         assert_eq!(moves(&d), 4);
+    }
+
+    #[test]
+    fn an_empty_side_needs_no_comparison() {
+        let all = keys(&[4, 5, 6]);
+        let d = diff(&[], &all);
+        assert_eq!(d.removed, Vec::<usize>::new());
+        assert_eq!(
+            d.steps,
+            (0..3)
+                .map(|new| Step::Insert { new, before: None })
+                .collect::<Vec<_>>()
+        );
+        let d = diff(&all, &[]);
+        assert_eq!(d.removed, vec![0, 1, 2]);
+        assert_eq!(d.steps, vec![]);
+        assert_eq!(diff(&[], &[]), KeyedDiff::default());
     }
 
     #[test]

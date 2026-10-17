@@ -20,6 +20,7 @@ mod compiled;
 mod dispatch;
 mod effects;
 pub mod eval;
+mod fast;
 pub mod ir;
 pub mod keyed;
 pub mod list;

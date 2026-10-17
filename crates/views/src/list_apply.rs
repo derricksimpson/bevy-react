@@ -5,9 +5,8 @@
 //! all of it; a windowed one mounts a slice, so scrolling is "rows leave at
 //! one end, rows enter at the other" through the same moves and inserts.
 
-use std::collections::{HashMap, HashSet};
-
 use crate::command::{Command, NodeId};
+use crate::fast::{FastMap, FastSet};
 use crate::keyed::{self, Key, Step};
 use crate::list::{ListState, same_keys};
 use crate::runtime::{InstanceId, Runtime};
@@ -76,7 +75,7 @@ impl Runtime {
         };
         // Which keys the list still has (only a changed windowed list can
         // lose keys that are not mounted).
-        let live: Option<HashSet<&Key>> =
+        let live: Option<FastSet<&Key>> =
             (windowed && all_changed).then(|| new_all.iter().collect());
 
         for &o in &d.removed {
@@ -94,12 +93,12 @@ impl Runtime {
             self.forget(item);
         }
 
-        let mut fresh: HashMap<Key, Vec<Value>> = HashMap::new();
+        let mut fresh: FastMap<Key, Vec<Value>> = FastMap::default();
         if let Some(items) = items {
-            let in_view: HashSet<&Key> = if windowed {
+            let in_view: FastSet<&Key> = if windowed {
                 visible.iter().collect()
             } else {
-                HashSet::new()
+                FastSet::default()
             };
             for it in items {
                 let Some(fields) = it.fields else { continue };
