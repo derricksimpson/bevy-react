@@ -1,21 +1,43 @@
-//! The values bindings compute: the JS primitives a view reads.
+//! The values bindings compute: the JS primitives a view reads, and the
+//! plain lists and objects styles are made of (`transform`, shadows).
 
 use std::fmt;
 use std::sync::Arc;
 
-/// A JS primitive as a binding sees it. Strings are shared (`Arc<str>`), so
-/// copying a value out of a slot never copies text.
+/// A JS value as a binding sees it. Strings, lists and maps are shared
+/// (`Arc`), so copying a value out of a slot never copies its contents.
+/// Lists and maps compare by content (change detection then skips an update
+/// that rebuilt an equal object).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Null,
     Bool(bool),
     Num(f64),
     Str(Arc<str>),
+    /// An array: `[a, b]`.
+    List(Arc<[Value]>),
+    /// A plain object, in insertion order: `{ rotate: "45deg" }`.
+    Map(Arc<[(Arc<str>, Value)]>),
 }
 
 impl Value {
     pub fn str(s: &str) -> Self {
         Value::Str(Arc::from(s))
+    }
+
+    /// An array value.
+    pub fn list(items: impl IntoIterator<Item = Value>) -> Self {
+        Value::List(items.into_iter().collect())
+    }
+
+    /// A plain-object value.
+    pub fn map<'a>(entries: impl IntoIterator<Item = (&'a str, Value)>) -> Self {
+        Value::Map(
+            entries
+                .into_iter()
+                .map(|(k, v)| (Arc::from(k), v))
+                .collect(),
+        )
     }
 
     /// JS truthiness (`!!v`).
@@ -25,6 +47,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Num(n) => *n != 0.0 && !n.is_nan(),
             Value::Str(s) => !s.is_empty(),
+            Value::List(_) | Value::Map(_) => true,
         }
     }
 
@@ -35,6 +58,7 @@ impl Value {
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Num(n) => *n,
             Value::Str(s) => s.trim().parse().unwrap_or(f64::NAN),
+            Value::List(_) | Value::Map(_) => f64::NAN,
         }
     }
 }
@@ -48,6 +72,20 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{b}"),
             Value::Num(n) => write_number(f, *n),
             Value::Str(s) => f.write_str(s),
+            // `[1, 2] + ""` is "1,2" (null and holes print empty); an object
+            // prints as JS prints one.
+            Value::List(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(",")?;
+                    }
+                    if !matches!(item, Value::Null) {
+                        write!(f, "{item}")?;
+                    }
+                }
+                Ok(())
+            }
+            Value::Map(_) => f.write_str("[object Object]"),
         }
     }
 }

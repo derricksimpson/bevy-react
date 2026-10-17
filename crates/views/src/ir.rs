@@ -359,6 +359,10 @@ pub enum Expr {
     Un(UnOp, Box<Expr>),
     /// `n.toFixed(digits)`.
     Fixed(Box<Expr>, u8),
+    /// `[a, b]`.
+    List(Vec<Expr>),
+    /// `{ key: a, other: b }`.
+    Map(Vec<(&'static str, Expr)>),
 }
 
 /// The binary operators beyond `+`, `*`, `===` and `>`; JS semantics.
@@ -407,7 +411,10 @@ impl Expr {
                     out.push(*s);
                 }
             }
-            Expr::Concat(parts) => parts.iter().for_each(|p| p.collect_reads(out)),
+            Expr::Concat(parts) | Expr::List(parts) => {
+                parts.iter().for_each(|p| p.collect_reads(out))
+            }
+            Expr::Map(entries) => entries.iter().for_each(|(_, p)| p.collect_reads(out)),
             Expr::Cond(a, b, c) => [a, b, c].iter().for_each(|e| e.collect_reads(out)),
             Expr::Not(a) | Expr::Un(_, a) | Expr::Fixed(a, _) => a.collect_reads(out),
             Expr::Eq(a, b)
@@ -435,6 +442,12 @@ pub mod e {
     }
     pub fn concat(parts: impl IntoIterator<Item = Expr>) -> Expr {
         Expr::Concat(parts.into_iter().collect())
+    }
+    pub fn list(items: impl IntoIterator<Item = Expr>) -> Expr {
+        Expr::List(items.into_iter().collect())
+    }
+    pub fn map(entries: impl IntoIterator<Item = (&'static str, Expr)>) -> Expr {
+        Expr::Map(entries.into_iter().collect())
     }
     pub fn cond(c: Expr, then: Expr, otherwise: Expr) -> Expr {
         Expr::Cond(Box::new(c), Box::new(then), Box::new(otherwise))

@@ -122,5 +122,12 @@ fn json(v: &Value) -> Json {
         Value::Num(n) if n.fract() == 0.0 && n.abs() < 9.0e15 => Json::from(*n as i64),
         Value::Num(n) => serde_json::Number::from_f64(*n).map_or(Json::Null, Json::Number),
         Value::Str(s) => Json::String(s.to_string()),
+        Value::List(items) => Json::Array(items.iter().map(json).collect()),
+        Value::Map(entries) => Json::Object(
+            entries
+                .iter()
+                .map(|(k, v)| (k.to_string(), json(v)))
+                .collect(),
+        ),
     }
 }

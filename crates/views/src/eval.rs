@@ -2,6 +2,7 @@
 
 use std::cell::Cell;
 use std::fmt::Write;
+use std::sync::Arc;
 
 use crate::ir::{BinOp, Expr, UnOp};
 use crate::value::{Value, to_fixed};
@@ -34,6 +35,13 @@ pub fn eval(expr: &Expr, slots: &[Value]) -> Value {
             SCRATCH.with(|c| c.set(out));
             result
         }
+        Expr::List(items) => Value::List(items.iter().map(|i| eval(i, slots)).collect()),
+        Expr::Map(entries) => Value::Map(
+            entries
+                .iter()
+                .map(|(k, v)| (Arc::from(*k), eval(v, slots)))
+                .collect(),
+        ),
         Expr::Cond(c, then, otherwise) => {
             if eval(c, slots).truthy() {
                 eval(then, slots)
@@ -286,6 +294,32 @@ mod tests {
             fx(0.05, 1),
             "0.1",
             "0.05 is 0.05000000000000000277: above the tie"
+        );
+    }
+
+    #[test]
+    fn lists_and_maps_are_values() {
+        let slots = [Value::Num(45.0)];
+        let transform = eval(
+            &e::map([("rotate", e::concat([e::slot(0), e::lit("deg")]))]),
+            &slots,
+        );
+        assert_eq!(transform, Value::map([("rotate", Value::str("45deg"))]));
+        let shadows = eval(
+            &e::list([e::lit(1.0), e::lit("a"), e::lit(Value::Null)]),
+            &[],
+        );
+        assert_eq!(shadows.to_string(), "1,a,");
+        assert_eq!(transform.to_string(), "[object Object]");
+        assert!(shadows.truthy() && transform.truthy());
+        // Equal content is equal, however it was built.
+        assert_eq!(eval(&e::map([("rotate", e::lit("45deg"))]), &[]), transform);
+        assert!(
+            eval(
+                &e::eq(e::lit(Value::list([])), e::lit(Value::list([]))),
+                &[]
+            )
+            .truthy()
         );
     }
 }
