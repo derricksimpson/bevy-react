@@ -68,7 +68,7 @@ fn fixture(n: i64, window_ms: u64) -> (Runtime, Time, usize) {
     let (time, clock) = Time::new();
     let mut rt = Runtime::with_id_base(1);
     rt.set_clock(clock);
-    rt.set_window(Duration::from_millis(window_ms));
+    rt.set_flush_window(Duration::from_millis(window_ms));
     let t = rt.mount(&table(), 0);
     rt.set_list(t, 0, (1..=n).map(|i| item(i, &format!("r{i}"))).collect())
         .unwrap();

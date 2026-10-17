@@ -53,6 +53,8 @@ impl Compiled {
                 parent,
                 item,
                 selectors,
+                anchor,
+                window,
             },
         ) in template.blocks.iter().enumerate()
         {
@@ -84,10 +86,26 @@ impl Compiled {
                     })
                     .push((block, i));
             }
-            assert!(
-                !nodes.iter().any(|n| n.parent == Some(*parent)),
-                "list parent {parent} has static children"
-            );
+            match anchor {
+                None => assert!(
+                    !nodes.iter().any(|n| n.parent == Some(*parent)),
+                    "list parent {parent} has static children"
+                ),
+                Some(a) => assert_eq!(
+                    nodes.get(usize::from(*a)).and_then(|n| n.parent),
+                    Some(*parent),
+                    "list anchor {a} is not a child of node {parent}"
+                ),
+            }
+            if let Some(w) = window {
+                assert!(anchor.is_some(), "a windowed list needs an anchor");
+                for slot in [w.top, w.bottom] {
+                    assert!(
+                        usize::from(slot) < template.slots.len(),
+                        "window slot {slot} is not declared"
+                    );
+                }
+            }
             let roots = item
                 .template
                 .nodes

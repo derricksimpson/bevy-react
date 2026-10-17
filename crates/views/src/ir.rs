@@ -92,7 +92,26 @@ pub enum Block {
         parent: NodeIx,
         item: Arc<Compiled>,
         selectors: Vec<Selector>,
+        /// Rows are placed before this static sibling of theirs (a bottom
+        /// spacer), or last when absent.
+        anchor: Option<NodeIx>,
+        /// Mount only the rows in view (see [`Window`]).
+        window: Option<Window>,
     },
+}
+
+/// A windowed (virtual) list: rows exist only for a range of the list, set
+/// with `Runtime::set_window`; the list's data lives on in Rust for the rest.
+/// Two slots of the owning instance hold how many rows are **not** mounted
+/// above and below the range, for spacer nodes to size themselves from
+/// (`height: top * ROW_HEIGHT`). A windowed list needs an `anchor`: the
+/// bottom spacer, a static sibling that follows the rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+    /// The slot receiving the count of unmounted rows before the range.
+    pub top: SlotId,
+    /// The slot receiving the count of unmounted rows after it.
+    pub bottom: SlotId,
 }
 
 /// `selected === row.id` for every row, without visiting every row: the item
@@ -119,7 +138,27 @@ impl Block {
             parent,
             item,
             selectors: Vec::new(),
+            anchor: None,
+            window: None,
         }
+    }
+
+    /// Place rows before the static sibling `node` instead of last.
+    pub fn before(mut self, node: NodeIx) -> Self {
+        let Block::For { anchor, .. } = &mut self;
+        *anchor = Some(node);
+        self
+    }
+
+    /// Make the list windowed: rows before the static sibling `anchor`, the
+    /// unmounted counts written to `top` and `bottom` (see [`Window`]).
+    pub fn windowed(mut self, anchor: NodeIx, top: SlotId, bottom: SlotId) -> Self {
+        let Block::For {
+            anchor: a, window, ..
+        } = &mut self;
+        *a = Some(anchor);
+        *window = Some(Window { top, bottom });
+        self
     }
 
     /// Add a selector (see [`Selector`]).
@@ -268,6 +307,7 @@ pub enum Expr {
     Eq(Box<Expr>, Box<Expr>),
     Gt(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
+    Mul(Box<Expr>, Box<Expr>),
 }
 
 impl Expr {
@@ -289,7 +329,7 @@ impl Expr {
             Expr::Concat(parts) => parts.iter().for_each(|p| p.collect_reads(out)),
             Expr::Cond(a, b, c) => [a, b, c].iter().for_each(|e| e.collect_reads(out)),
             Expr::Not(a) => a.collect_reads(out),
-            Expr::Eq(a, b) | Expr::Gt(a, b) | Expr::Add(a, b) => {
+            Expr::Eq(a, b) | Expr::Gt(a, b) | Expr::Add(a, b) | Expr::Mul(a, b) => {
                 a.collect_reads(out);
                 b.collect_reads(out);
             }
@@ -325,5 +365,8 @@ pub mod e {
     }
     pub fn add(a: Expr, b: Expr) -> Expr {
         Expr::Add(Box::new(a), Box::new(b))
+    }
+    pub fn mul(a: Expr, b: Expr) -> Expr {
+        Expr::Mul(Box::new(a), Box::new(b))
     }
 }

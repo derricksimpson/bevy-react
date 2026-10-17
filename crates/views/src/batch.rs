@@ -27,11 +27,11 @@ pub(crate) fn instant_clock() -> Clock {
 impl Runtime {
     /// Hold pending work for up to `window` after the first write (zero, the
     /// default, makes [`poll`](Self::poll) flush at once).
-    pub fn set_window(&mut self, window: Duration) {
+    pub fn set_flush_window(&mut self, window: Duration) {
         self.window = window;
     }
 
-    pub fn window(&self) -> Duration {
+    pub fn flush_window(&self) -> Duration {
         self.window
     }
 

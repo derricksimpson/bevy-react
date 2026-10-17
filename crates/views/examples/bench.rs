@@ -225,6 +225,7 @@ fn main() {
 
     burst();
     selection();
+    windowed();
 }
 
 /// Ten one-row edits to a 10k-row list, as a burst of handler calls inside one
@@ -434,4 +435,118 @@ fn selection() {
         clicks[clicks.len() / 2],
         2
     );
+}
+
+/// The same 10k-row table, windowed to 30 rows between two spacers: the data
+/// stays in Rust, the entities exist only for the rows in view.
+fn windowed() {
+    const TOP: u16 = 1;
+    const BOTTOM: u16 = 2;
+    let row = Compiled::new(Template {
+        nodes: vec![
+            TNode::new("button", None).on("click", 1),
+            TNode::new("text", Some(0)),
+        ],
+        bindings: vec![
+            Binding {
+                target: Target::Text(1),
+                expr: e::concat([e::slot(0), e::lit(" "), e::slot(1)]),
+            },
+            Binding {
+                target: Target::Style(0, "backgroundColor"),
+                expr: e::slot(2),
+            },
+        ],
+        slots: vec![Value::Num(0.0), Value::str(""), Value::str("")],
+        ..Default::default()
+    });
+    let table = Compiled::new(Template {
+        nodes: vec![
+            TNode::new("node", None),
+            TNode::new("node", Some(0)),
+            TNode::new("node", Some(0)),
+        ],
+        bindings: vec![
+            Binding {
+                target: Target::Style(1, "height"),
+                expr: e::mul(e::slot(TOP), e::lit(20.0)),
+            },
+            Binding {
+                target: Target::Style(2, "height"),
+                expr: e::mul(e::slot(BOTTOM), e::lit(20.0)),
+            },
+        ],
+        blocks: vec![Block::list(0, row).windowed(2, TOP, BOTTOM)],
+        slots: vec![Value::Null, Value::Num(0.0), Value::Num(0.0)],
+        ..Default::default()
+    });
+    let mut next_id = 0i64;
+    let rows = build(10_000, &mut next_id);
+    let mut edited = rows.clone();
+    for r in edited.iter_mut().step_by(2) {
+        r.label.push_str(" !!!");
+    }
+    type WindowStep = (&'static str, fn(&mut Runtime, usize, &[Data], &[Data]));
+    let steps: [WindowStep; 5] = [
+        ("create 10k, 30 mounted", |rt, t, rows, _| {
+            rt.set_list(t, 0, rows.iter().map(Data::item).collect())
+                .unwrap();
+            rt.set_window(t, 0, 0, 30).unwrap();
+        }),
+        ("scroll 1 row", |rt, t, _, _| {
+            rt.set_window(t, 0, 1, 31).unwrap()
+        }),
+        ("scroll 10 rows", |rt, t, _, _| {
+            rt.set_window(t, 0, 11, 41).unwrap()
+        }),
+        ("jump to row 5000", |rt, t, _, _| {
+            rt.set_window(t, 0, 5000, 5030).unwrap()
+        }),
+        ("text every 2nd (10k)", |rt, t, _, edited| {
+            rt.set_list(
+                t,
+                0,
+                edited
+                    .iter()
+                    .enumerate()
+                    .map(|(i, r)| {
+                        if i % 2 == 0 {
+                            r.item()
+                        } else {
+                            ListItem::same(r.id)
+                        }
+                    })
+                    .collect(),
+            )
+            .unwrap();
+        }),
+    ];
+    let mut times: Vec<Vec<f64>> = vec![Vec::new(); steps.len()];
+    let mut counts = vec![0usize; steps.len()];
+    for round in 0..9 {
+        let mut rt = Runtime::with_id_base(1);
+        let t = rt.mount(&table, 0);
+        for (i, (_, run)) in steps.iter().enumerate() {
+            let t0 = Instant::now();
+            run(&mut rt, t, &rows, &edited);
+            let cmds = rt.flush();
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            counts[i] = cmds.len();
+            if round > 0 {
+                times[i].push(ms);
+            }
+        }
+        assert_eq!(rt.live_instances(), 31);
+    }
+    println!("\nwindowed 10k-row table (30 mounted)");
+    println!("{:<28} {:>9} {:>9}", "step", "total ms", "commands");
+    for (i, (name, _)) in steps.iter().enumerate() {
+        times[i].sort_by(f64::total_cmp);
+        println!(
+            "{:<28} {:>9.4} {:>9}",
+            name,
+            times[i][times[i].len() / 2],
+            counts[i]
+        );
+    }
 }

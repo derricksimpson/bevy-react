@@ -176,11 +176,15 @@ impl Runtime {
                      parent,
                      item,
                      selectors,
+                     anchor,
+                     window,
                  }| {
                     ListState::new(
                         id0 + NodeId::from(*parent),
+                        anchor.map(|a| id0 + NodeId::from(a)),
                         Arc::clone(item),
                         selectors.clone(),
+                        *window,
                     )
                 },
             )

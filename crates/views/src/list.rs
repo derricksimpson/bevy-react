@@ -10,12 +10,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::command::{Command, NodeId};
+use crate::command::NodeId;
 use crate::compiled::Compiled;
-use crate::ir::Selector;
-use crate::keyed::{self, Key, Step};
+use crate::ir::{Selector, SlotId, Window};
+use crate::keyed::Key;
 use crate::runtime::{InstanceId, Runtime};
-use crate::select;
 use crate::value::Value;
 
 /// One entry of a new list.
@@ -55,35 +54,91 @@ pub enum ListError {
         expected: usize,
         got: usize,
     },
+    /// `set_window` on a list that is not windowed.
+    NotWindowed,
 }
 
 /// A mounted list.
 pub(crate) struct ListState {
-    /// The node whose children the items are.
-    parent: NodeId,
-    item: Arc<Compiled>,
-    keys: Vec<Key>,
+    /// The node whose children the rows are.
+    pub(crate) parent: NodeId,
+    /// Rows go before this node (a bottom spacer), or last.
+    pub(crate) anchor: Option<NodeId>,
+    pub(crate) item: Arc<Compiled>,
+    /// The mounted rows' keys, in order (all of the list unless windowed).
+    pub(crate) keys: Vec<Key>,
     pub(crate) selectors: Vec<Selector>,
     pub(crate) items: HashMap<Key, InstanceId>,
     /// A list staged by [`Runtime::set_list`], applied at the next flush. Its
     /// `fields: None` entries are unchanged relative to the **applied** list.
-    pending: Option<Vec<ListItem>>,
+    pub(crate) pending: Option<Vec<ListItem>>,
+    /// Windowed lists only.
+    pub(crate) window: Option<WindowState>,
+    /// A range staged by [`Runtime::set_window`].
+    pub(crate) pending_range: Option<(usize, usize)>,
+    /// Windowed lists: every key in order (`keys` is the mounted slice).
+    pub(crate) all: Vec<Key>,
+    /// Windowed lists: the fields of the rows that are not mounted.
+    pub(crate) store: HashMap<Key, Vec<Value>>,
+}
+
+/// A windowed list's slots and applied range.
+pub(crate) struct WindowState {
+    pub(crate) top: SlotId,
+    pub(crate) bottom: SlotId,
+    /// The mounted rows' index range in the full list.
+    pub(crate) range: (usize, usize),
 }
 
 impl ListState {
-    pub(crate) fn new(parent: NodeId, item: Arc<Compiled>, selectors: Vec<Selector>) -> Self {
+    pub(crate) fn new(
+        parent: NodeId,
+        anchor: Option<NodeId>,
+        item: Arc<Compiled>,
+        selectors: Vec<Selector>,
+        window: Option<Window>,
+    ) -> Self {
         ListState {
             parent,
+            anchor,
             item,
             keys: Vec::new(),
             selectors,
             items: HashMap::new(),
             pending: None,
+            window: window.map(|w| WindowState {
+                top: w.top,
+                bottom: w.bottom,
+                // Until a window is set, a windowed list mounts everything.
+                range: (0, usize::MAX),
+            }),
+            pending_range: None,
+            all: Vec::new(),
+            store: HashMap::new(),
         }
     }
 
+    /// A stand-in left in the instance while a list is applied.
+    pub(crate) fn placeholder(item: &Arc<Compiled>) -> Self {
+        ListState::new(0, None, Arc::clone(item), Vec::new(), None)
+    }
+
+    /// Every key of the list, mounted or not, in order.
+    fn all_keys(&self) -> &[Key] {
+        if self.window.is_some() {
+            &self.all
+        } else {
+            &self.keys
+        }
+    }
+
+    /// Is `key` a row of the list (mounted, or held in the store)?
+    fn knows(&self, key: &Key) -> bool {
+        self.items.contains_key(key) || self.store.contains_key(key)
+    }
+
     /// How many slots an entry's fields fill (the flag slots follow).
-    fn data_slots(&self) -> usize {
+    pub(crate) fn data_slots(&self) -> usize {
         self.item.template().slots.len() - self.selectors.len()
     }
 
@@ -103,7 +158,7 @@ impl ListState {
             None => {
                 // Same keys in the same order as the applied list: already
                 // unique and all known, so no hashing.
-                let same_order = same_keys(&self.keys, &items);
+                let same_order = same_keys(self.all_keys(), &items);
                 if !same_order {
                     let mut seen = HashSet::with_capacity(items.len());
                     for it in &items {
@@ -116,7 +171,7 @@ impl ListState {
                     if let Some(e) = wrong_count(it) {
                         return Err(e);
                     }
-                    if !same_order && it.fields.is_none() && !self.items.contains_key(&it.key) {
+                    if !same_order && it.fields.is_none() && !self.knows(&it.key) {
                         return Err(ListError::MissingFields(it.key.clone()));
                     }
                 }
@@ -166,7 +221,7 @@ impl ListState {
     }
 }
 
-fn same_keys(keys: &[Key], items: &[ListItem]) -> bool {
+pub(crate) fn same_keys(keys: &[Key], items: &[ListItem]) -> bool {
     keys.len() == items.len() && keys.iter().zip(items).all(|(k, it)| *k == it.key)
 }
 
@@ -232,11 +287,15 @@ impl Runtime {
             self.note_pending();
             return Ok(());
         }
-        let item = list
-            .items
-            .get(key)
-            .copied()
-            .ok_or_else(|| ListError::MissingFields(key.clone()))?;
+        let Some(&item) = list.items.get(key) else {
+            // A windowed list's unmounted row: its stored fields change.
+            let stored = list
+                .store
+                .get_mut(key)
+                .ok_or_else(|| ListError::MissingFields(key.clone()))?;
+            *stored = fields;
+            return Ok(());
+        };
         let selectors = list.selectors.clone();
         for (slot, v) in fields.into_iter().enumerate() {
             self.set(item, slot as u16, v);
@@ -245,112 +304,40 @@ impl Runtime {
         Ok(())
     }
 
-    /// Apply every staged list (the first step of a flush).
-    pub(crate) fn apply_staged(&mut self) {
-        for (instance, block) in std::mem::take(&mut self.staged) {
-            self.apply_one(instance, block);
-        }
-    }
-
-    /// Apply list `block` of `instance` if it has a staged list.
-    fn apply_one(&mut self, instance: InstanceId, block: usize) {
+    /// Mount only rows `start..end` of a windowed list (clamped to its
+    /// length): rows leaving the range are unmounted with their fields kept,
+    /// rows entering it are mounted from them, and the spacer counts follow.
+    /// Applied at the next flush, together with a staged list.
+    pub fn set_window(
+        &mut self,
+        instance: InstanceId,
+        block: usize,
+        start: usize,
+        end: usize,
+    ) -> Result<(), ListError> {
         let Some(Some(inst)) = self.instances.get_mut(instance) else {
-            return;
+            return Err(ListError::NoSuchList);
         };
         let Some(list) = inst.lists.get_mut(block) else {
-            return;
+            return Err(ListError::NoSuchList);
         };
-        let Some(items) = list.pending.take() else {
-            return;
-        };
-        // Work on the list out of its instance (mounting borrows `self`).
-        let placeholder = ListState::new(0, Arc::clone(&list.item), Vec::new());
-        let mut list = std::mem::replace(list, placeholder);
-        // Same order as applied: no positions to compute.
-        let same_order = same_keys(&list.keys, &items);
-        let new_keys: Vec<Key> = if same_order {
-            std::mem::take(&mut list.keys)
-        } else {
-            items.iter().map(|it| it.key.clone()).collect()
-        };
-        let d = if same_order {
-            keyed::KeyedDiff::default()
-        } else {
-            keyed::diff(&list.keys, &new_keys)
-        };
-
-        for &o in &d.removed {
-            let item = list
-                .items
-                .remove(&list.keys[o])
-                .expect("old key is mounted");
-            self.out.push(Command::Remove {
-                parent: list.parent,
-                child: self.root(item),
-            });
-            self.forget(item);
+        if list.window.is_none() {
+            return Err(ListError::NotWindowed);
         }
-        let mut fresh: HashMap<usize, Vec<Value>> = HashMap::new();
-        for (i, it) in items.into_iter().enumerate() {
-            let Some(fields) = it.fields else { continue };
-            match list.items.get(&it.key) {
-                Some(&item) => {
-                    fields
-                        .into_iter()
-                        .enumerate()
-                        .for_each(|(s, v)| self.set(item, s as u16, v));
-                    self.refresh_flags(instance, &list.selectors, item);
-                }
-                None => {
-                    fresh.insert(i, fields);
-                }
-            }
-        }
-        // The selections new rows are born under.
-        let selections: Vec<Value> = list
-            .selectors
-            .iter()
-            .map(|s| self.get(instance, s.from).cloned().unwrap_or(Value::Null))
-            .collect();
-        for step in &d.steps {
-            let (new, before) = match *step {
-                Step::Insert { new, before } => {
-                    let mut slots = fresh
-                        .remove(&new)
-                        .expect("validated: new keys carry fields");
-                    slots.extend(std::iter::repeat_n(Value::Null, list.selectors.len()));
-                    for (s, selection) in list.selectors.iter().zip(&selections) {
-                        slots[usize::from(s.flag)] =
-                            select::flag(selection, &slots[usize::from(s.field)]);
-                    }
-                    let item = self.mount_detached(&list.item, list.parent, Some(instance), slots);
-                    list.items.insert(new_keys[new].clone(), item);
-                    (new, before)
-                }
-                Step::Move { new, before, .. } => (new, before),
-            };
-            let child = self.root(list.items[&new_keys[new]]);
-            self.out.push(match before {
-                Some(b) => Command::Insert {
-                    parent: list.parent,
-                    child,
-                    before: self.root(list.items[&new_keys[b]]),
-                },
-                None => Command::Append {
-                    parent: list.parent,
-                    child,
-                },
-            });
-        }
-        list.keys = new_keys;
-        if let Some(Some(inst)) = self.instances.get_mut(instance) {
-            inst.lists[block] = list;
-        }
+        list.pending_range = Some((start, end));
+        self.staged.push((instance, block));
+        self.note_pending();
+        Ok(())
     }
 
-    /// The bridge id of an item's root (node 0, checked by `Compiled::new`).
-    fn root(&self, item: InstanceId) -> NodeId {
-        self.instances[item].as_ref().expect("live item").id0
+    /// A windowed list's applied range and its full length:
+    /// `(start, end, total)`.
+    pub fn list_window(&self, instance: InstanceId, block: usize) -> Option<(usize, usize, usize)> {
+        let list = self.instances.get(instance)?.as_ref()?.lists.get(block)?;
+        let w = list.window.as_ref()?;
+        let total = list.all.len();
+        let (start, end) = crate::list_apply::clamp(w.range, total);
+        Some((start, end, total))
     }
 
     /// The instance of list entry `key` (to read or write its fields).
@@ -364,4 +351,25 @@ impl Runtime {
             .get(key)
             .copied()
     }
+}
+
+/// The rows to mount for a scroll position: those that meet the viewport
+/// plus `overscan` on each side, clamped to `total`. Rows have a fixed
+/// height; feed the result to [`Runtime::set_window`].
+pub fn visible_range(
+    scroll_top: f64,
+    viewport: f64,
+    row_height: f64,
+    overscan: usize,
+    total: usize,
+) -> (usize, usize) {
+    if row_height <= 0.0 || total == 0 {
+        return (0, 0);
+    }
+    let first = (scroll_top.max(0.0) / row_height).floor() as usize;
+    let last = ((scroll_top.max(0.0) + viewport.max(0.0)) / row_height).ceil() as usize;
+    (
+        first.saturating_sub(overscan).min(total),
+        last.saturating_add(overscan).min(total),
+    )
 }

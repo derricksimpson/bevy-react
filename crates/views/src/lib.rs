@@ -20,6 +20,7 @@ pub mod eval;
 pub mod ir;
 pub mod keyed;
 pub mod list;
+mod list_apply;
 pub mod runtime;
 mod select;
 pub mod value;
@@ -30,9 +31,9 @@ pub use compiled::Compiled;
 pub use dispatch::Dispatch;
 pub use ir::{
     Action, Binding, Block, ChildBlock, Expr, Handler, JsRef, Selector, SlotId, TNode, Target,
-    Template, e,
+    Template, Window, e,
 };
 pub use keyed::Key;
-pub use list::{ListError, ListItem};
+pub use list::{ListError, ListItem, visible_range};
 pub use runtime::{InstanceId, Runtime};
 pub use value::Value;

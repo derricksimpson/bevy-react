@@ -27,6 +27,7 @@ pub fn eval(expr: &Expr, slots: &[Value]) -> Value {
         }
         Expr::Not(a) => Value::Bool(!eval(a, slots).truthy()),
         Expr::Eq(a, b) => Value::Bool(strict_eq(&eval(a, slots), &eval(b, slots))),
+        Expr::Mul(a, b) => Value::Num(eval(a, slots).num() * eval(b, slots).num()),
         Expr::Gt(a, b) => Value::Bool(eval(a, slots).num() > eval(b, slots).num()),
         Expr::Add(a, b) => match (eval(a, slots), eval(b, slots)) {
             // JS `+`: string concatenation when either side is a string.
