@@ -20,8 +20,36 @@ use crate::ir::{Block, Handler, JsRef, SlotId, Target};
 use crate::list::ListState;
 use crate::value::Value;
 
-/// A mounted component instance.
-pub type InstanceId = usize;
+/// A mounted component instance. The id carries a generation, so the id of
+/// an instance that was dropped never reaches the one that reuses its slot.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct InstanceId(u64);
+
+impl InstanceId {
+    fn new(index: u32, generation: u32) -> Self {
+        InstanceId(u64::from(generation) << 32 | u64::from(index))
+    }
+
+    fn index(self) -> usize {
+        (self.0 & 0xFFFF_FFFF) as usize
+    }
+
+    fn generation(self) -> u32 {
+        (self.0 >> 32) as u32
+    }
+}
+
+impl std::fmt::Debug for InstanceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}v{}", self.index(), self.generation())
+    }
+}
+
+/// One entry of the instance table.
+pub(crate) struct Slot {
+    generation: u32,
+    inst: Option<Instance>,
+}
 
 pub(crate) struct Instance {
     pub(crate) compiled: Arc<Compiled>,
@@ -57,7 +85,9 @@ impl Instance {
 /// The runtime for one island tree.
 pub struct Runtime {
     next_id: NodeId,
-    pub(crate) instances: Vec<Option<Instance>>,
+    pub(crate) instances: Vec<Slot>,
+    /// Indexes of table slots whose instance is gone, for reuse.
+    free: Vec<u32>,
     /// Instances with marked bindings, in first-write order (entries for
     /// instances dropped since are skipped at flush).
     dirty: Vec<InstanceId>,
@@ -94,6 +124,7 @@ impl Runtime {
         Runtime {
             next_id: first_id,
             instances: Vec::new(),
+            free: Vec::new(),
             dirty: Vec::new(),
             ranges: Vec::new(),
             dead_ranges: 0,
@@ -110,7 +141,7 @@ impl Runtime {
     /// creates and appends are queued for the next [`flush`](Self::flush).
     pub fn mount(&mut self, compiled: &Arc<Compiled>, parent: NodeId) -> InstanceId {
         let instance = self.mount_detached(compiled, parent, None, compiled.template.slots.clone());
-        let inst = self.instances[instance].as_ref().expect("just mounted");
+        let inst = lookup(&self.instances, instance).expect("just mounted");
         for (ix, node) in inst.compiled.template.nodes.iter().enumerate() {
             if node.parent.is_none() {
                 self.out.push(Command::Append {
@@ -132,7 +163,7 @@ impl Runtime {
         owner: Option<InstanceId>,
         slots: Vec<Value>,
     ) -> InstanceId {
-        let instance = self.instances.len();
+        let instance = self.reserve();
         let t = &compiled.template;
         let id0 = self.next_id;
         self.next_id += t.nodes.len() as NodeId;
@@ -198,20 +229,23 @@ impl Runtime {
             )
             .collect();
         let n_children = t.children.len();
-        self.instances.push(Some(Instance {
-            compiled: Arc::clone(compiled),
-            parent,
-            owner,
-            id0,
-            slots,
-            sent,
-            dirty: Vec::new(),
-            is_dirty: Bits::default(),
-            lists,
-            children: vec![None; n_children],
-            effect_deps: Vec::new(),
-            effect_ran: vec![false; t.effects.len()],
-        }));
+        self.fill(
+            instance,
+            Instance {
+                compiled: Arc::clone(compiled),
+                parent,
+                owner,
+                id0,
+                slots,
+                sent,
+                dirty: Vec::new(),
+                is_dirty: Bits::default(),
+                lists,
+                children: vec![None; n_children],
+                effect_deps: Vec::new(),
+                effect_ran: vec![false; t.effects.len()],
+            },
+        );
         for c in 0..n_children {
             self.sync_child(instance, c);
         }
@@ -220,10 +254,52 @@ impl Runtime {
         instance
     }
 
+    /// The live instance `id` names (`None` once it was dropped, even if its
+    /// slot has been reused since).
+    pub(crate) fn inst(&self, id: InstanceId) -> Option<&Instance> {
+        lookup(&self.instances, id)
+    }
+
+    pub(crate) fn inst_mut(&mut self, id: InstanceId) -> Option<&mut Instance> {
+        lookup_mut(&mut self.instances, id)
+    }
+
+    /// Claim a table slot (a dropped instance's, if one is free) and name it.
+    fn reserve(&mut self) -> InstanceId {
+        match self.free.pop() {
+            Some(index) => InstanceId::new(index, self.instances[index as usize].generation),
+            None => {
+                self.instances.push(Slot {
+                    generation: 0,
+                    inst: None,
+                });
+                InstanceId::new(self.instances.len() as u32 - 1, 0)
+            }
+        }
+    }
+
+    /// Put the instance in the slot [`reserve`](Self::reserve) named.
+    fn fill(&mut self, id: InstanceId, inst: Instance) {
+        self.instances[id.index()].inst = Some(inst);
+    }
+
+    /// Take an instance out of the table and free its slot: the generation
+    /// moves on, so the old id names nothing from here on.
+    pub(crate) fn release(&mut self, id: InstanceId) -> Option<Instance> {
+        let slot = self.instances.get_mut(id.index())?;
+        if slot.generation != id.generation() {
+            return None;
+        }
+        let inst = slot.inst.take()?;
+        slot.generation = slot.generation.wrapping_add(1);
+        self.free.push(id.index() as u32);
+        Some(inst)
+    }
+
     /// Write a state slot (a JS handler's `setX(value)`). Marks the bindings
     /// that read it; nothing is evaluated until [`flush`](Self::flush).
     pub fn set(&mut self, instance: InstanceId, slot: SlotId, value: Value) {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return;
         };
         let Some(cur) = inst.slots.get_mut(usize::from(slot)) else {
@@ -252,11 +328,7 @@ impl Runtime {
 
     /// Read a slot (what a JS handler sees as the current state).
     pub fn get(&self, instance: InstanceId, slot: SlotId) -> Option<&Value> {
-        self.instances
-            .get(instance)?
-            .as_ref()?
-            .slots
-            .get(usize::from(slot))
+        self.inst(instance)?.slots.get(usize::from(slot))
     }
 
     /// Re-evaluate every marked binding and return the commands queued since
@@ -270,7 +342,7 @@ impl Runtime {
         // until nothing is left (parents only ever mark their children).
         while !self.dirty.is_empty() {
             for instance in std::mem::take(&mut self.dirty) {
-                let Some(Some(inst)) = self.instances.get_mut(instance) else {
+                let Some(inst) = lookup_mut(&mut self.instances, instance) else {
                     continue;
                 };
                 let n_bindings = inst.compiled.template.bindings.len();
@@ -329,7 +401,7 @@ impl Runtime {
     /// Remove an instance: its roots leave the mount parent (Bevy despawns the
     /// subtree, list items included), its handlers are forgotten.
     pub fn unmount(&mut self, instance: InstanceId) {
-        let Some(Some(inst)) = self.instances.get(instance) else {
+        let Some(inst) = lookup(&self.instances, instance) else {
             return;
         };
         for (ix, node) in inst.compiled.template.nodes.iter().enumerate() {
@@ -347,7 +419,7 @@ impl Runtime {
     /// Drop an instance and everything mounted inside it, emitting nothing
     /// (its nodes die with whatever removal the caller sent).
     pub(crate) fn forget(&mut self, instance: InstanceId) {
-        let Some(inst) = self.instances.get_mut(instance).and_then(Option::take) else {
+        let Some(inst) = self.release(instance) else {
             return;
         };
         if inst.compiled.has_handlers {
@@ -370,7 +442,7 @@ impl Runtime {
     pub(crate) fn instance_of(&self, node: NodeId) -> Option<(InstanceId, &Instance)> {
         let at = self.ranges.partition_point(|(id0, _)| *id0 <= node);
         let &(id0, instance) = self.ranges.get(at.checked_sub(1)?)?;
-        let inst = self.instances.get(instance)?.as_ref()?;
+        let inst = self.inst(instance)?;
         // A stale range (its instance dropped) fails the id0 check.
         (inst.id0 == id0 && ((node - id0) as usize) < inst.compiled.template.nodes.len())
             .then_some((instance, inst))
@@ -381,9 +453,11 @@ impl Runtime {
         if self.dead_ranges < 1024 || self.dead_ranges * 2 < self.ranges.len() {
             return;
         }
-        let instances = &self.instances;
-        self.ranges
-            .retain(|&(id0, i)| instances[i].as_ref().is_some_and(|inst| inst.id0 == id0));
+        let ranges = std::mem::take(&mut self.ranges);
+        self.ranges = ranges
+            .into_iter()
+            .filter(|&(id0, i)| self.inst(i).is_some_and(|inst| inst.id0 == id0))
+            .collect();
         self.dead_ranges = 0;
     }
 
@@ -401,13 +475,19 @@ impl Runtime {
 
     /// The bridge id of template node `ix` in `instance`.
     pub fn node_id(&self, instance: InstanceId, ix: usize) -> Option<NodeId> {
-        let inst = self.instances.get(instance)?.as_ref()?;
+        let inst = self.inst(instance)?;
         (ix < inst.compiled.template.nodes.len()).then(|| inst.node(ix))
+    }
+
+    /// How many entries the instance table has (live or free): it grows to
+    /// the most instances ever alive at once, not with every mount.
+    pub fn instance_table_len(&self) -> usize {
+        self.instances.len()
     }
 
     /// How many instances are alive (list items included).
     pub fn live_instances(&self) -> usize {
-        self.instances.iter().filter(|i| i.is_some()).count()
+        self.instances.iter().filter(|s| s.inst.is_some()).count()
     }
 }
 
@@ -417,4 +497,20 @@ fn upsert(list: &mut Vec<(&'static str, Value)>, key: &'static str, v: Value) {
         Some(slot) => slot.1 = v,
         None => list.push((key, v)),
     }
+}
+
+/// The live instance `id` names in `table`, field-level so callers can hold
+/// it while pushing to the runtime's other fields.
+fn lookup(table: &[Slot], id: InstanceId) -> Option<&Instance> {
+    let slot = table.get(id.index())?;
+    (slot.generation == id.generation())
+        .then_some(slot.inst.as_ref())
+        .flatten()
+}
+
+fn lookup_mut(table: &mut [Slot], id: InstanceId) -> Option<&mut Instance> {
+    let slot = table.get_mut(id.index())?;
+    (slot.generation == id.generation())
+        .then_some(slot.inst.as_mut())
+        .flatten()
 }

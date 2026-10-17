@@ -41,9 +41,9 @@ impl Runtime {
                     .filter_map(|Action::Set { up, slot, expr }| {
                         let mut target = instance;
                         for _ in 0..*up {
-                            target = self.instances[target].as_ref()?.owner?;
+                            target = self.inst(target)?.owner?;
                         }
-                        let value = eval(expr, &self.instances[instance].as_ref()?.slots);
+                        let value = eval(expr, &self.inst(instance)?.slots);
                         Some((target, *slot, value))
                     })
                     .collect();

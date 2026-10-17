@@ -14,7 +14,8 @@
 use std::sync::Arc;
 
 use bevy_react_views::{
-    Binding, Block, Command, Compiled, Key, ListItem, Runtime, TNode, Target, Template, Value, e,
+    Binding, Block, Command, Compiled, InstanceId, Key, ListItem, Runtime, TNode, Target, Template,
+    Value, e,
 };
 
 const SELECTED: u16 = 0;
@@ -60,7 +61,7 @@ fn same(ids: &[i64]) -> Vec<ListItem> {
     ids.iter().map(|&i| ListItem::same(i)).collect()
 }
 
-fn recolor(rt: &Runtime, t: usize, id: i64, color: &str) -> Command {
+fn recolor(rt: &Runtime, t: InstanceId, id: i64, color: &str) -> Command {
     let r = rt.list_item(t, 0, &Key::Int(id)).unwrap();
     Command::SetStyle {
         id: rt.node_id(r, 0).unwrap(),
@@ -69,7 +70,7 @@ fn recolor(rt: &Runtime, t: usize, id: i64, color: &str) -> Command {
     }
 }
 
-fn setup(n: i64) -> (Runtime, usize) {
+fn setup(n: i64) -> (Runtime, InstanceId) {
     let mut rt = Runtime::with_id_base(1);
     let t = rt.mount(&table(), 0);
     rt.set_list(t, 0, (1..=n).map(item).collect()).unwrap();

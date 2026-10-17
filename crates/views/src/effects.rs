@@ -38,7 +38,7 @@ impl Runtime {
     /// Queue every effect of a freshly mounted instance, and remember the
     /// dependency values they ran with.
     pub(crate) fn start_effects(&mut self, instance: InstanceId) {
-        let Some(Some(inst)) = self.instances.get(instance) else {
+        let Some(inst) = self.inst(instance) else {
             return;
         };
         let compiled = inst.compiled.clone();
@@ -48,7 +48,7 @@ impl Runtime {
             .iter()
             .map(|fx| snapshot(fx, &inst.slots))
             .collect();
-        if let Some(Some(inst)) = self.instances.get_mut(instance) {
+        if let Some(inst) = self.inst_mut(instance) {
             inst.effect_deps = snaps;
         }
         for e in 0..compiled.template().effects.len() {
@@ -59,7 +59,7 @@ impl Runtime {
     /// An effect's dependencies were written: run it again if their values
     /// differ from the last run's.
     pub(crate) fn effect_deps_changed(&mut self, instance: InstanceId, e: usize) {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return;
         };
         let compiled = inst.compiled.clone();
@@ -76,7 +76,7 @@ impl Runtime {
     /// Queue `Cleanup` (if the last run left one) then `Run`; a run still
     /// waiting for the host is replaced instead.
     fn queue_run(&mut self, instance: InstanceId, e: usize) {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return;
         };
         let fx = &inst.compiled.template().effects[e];

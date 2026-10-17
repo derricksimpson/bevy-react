@@ -240,7 +240,7 @@ impl Runtime {
         block: usize,
         items: Vec<ListItem>,
     ) -> Result<(), ListError> {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return Err(ListError::NoSuchList);
         };
         let Some(list) = inst.lists.get_mut(block) else {
@@ -264,7 +264,7 @@ impl Runtime {
         key: &Key,
         fields: Vec<Value>,
     ) -> Result<(), ListError> {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return Err(ListError::NoSuchList);
         };
         let Some(list) = inst.lists.get_mut(block) else {
@@ -315,7 +315,7 @@ impl Runtime {
         start: usize,
         end: usize,
     ) -> Result<(), ListError> {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return Err(ListError::NoSuchList);
         };
         let Some(list) = inst.lists.get_mut(block) else {
@@ -333,7 +333,7 @@ impl Runtime {
     /// A windowed list's applied range and its full length:
     /// `(start, end, total)`.
     pub fn list_window(&self, instance: InstanceId, block: usize) -> Option<(usize, usize, usize)> {
-        let list = self.instances.get(instance)?.as_ref()?.lists.get(block)?;
+        let list = self.inst(instance)?.lists.get(block)?;
         let w = list.window.as_ref()?;
         let total = list.all.len();
         let (start, end) = crate::list_apply::clamp(w.range, total);
@@ -342,9 +342,7 @@ impl Runtime {
 
     /// The instance of list entry `key` (to read or write its fields).
     pub fn list_item(&self, instance: InstanceId, block: usize, key: &Key) -> Option<InstanceId> {
-        self.instances
-            .get(instance)?
-            .as_ref()?
+        self.inst(instance)?
             .lists
             .get(block)?
             .items

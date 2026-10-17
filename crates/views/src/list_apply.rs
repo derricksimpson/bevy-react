@@ -24,7 +24,7 @@ impl Runtime {
 
     /// Apply list `block` of `instance` if it has a staged list or window.
     pub(crate) fn apply_one(&mut self, instance: InstanceId, block: usize) {
-        let Some(Some(inst)) = self.instances.get_mut(instance) else {
+        let Some(inst) = self.inst_mut(instance) else {
             return;
         };
         let Some(list) = inst.lists.get_mut(block) else {
@@ -84,8 +84,7 @@ impl Runtime {
             let item = list.items.remove(key).expect("old key is mounted");
             if windowed && live.as_ref().is_none_or(|l| l.contains(key)) {
                 // Left the window, not the list: keep its fields.
-                let fields =
-                    self.instances[item].as_ref().expect("live row").slots[..data].to_vec();
+                let fields = self.inst(item).expect("live row").slots[..data].to_vec();
                 list.store.insert(key.clone(), fields);
             }
             self.out.push(Command::Remove {
@@ -177,7 +176,7 @@ impl Runtime {
             list.all = new_all;
         }
         let total = list.all.len();
-        if let Some(Some(inst)) = self.instances.get_mut(instance) {
+        if let Some(inst) = self.inst_mut(instance) {
             inst.lists[block] = list;
         }
         if let Some((top, bottom)) = spacers {
@@ -188,7 +187,7 @@ impl Runtime {
 
     /// The bridge id of an item's root (node 0, checked by `Compiled::new`).
     pub(crate) fn root(&self, item: InstanceId) -> NodeId {
-        self.instances[item].as_ref().expect("live item").id0
+        self.inst(item).expect("live item").id0
     }
 }
 

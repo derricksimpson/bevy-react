@@ -15,8 +15,8 @@ mod common;
 use common::Tree;
 
 use bevy_react_views::{
-    Binding, Block, Command, Compiled, Key, ListError, ListItem, NodeId, Runtime, TNode, Target,
-    Template, Value, e,
+    Binding, Block, Command, Compiled, InstanceId, Key, ListError, ListItem, NodeId, Runtime,
+    TNode, Target, Template, Value, e,
 };
 
 const ROOT: NodeId = 0;
@@ -60,7 +60,7 @@ fn labels(ids: &[i64]) -> Vec<String> {
 struct Fixture {
     rt: Runtime,
     tree: Tree,
-    table: usize,
+    table: InstanceId,
     node: NodeId,
 }
 

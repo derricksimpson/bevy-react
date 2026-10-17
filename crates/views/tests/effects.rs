@@ -9,15 +9,15 @@
 use std::sync::Arc;
 
 use bevy_react_views::{
-    Block, ChildBlock, Compiled, Effect, EffectCall, EffectKind, ListItem, Runtime, TNode,
-    Template, Value,
+    Block, ChildBlock, Compiled, Effect, EffectCall, EffectKind, InstanceId, ListItem, Runtime,
+    TNode, Template, Value,
 };
 
 const FETCH: u32 = 1;
 const MOUNTED: u32 = 2;
 const RENDERED: u32 = 3;
 
-fn call(instance: usize, effect: u16, js: u32, kind: EffectKind) -> EffectCall {
+fn call(instance: InstanceId, effect: u16, js: u32, kind: EffectKind) -> EffectCall {
     EffectCall {
         instance,
         effect,
@@ -26,11 +26,11 @@ fn call(instance: usize, effect: u16, js: u32, kind: EffectKind) -> EffectCall {
     }
 }
 
-fn run(instance: usize, effect: u16, js: u32) -> EffectCall {
+fn run(instance: InstanceId, effect: u16, js: u32) -> EffectCall {
     call(instance, effect, js, EffectKind::Run)
 }
 
-fn cleanup(instance: usize, effect: u16, js: u32) -> EffectCall {
+fn cleanup(instance: InstanceId, effect: u16, js: u32) -> EffectCall {
     call(instance, effect, js, EffectKind::Cleanup)
 }
 
@@ -49,7 +49,7 @@ fn user() -> Arc<Compiled> {
     })
 }
 
-fn mounted() -> (Runtime, usize) {
+fn mounted() -> (Runtime, InstanceId) {
     let mut rt = Runtime::with_id_base(1);
     let u = rt.mount(&user(), 0);
     rt.flush();
@@ -230,7 +230,7 @@ fn list_rows_run_effects_when_they_mount_and_clean_up_when_they_go() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].kind, EffectKind::Cleanup);
     // The cleanup names row 2's instance: the one missing from the live rows.
-    let live: Vec<usize> = [1i64, 3]
+    let live: Vec<InstanceId> = [1i64, 3]
         .iter()
         .map(|i| rt.list_item(t, 0, &(*i).into()).unwrap())
         .collect();

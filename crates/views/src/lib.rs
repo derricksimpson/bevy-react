@@ -11,6 +11,8 @@
 //! by exact command streams in tests.
 
 pub mod batch;
+#[cfg(feature = "bevy")]
+pub mod bevy;
 mod bits;
 mod child;
 pub mod command;

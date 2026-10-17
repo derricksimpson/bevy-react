@@ -28,7 +28,7 @@ impl Runtime {
     /// the old row off and the new row on (rows not mounted yet get their flag
     /// when they are created).
     pub(crate) fn retarget(&mut self, instance: InstanceId, slot: u16, old: Value, new: Value) {
-        let Some(Some(inst)) = self.instances.get(instance) else {
+        let Some(inst) = self.inst(instance) else {
             return;
         };
         let mut flips: Vec<(InstanceId, u16, bool)> = Vec::new();

@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use bevy_react_views::{
-    Binding, Block, Clock, Command, Compiled, Key, ListError, ListItem, Runtime, TNode, Target,
-    Template, Value, e,
+    Binding, Block, Clock, Command, Compiled, InstanceId, Key, ListError, ListItem, Runtime, TNode,
+    Target, Template, Value, e,
 };
 
 /// A manual clock: `tick(ms)` advances it.
@@ -64,7 +64,7 @@ fn text(id: u32, s: &str) -> Command {
 }
 
 /// A table of rows 1..=n, applied and flushed, on a manual clock.
-fn fixture(n: i64, window_ms: u64) -> (Runtime, Time, usize) {
+fn fixture(n: i64, window_ms: u64) -> (Runtime, Time, InstanceId) {
     let (time, clock) = Time::new();
     let mut rt = Runtime::with_id_base(1);
     rt.set_clock(clock);
@@ -76,7 +76,7 @@ fn fixture(n: i64, window_ms: u64) -> (Runtime, Time, usize) {
     (rt, time, t)
 }
 
-fn row_text_node(rt: &Runtime, t: usize, id: i64) -> u32 {
+fn row_text_node(rt: &Runtime, t: InstanceId, id: i64) -> u32 {
     let row = rt.list_item(t, 0, &Key::Int(id)).unwrap();
     rt.node_id(row, 1).unwrap()
 }

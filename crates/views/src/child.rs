@@ -10,7 +10,7 @@ impl Runtime {
     /// Mount, unmount or re-prop child block `c` of `instance` so it matches
     /// the instance's current slots.
     pub(crate) fn sync_child(&mut self, instance: InstanceId, c: usize) {
-        let Some(Some(inst)) = self.instances.get(instance) else {
+        let Some(inst) = self.inst(instance) else {
             return;
         };
         let compiled = inst.compiled.clone();
@@ -38,7 +38,7 @@ impl Runtime {
                     slots[usize::from(slot)] = v;
                 }
                 let child = self.mount_detached(&block.component, parent, Some(instance), slots);
-                let root = self.instances[child].as_ref().expect("just mounted").id0;
+                let root = self.inst(child).expect("just mounted").id0;
                 self.out.push(match before {
                     Some(before) => Command::Insert {
                         parent,
@@ -50,22 +50,16 @@ impl Runtime {
                         child: root,
                     },
                 });
-                self.instances[instance]
-                    .as_mut()
-                    .expect("live parent")
-                    .children[c] = Some(child);
+                self.inst_mut(instance).expect("live parent").children[c] = Some(child);
             }
             (false, Some(child)) => {
-                let root = self.instances[child].as_ref().expect("live child").id0;
+                let root = self.inst(child).expect("live child").id0;
                 self.out.push(Command::Remove {
                     parent,
                     child: root,
                 });
                 self.forget(child);
-                self.instances[instance]
-                    .as_mut()
-                    .expect("live parent")
-                    .children[c] = None;
+                self.inst_mut(instance).expect("live parent").children[c] = None;
             }
             (true, Some(child)) => {
                 for (slot, v) in props {

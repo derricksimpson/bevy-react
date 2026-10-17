@@ -6,4 +6,18 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+# `bevy` adds `bevy_react_views::bevy`: the adapter from commands to
+# `bevy_react_core`'s wire ops, and the end-to-end tests that drive real Bevy
+# entities with it (`cargo test -p bevy_react_views --features bevy`; this
+# builds Bevy, so it is off by default).
+[features]
+bevy = ["dep:bevy", "dep:bevy_react_core", "bevy_react_core/test_util", "dep:serde_json"]
+
 [dependencies]
+bevy = { workspace = true, features = ["bevy_ui", "bevy_text", "bevy_color", "bevy_asset", "bevy_image", "bevy_window", "bevy_camera"], optional = true }
+bevy_react_core = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[[test]]
+name = "bevy_e2e"
+required-features = ["bevy"]

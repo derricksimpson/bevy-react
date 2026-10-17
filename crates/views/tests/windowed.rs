@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bevy_react_views::{
-    Binding, Block, Command, Compiled, Key, ListError, ListItem, NodeId, Runtime, TNode, Target,
-    Template, Value, e, visible_range,
+    Binding, Block, Command, Compiled, InstanceId, Key, ListError, ListItem, NodeId, Runtime,
+    TNode, Target, Template, Value, e, visible_range,
 };
 
 mod common;
@@ -85,7 +85,7 @@ fn same(ids: impl IntoIterator<Item = i64>) -> Vec<ListItem> {
 struct Fixture {
     rt: Runtime,
     tree: Tree,
-    t: usize,
+    t: InstanceId,
     list: NodeId,
     heights: HashMap<NodeId, f64>,
     top: NodeId,

@@ -21,8 +21,8 @@
 use std::sync::Arc;
 
 use bevy_react_views::{
-    Binding, Block, ChildBlock, Command, Compiled, ListItem, NodeId, Runtime, TNode, Target,
-    Template, Value, e,
+    Binding, Block, ChildBlock, Command, Compiled, InstanceId, ListItem, NodeId, Runtime, TNode,
+    Target, Template, Value, e,
 };
 
 mod common;
@@ -67,7 +67,7 @@ fn panel(detail: Arc<Compiled>) -> Arc<Compiled> {
 struct Fixture {
     rt: Runtime,
     tree: Tree,
-    panel: usize,
+    panel: InstanceId,
     root: NodeId,
 }
 

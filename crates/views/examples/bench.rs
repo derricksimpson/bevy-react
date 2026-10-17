@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bevy_react_views::{
-    Action, Binding, Block, Command, Compiled, ListItem, Runtime, TNode, Target, Template, Value, e,
+    Action, Binding, Block, Command, Compiled, InstanceId, ListItem, Runtime, TNode, Target,
+    Template, Value, e,
 };
 
 const ROW_BG_A: &str = "#45475a";
@@ -261,7 +262,10 @@ fn burst() {
             })
             .collect()
     };
-    type Variant = (&'static str, fn(&mut Runtime, usize, &[Vec<Data>]) -> usize);
+    type Variant = (
+        &'static str,
+        fn(&mut Runtime, InstanceId, &[Vec<Data>]) -> usize,
+    );
     let variants: [Variant; 3] = [
         ("flush after every edit", |rt, table, versions| {
             let mut n = 0;
@@ -486,7 +490,7 @@ fn windowed() {
     for r in edited.iter_mut().step_by(2) {
         r.label.push_str(" !!!");
     }
-    type WindowStep = (&'static str, fn(&mut Runtime, usize, &[Data], &[Data]));
+    type WindowStep = (&'static str, fn(&mut Runtime, InstanceId, &[Data], &[Data]));
     let steps: [WindowStep; 5] = [
         ("create 10k, 30 mounted", |rt, t, rows, _| {
             rt.set_list(t, 0, rows.iter().map(Data::item).collect())
