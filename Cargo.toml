@@ -9,6 +9,7 @@ members = [
     "crates/canvas",
     "crates/portal",
     "crates/surface",
+    "crates/views",
     "examples/demos",
     "examples/minimal",
     "examples/stress",

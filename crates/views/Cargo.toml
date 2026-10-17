@@ -1,0 +1,9 @@
+[package]
+name = "bevy_react_views"
+description = "Experimental compiled-views runtime: templates + bindings evaluated in Rust (see .scratch/compiled-views)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]

@@ -1582,6 +1582,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_react_views"
+version = "0.8.1"
+
+[[package]]
 name = "bevy_reflect"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
