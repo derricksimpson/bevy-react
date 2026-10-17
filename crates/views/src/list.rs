@@ -11,8 +11,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::command::{Command, NodeId};
+use crate::ir::Selector;
 use crate::keyed::{self, Key, Step};
 use crate::runtime::{Compiled, InstanceId, Runtime};
+use crate::select;
 use crate::value::Value;
 
 /// One entry of a new list.
@@ -60,6 +62,7 @@ pub(crate) struct ListState {
     parent: NodeId,
     item: Arc<Compiled>,
     keys: Vec<Key>,
+    pub(crate) selectors: Vec<Selector>,
     pub(crate) items: HashMap<Key, InstanceId>,
     /// A list staged by [`Runtime::set_list`], applied at the next flush. Its
     /// `fields: None` entries are unchanged relative to the **applied** list.
@@ -67,20 +70,26 @@ pub(crate) struct ListState {
 }
 
 impl ListState {
-    pub(crate) fn new(parent: NodeId, item: Arc<Compiled>) -> Self {
+    pub(crate) fn new(parent: NodeId, item: Arc<Compiled>, selectors: Vec<Selector>) -> Self {
         ListState {
             parent,
             item,
             keys: Vec::new(),
+            selectors,
             items: HashMap::new(),
             pending: None,
         }
     }
 
+    /// How many slots an entry's fields fill (the flag slots follow).
+    fn data_slots(&self) -> usize {
+        self.item.template().slots.len() - self.selectors.len()
+    }
+
     /// Validate `items` and stage them (merged over a list already staged).
     /// Returns whether the list was newly staged. Nothing changes on error.
     fn stage(&mut self, mut items: Vec<ListItem>) -> Result<bool, ListError> {
-        let expected = self.item.template().slots.len();
+        let expected = self.data_slots();
         let wrong_count = |it: &ListItem| match &it.fields {
             Some(f) if f.len() != expected => Some(ListError::WrongFieldCount {
                 key: it.key.clone(),
@@ -205,7 +214,7 @@ impl Runtime {
         let Some(list) = inst.lists.get_mut(block) else {
             return Err(ListError::NoSuchList);
         };
-        let expected = list.item.template().slots.len();
+        let expected = list.data_slots();
         if fields.len() != expected {
             return Err(ListError::WrongFieldCount {
                 key: key.clone(),
@@ -227,9 +236,11 @@ impl Runtime {
             .get(key)
             .copied()
             .ok_or_else(|| ListError::MissingFields(key.clone()))?;
+        let selectors = list.selectors.clone();
         for (slot, v) in fields.into_iter().enumerate() {
             self.set(item, slot as u16, v);
         }
+        self.refresh_flags(instance, &selectors, item);
         Ok(())
     }
 
@@ -252,7 +263,8 @@ impl Runtime {
             return;
         };
         // Work on the list out of its instance (mounting borrows `self`).
-        let mut list = std::mem::replace(list, ListState::new(0, Arc::clone(&list.item)));
+        let placeholder = ListState::new(0, Arc::clone(&list.item), Vec::new());
+        let mut list = std::mem::replace(list, placeholder);
         // Same order as applied: no positions to compute.
         let same_order = same_keys(&list.keys, &items);
         let new_keys: Vec<Key> = if same_order {
@@ -281,21 +293,35 @@ impl Runtime {
         for (i, it) in items.into_iter().enumerate() {
             let Some(fields) = it.fields else { continue };
             match list.items.get(&it.key) {
-                Some(&item) => fields
-                    .into_iter()
-                    .enumerate()
-                    .for_each(|(s, v)| self.set(item, s as u16, v)),
+                Some(&item) => {
+                    fields
+                        .into_iter()
+                        .enumerate()
+                        .for_each(|(s, v)| self.set(item, s as u16, v));
+                    self.refresh_flags(instance, &list.selectors, item);
+                }
                 None => {
                     fresh.insert(i, fields);
                 }
             }
         }
+        // The selections new rows are born under.
+        let selections: Vec<Value> = list
+            .selectors
+            .iter()
+            .map(|s| self.get(instance, s.from).cloned().unwrap_or(Value::Null))
+            .collect();
         for step in &d.steps {
             let (new, before) = match *step {
                 Step::Insert { new, before } => {
-                    let slots = fresh
+                    let mut slots = fresh
                         .remove(&new)
                         .expect("validated: new keys carry fields");
+                    slots.extend(std::iter::repeat_n(Value::Null, list.selectors.len()));
+                    for (s, selection) in list.selectors.iter().zip(&selections) {
+                        slots[usize::from(s.flag)] =
+                            select::flag(selection, &slots[usize::from(s.field)]);
+                    }
                     let item = self.mount_detached(&list.item, list.parent, slots);
                     list.items.insert(new_keys[new].clone(), item);
                     (new, before)

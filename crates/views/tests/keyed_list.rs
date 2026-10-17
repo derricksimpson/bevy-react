@@ -38,10 +38,7 @@ fn row() -> Arc<Compiled> {
 fn table() -> Arc<Compiled> {
     Compiled::new(Template {
         nodes: vec![TNode::new("node", None)],
-        blocks: vec![Block::For {
-            parent: 0,
-            item: row(),
-        }],
+        blocks: vec![Block::list(0, row())],
         ..Default::default()
     })
 }

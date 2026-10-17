@@ -25,6 +25,8 @@ pub struct Compiled {
     template: Template,
     /// `slot_deps[slot]` = the bindings that read `slot`.
     slot_deps: Vec<Vec<u16>>,
+    /// `selector_index[slot]` = the `(block, selector)` pairs selecting on `slot`.
+    pub(crate) selector_index: Vec<Vec<(usize, usize)>>,
     /// Per node, the handler props as they cross the wire (`"onClick"`).
     handler_props: Vec<Vec<String>>,
 }
@@ -53,8 +55,44 @@ impl Compiled {
                 deps.push(b as u16);
             }
         }
-        for Block::For { parent, item } in &template.blocks {
+        let mut selector_index = vec![Vec::new(); template.slots.len()];
+        for (
+            block,
+            Block::For {
+                parent,
+                item,
+                selectors,
+            },
+        ) in template.blocks.iter().enumerate()
+        {
             assert!(usize::from(*parent) < nodes.len(), "list parent {parent}");
+            let item_slots = item.template.slots.len();
+            assert!(
+                item_slots >= selectors.len(),
+                "list item has fewer slots than selectors"
+            );
+            let data = item_slots - selectors.len();
+            for (i, sel) in selectors.iter().enumerate() {
+                assert!(
+                    usize::from(sel.field) < data,
+                    "selector field {} is not a data slot",
+                    sel.field
+                );
+                assert_eq!(
+                    usize::from(sel.flag),
+                    data + i,
+                    "selector {i}: flag slots are the item's last slots, in order"
+                );
+                selector_index
+                    .get_mut(usize::from(sel.from))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "selector reads parent slot {}, which is not declared",
+                            sel.from
+                        )
+                    })
+                    .push((block, i));
+            }
             assert!(
                 !nodes.iter().any(|n| n.parent == Some(*parent)),
                 "list parent {parent} has static children"
@@ -77,6 +115,7 @@ impl Compiled {
         Arc::new(Compiled {
             template,
             slot_deps,
+            selector_index,
             handler_props,
         })
     }
@@ -242,9 +281,19 @@ impl Runtime {
         let lists = t
             .blocks
             .iter()
-            .map(|Block::For { parent, item }| {
-                ListState::new(ids[usize::from(*parent)], Arc::clone(item))
-            })
+            .map(
+                |Block::For {
+                     parent,
+                     item,
+                     selectors,
+                 }| {
+                    ListState::new(
+                        ids[usize::from(*parent)],
+                        Arc::clone(item),
+                        selectors.clone(),
+                    )
+                },
+            )
             .collect();
         let n_bindings = t.bindings.len();
         self.instances.push(Some(Instance {
@@ -272,7 +321,9 @@ impl Runtime {
         if *cur == value {
             return;
         }
-        *cur = value;
+        let selects = !inst.compiled.selector_index[usize::from(slot)].is_empty();
+        let old = std::mem::replace(cur, value);
+        let new = selects.then(|| cur.clone());
         let first = inst.dirty.is_empty();
         for &b in &inst.compiled.slot_deps[usize::from(slot)] {
             if !inst.is_dirty[usize::from(b)] {
@@ -284,6 +335,9 @@ impl Runtime {
             self.dirty.push(instance);
         }
         self.note_pending();
+        if let Some(new) = new {
+            self.retarget(instance, slot, old, new);
+        }
     }
 
     /// Read a slot (what a JS handler sees as the current state).

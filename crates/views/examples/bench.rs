@@ -54,6 +54,12 @@ impl Data {
         ]
     }
 
+    /// An item of `data` fields (id, label, bg) minus the ones a template
+    /// does not take: the first `n`.
+    fn item_fields(&self, n: usize) -> ListItem {
+        ListItem::new(self.id, self.fields().into_iter().take(n).collect())
+    }
+
     fn item(&self) -> ListItem {
         ListItem::new(
             self.id,
@@ -173,10 +179,7 @@ fn main() {
         let table = rt.mount(
             &Compiled::new(Template {
                 nodes: vec![TNode::new("node", None)],
-                blocks: vec![Block::For {
-                    parent: 0,
-                    item: row(),
-                }],
+                blocks: vec![Block::list(0, row())],
                 ..Default::default()
             }),
             0,
@@ -221,6 +224,7 @@ fn main() {
     }
 
     burst();
+    selection();
 }
 
 /// Ten one-row edits to a 10k-row list, as a burst of handler calls inside one
@@ -236,10 +240,7 @@ fn burst() {
         let table = rt.mount(
             &Compiled::new(Template {
                 nodes: vec![TNode::new("node", None)],
-                blocks: vec![Block::For {
-                    parent: 0,
-                    item: row(),
-                }],
+                blocks: vec![Block::list(0, row())],
                 ..Default::default()
             }),
             0,
@@ -305,6 +306,76 @@ fn burst() {
             name,
             samples[samples.len() / 2],
             cmds
+        );
+    }
+}
+
+/// Selecting a row of a 10k-row table, then moving the selection: the table's
+/// `selected` state reaches the rows through a selector, so each change flips
+/// the old and the new row only.
+fn selection() {
+    let row = Compiled::new(Template {
+        nodes: vec![TNode::new("button", None), TNode::new("text", Some(0))],
+        bindings: vec![
+            Binding {
+                target: Target::Text(1),
+                expr: e::concat([e::slot(0), e::lit(" "), e::slot(1)]),
+            },
+            Binding {
+                target: Target::Style(0, "backgroundColor"),
+                expr: e::cond(e::slot(2), e::lit("#89b4fa"), e::lit(ROW_BG_A)),
+            },
+        ],
+        slots: vec![Value::Num(0.0), Value::str(""), Value::Bool(false)],
+        ..Default::default()
+    });
+    let table = Compiled::new(Template {
+        nodes: vec![TNode::new("node", None)],
+        blocks: vec![Block::list(0, row).select(0, 0, 2)],
+        slots: vec![Value::Null],
+        ..Default::default()
+    });
+    let mut next_id = 0i64;
+    let rows = build(10_000, &mut next_id);
+    let mut times = [Vec::new(), Vec::new(), Vec::new()];
+    let mut counts = [0usize; 3];
+    for round in 0..9 {
+        let mut rt = Runtime::with_id_base(1);
+        let t = rt.mount(&table, 0);
+        rt.set_list(t, 0, rows.iter().map(|r| r.item_fields(2)).collect())
+            .unwrap();
+        rt.flush();
+        for (i, sel) in [Value::Num(5000.0), Value::Num(7000.0), Value::Null]
+            .into_iter()
+            .enumerate()
+        {
+            let sel = if let Value::Num(n) = sel {
+                Value::Num(rows[n as usize].id as f64)
+            } else {
+                sel
+            };
+            let t0 = Instant::now();
+            rt.set(t, 0, sel);
+            let cmds = rt.flush();
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            counts[i] = cmds.len();
+            if round > 0 {
+                times[i].push(ms);
+            }
+        }
+    }
+    println!("\nselection in a 10k-row table");
+    println!("{:<28} {:>9} {:>9}", "step", "total ms", "commands");
+    for (i, name) in ["select a row", "move the selection", "clear the selection"]
+        .into_iter()
+        .enumerate()
+    {
+        times[i].sort_by(f64::total_cmp);
+        println!(
+            "{:<28} {:>9.4} {:>9}",
+            name,
+            times[i][times[i].len() / 2],
+            counts[i]
         );
     }
 }

@@ -35,9 +35,48 @@ pub struct Template {
 pub enum Block {
     /// A keyed list (`items.map(i => <Row key={i.id} … />)`): the children of
     /// node `parent` are one `item` instance per list entry, whose slots are
-    /// the entry's fields. The list owns `parent`'s children (no static
-    /// siblings), and `item` has a single root.
-    For { parent: NodeIx, item: Arc<Compiled> },
+    /// the entry's fields (then one flag slot per selector). The list owns
+    /// `parent`'s children (no static siblings), and `item` has a single root.
+    For {
+        parent: NodeIx,
+        item: Arc<Compiled>,
+        selectors: Vec<Selector>,
+    },
+}
+
+/// `selected === row.id` for every row, without visiting every row: the item
+/// slot `flag` is true exactly for the row whose `field` equals the parent
+/// slot `from`. A write to `from` flips only the old and the new row.
+///
+/// Flag slots are the item's last slots, in selector order (so
+/// `flag == data slots + index`); rows compare by key, and `null` selects no
+/// row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Selector {
+    /// The parent instance's slot holding the selection.
+    pub from: SlotId,
+    /// The item slot holding the row's key value.
+    pub field: SlotId,
+    /// The item slot that receives the boolean.
+    pub flag: SlotId,
+}
+
+impl Block {
+    /// A keyed list with no selectors.
+    pub fn list(parent: NodeIx, item: Arc<Compiled>) -> Self {
+        Block::For {
+            parent,
+            item,
+            selectors: Vec::new(),
+        }
+    }
+
+    /// Add a selector (see [`Selector`]).
+    pub fn select(mut self, from: SlotId, field: SlotId, flag: SlotId) -> Self {
+        let Block::For { selectors, .. } = &mut self;
+        selectors.push(Selector { from, field, flag });
+        self
+    }
 }
 
 /// One host element of a template.
