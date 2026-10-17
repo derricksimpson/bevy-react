@@ -15,6 +15,7 @@ mod bits;
 mod child;
 pub mod command;
 mod compiled;
+mod dispatch;
 pub mod eval;
 pub mod ir;
 pub mod keyed;
@@ -26,8 +27,10 @@ pub mod value;
 pub use batch::Clock;
 pub use command::{Command, NodeId};
 pub use compiled::Compiled;
+pub use dispatch::Dispatch;
 pub use ir::{
-    Binding, Block, ChildBlock, Expr, JsRef, Selector, SlotId, TNode, Target, Template, e,
+    Action, Binding, Block, ChildBlock, Expr, Handler, JsRef, Selector, SlotId, TNode, Target,
+    Template, e,
 };
 pub use keyed::Key;
 pub use list::{ListError, ListItem};

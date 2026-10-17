@@ -143,8 +143,8 @@ pub struct TNode {
     pub style: Vec<(&'static str, Value)>,
     /// Static inline text (a `<text>` whose only child is a string).
     pub text: Option<&'static str>,
-    /// Handlers: wire event name (`"click"`) → the JS function to run.
-    pub handlers: Vec<(&'static str, JsRef)>,
+    /// Handlers: wire event name (`"click"`) → what to run.
+    pub handlers: Vec<(&'static str, Handler)>,
 }
 
 impl TNode {
@@ -169,9 +169,70 @@ impl TNode {
         self
     }
 
+    /// A JS handler: the host runs function `js`.
     pub fn on(mut self, event: &'static str, js: JsRef) -> Self {
-        self.handlers.push((event, js));
+        self.handlers.push((event, Handler::Js(js)));
         self
+    }
+
+    /// A handler Rust runs itself, with no JS call.
+    pub fn on_do(mut self, event: &'static str, actions: Vec<Action>) -> Self {
+        self.handlers.push((
+            event,
+            Handler::Do {
+                actions,
+                then: None,
+            },
+        ));
+        self
+    }
+
+    /// Rust runs `actions`, then the host runs `js` (it sees their effect).
+    pub fn on_do_then(mut self, event: &'static str, actions: Vec<Action>, js: JsRef) -> Self {
+        self.handlers.push((
+            event,
+            Handler::Do {
+                actions,
+                then: Some(js),
+            },
+        ));
+        self
+    }
+}
+
+/// What an event handler runs.
+#[derive(Clone, Debug)]
+pub enum Handler {
+    /// A JS function the host runs.
+    Js(JsRef),
+    /// Actions Rust runs at once, then optionally a JS function. A click that
+    /// only flips state never leaves Rust.
+    Do {
+        actions: Vec<Action>,
+        then: Option<JsRef>,
+    },
+}
+
+/// One statement of a Rust handler.
+#[derive(Clone, Debug)]
+pub enum Action {
+    /// `setX(expr)`: write `slot` of the instance `up` owners above the
+    /// handler's own (0 = its own slots; 1 = the table a row belongs to, the
+    /// component that mounted a child). `expr` reads the handler's own slots.
+    /// Every action of a handler reads the state from before the handler ran,
+    /// like the closures of one React render.
+    Set { up: u8, slot: SlotId, expr: Expr },
+}
+
+impl Action {
+    /// `setX(expr)` on the handler's own state.
+    pub fn set(slot: SlotId, expr: Expr) -> Self {
+        Action::Set { up: 0, slot, expr }
+    }
+
+    /// `setX(expr)` on the instance that owns this one.
+    pub fn set_owner(slot: SlotId, expr: Expr) -> Self {
+        Action::Set { up: 1, slot, expr }
     }
 }
 

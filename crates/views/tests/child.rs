@@ -342,3 +342,50 @@ fn a_child_under_a_list_parent_is_rejected() {
         ..Default::default()
     });
 }
+
+#[test]
+fn a_ternary_is_two_complementary_children() {
+    // `{on ? <A/> : <B/>}` before the footer: exactly one is ever mounted, and
+    // flipping swaps them in one flush.
+    let a = Compiled::new(Template {
+        nodes: vec![TNode::new("text", None).text("A")],
+        ..Default::default()
+    });
+    let b = Compiled::new(Template {
+        nodes: vec![TNode::new("text", None).text("B")],
+        ..Default::default()
+    });
+    let host = Compiled::new(Template {
+        nodes: vec![
+            TNode::new("node", None),
+            TNode::new("text", Some(0)).text("footer"),
+        ],
+        children: vec![
+            ChildBlock::new(0, a).before(1).when(e::slot(0)),
+            ChildBlock::new(0, b).before(1).when(e::not(e::slot(0))),
+        ],
+        slots: vec![Value::Bool(true)],
+        ..Default::default()
+    });
+    let mut rt = Runtime::with_id_base(1);
+    let h = rt.mount(&host, 0);
+    let mut tree = Tree::default();
+    tree.apply(&rt.flush());
+    let root = rt.node_id(h, 0).unwrap();
+    let shape = |tree: &Tree| -> Vec<String> {
+        tree.children[&root]
+            .iter()
+            .map(|c| tree.text[c].clone())
+            .collect()
+    };
+    assert_eq!(shape(&tree), ["A", "footer"]);
+    rt.set(h, 0, Value::Bool(false));
+    let cmds = rt.flush();
+    tree.apply(&cmds);
+    assert_eq!(shape(&tree), ["B", "footer"]);
+    assert_eq!(rt.live_instances(), 2, "host and B");
+    assert_eq!(cmds.len(), 3, "remove A, create B, place B: {cmds:?}");
+    rt.set(h, 0, Value::Bool(true));
+    tree.apply(&rt.flush());
+    assert_eq!(shape(&tree), ["A", "footer"]);
+}

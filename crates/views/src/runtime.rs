@@ -15,7 +15,7 @@ use crate::bits::Bits;
 use crate::command::{Command, NodeId};
 use crate::compiled::Compiled;
 use crate::eval::eval;
-use crate::ir::{Block, JsRef, SlotId, Target};
+use crate::ir::{Block, Handler, JsRef, SlotId, Target};
 use crate::list::ListState;
 use crate::value::Value;
 
@@ -25,6 +25,8 @@ pub type InstanceId = usize;
 pub(crate) struct Instance {
     pub(crate) compiled: Arc<Compiled>,
     pub(crate) parent: NodeId,
+    /// The instance that mounted this one (a row's table, a child's parent).
+    pub(crate) owner: Option<InstanceId>,
     /// The bridge id of template node 0; node `i` is `id0 + i` (ids are
     /// allocated per instance in one run, so there is no id table).
     pub(crate) id0: NodeId,
@@ -99,7 +101,7 @@ impl Runtime {
     /// Mount an instance of `compiled` under the bridge node `parent`. Its
     /// creates and appends are queued for the next [`flush`](Self::flush).
     pub fn mount(&mut self, compiled: &Arc<Compiled>, parent: NodeId) -> InstanceId {
-        let instance = self.mount_detached(compiled, parent, compiled.template.slots.clone());
+        let instance = self.mount_detached(compiled, parent, None, compiled.template.slots.clone());
         let inst = self.instances[instance].as_ref().expect("just mounted");
         for (ix, node) in inst.compiled.template.nodes.iter().enumerate() {
             if node.parent.is_none() {
@@ -119,6 +121,7 @@ impl Runtime {
         &mut self,
         compiled: &Arc<Compiled>,
         parent: NodeId,
+        owner: Option<InstanceId>,
         slots: Vec<Value>,
     ) -> InstanceId {
         let instance = self.instances.len();
@@ -186,6 +189,7 @@ impl Runtime {
         self.instances.push(Some(Instance {
             compiled: Arc::clone(compiled),
             parent,
+            owner,
             id0,
             slots,
             sent,
@@ -337,7 +341,7 @@ impl Runtime {
 
     /// The instance a bridge node id belongs to, if it is alive and its
     /// template has handlers.
-    fn instance_of(&self, node: NodeId) -> Option<(InstanceId, &Instance)> {
+    pub(crate) fn instance_of(&self, node: NodeId) -> Option<(InstanceId, &Instance)> {
         let at = self.ranges.partition_point(|(id0, _)| *id0 <= node);
         let &(id0, instance) = self.ranges.get(at.checked_sub(1)?)?;
         let inst = self.instances.get(instance)?.as_ref()?;
@@ -357,15 +361,16 @@ impl Runtime {
         self.dead_ranges = 0;
     }
 
-    /// The JS function to run for `event` on bridge node `node`, and the
-    /// instance it belongs to (so a row's handler can read its row).
+    /// The JS function an `event` on bridge node `node` ends up running, and
+    /// the instance it belongs to (so a row's handler can read its row). A
+    /// Rust-only handler has none; see [`Runtime::dispatch`].
     pub fn handler(&self, node: NodeId, event: &str) -> Option<(JsRef, InstanceId)> {
         let (instance, inst) = self.instance_of(node)?;
-        inst.compiled.template.nodes[(node - inst.id0) as usize]
-            .handlers
-            .iter()
-            .find(|(ev, _)| *ev == event)
-            .map(|(_, js)| (*js, instance))
+        let handlers = &inst.compiled.template.nodes[(node - inst.id0) as usize].handlers;
+        match &handlers.iter().find(|(ev, _)| *ev == event)?.1 {
+            Handler::Js(js) | Handler::Do { then: Some(js), .. } => Some((*js, instance)),
+            Handler::Do { then: None, .. } => None,
+        }
     }
 
     /// The bridge id of template node `ix` in `instance`.

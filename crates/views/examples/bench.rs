@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bevy_react_views::{
-    Binding, Block, Command, Compiled, ListItem, Runtime, TNode, Target, Template, Value, e,
+    Action, Binding, Block, Command, Compiled, ListItem, Runtime, TNode, Target, Template, Value, e,
 };
 
 const ROW_BG_A: &str = "#45475a";
@@ -378,4 +378,60 @@ fn selection() {
             counts[i]
         );
     }
+
+    // The same selection driven by a click handler that runs in Rust.
+    let row = Compiled::new(Template {
+        nodes: vec![
+            TNode::new("button", None).on_do("click", vec![Action::set_owner(0, e::slot(0))]),
+            TNode::new("text", Some(0)),
+        ],
+        bindings: vec![
+            Binding {
+                target: Target::Text(1),
+                expr: e::concat([e::slot(0), e::lit(" "), e::slot(1)]),
+            },
+            Binding {
+                target: Target::Style(0, "backgroundColor"),
+                expr: e::cond(e::slot(2), e::lit("#89b4fa"), e::lit(ROW_BG_A)),
+            },
+        ],
+        slots: vec![Value::Num(0.0), Value::str(""), Value::Bool(false)],
+        ..Default::default()
+    });
+    let table = Compiled::new(Template {
+        nodes: vec![TNode::new("node", None)],
+        blocks: vec![Block::list(0, row).select(0, 0, 2)],
+        slots: vec![Value::Null],
+        ..Default::default()
+    });
+    let mut clicks = Vec::new();
+    for round in 0..9 {
+        let mut rt = Runtime::with_id_base(1);
+        let t = rt.mount(&table, 0);
+        rt.set_list(t, 0, rows.iter().map(|r| r.item_fields(2)).collect())
+            .unwrap();
+        rt.flush();
+        let target = |rt: &Runtime, i: usize| {
+            let r = rt.list_item(t, 0, &rows[i].id.into()).unwrap();
+            rt.node_id(r, 0).unwrap()
+        };
+        let (a, b) = (target(&rt, 5000), target(&rt, 7000));
+        rt.dispatch(a, "click");
+        rt.flush();
+        let t0 = Instant::now();
+        rt.dispatch(b, "click");
+        let cmds = rt.flush();
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        assert_eq!(cmds.len(), 2);
+        if round > 0 {
+            clicks.push(ms);
+        }
+    }
+    clicks.sort_by(f64::total_cmp);
+    println!(
+        "{:<28} {:>9.4} {:>9}",
+        "click a row (dispatch+flush)",
+        clicks[clicks.len() / 2],
+        2
+    );
 }

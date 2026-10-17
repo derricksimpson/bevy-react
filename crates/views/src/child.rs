@@ -37,7 +37,7 @@ impl Runtime {
                 for (slot, v) in props {
                     slots[usize::from(slot)] = v;
                 }
-                let child = self.mount_detached(&block.component, parent, slots);
+                let child = self.mount_detached(&block.component, parent, Some(instance), slots);
                 let root = self.instances[child].as_ref().expect("just mounted").id0;
                 self.out.push(match before {
                     Some(before) => Command::Insert {

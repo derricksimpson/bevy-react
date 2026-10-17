@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::ir::{Block, Target, Template};
+use crate::ir::{Action, Block, Handler, Target, Template};
 
 /// A template prepared for mounting: validated, with its slot → binding
 /// index precomputed (the compiler knows every read statically).
@@ -98,6 +98,27 @@ impl Compiled {
                 roots == 1 && item.template.nodes[0].parent.is_none(),
                 "list item needs one root, node 0"
             );
+        }
+        for (i, n) in nodes.iter().enumerate() {
+            for (event, handler) in &n.handlers {
+                let Handler::Do { actions, .. } = handler else {
+                    continue;
+                };
+                for Action::Set { up, slot, expr } in actions {
+                    if *up == 0 {
+                        assert!(
+                            usize::from(*slot) < template.slots.len(),
+                            "node {i} {event}: sets slot {slot}, which is not declared"
+                        );
+                    }
+                    for r in expr.reads() {
+                        assert!(
+                            usize::from(r) < template.slots.len(),
+                            "node {i} {event}: reads slot {r}, which is not declared"
+                        );
+                    }
+                }
+            }
         }
         // Child blocks depend on slots through ids after the bindings'.
         let n_bindings = template.bindings.len();

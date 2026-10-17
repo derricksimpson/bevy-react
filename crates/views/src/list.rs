@@ -323,7 +323,7 @@ impl Runtime {
                         slots[usize::from(s.flag)] =
                             select::flag(selection, &slots[usize::from(s.field)]);
                     }
-                    let item = self.mount_detached(&list.item, list.parent, slots);
+                    let item = self.mount_detached(&list.item, list.parent, Some(instance), slots);
                     list.items.insert(new_keys[new].clone(), item);
                     (new, before)
                 }
