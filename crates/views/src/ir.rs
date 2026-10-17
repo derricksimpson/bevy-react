@@ -5,6 +5,9 @@
 //! slots an expression reads are known statically ([`Expr::reads`]), so the
 //! runtime needs no dependency tracking at run time.
 
+use std::sync::Arc;
+
+use crate::runtime::Compiled;
 use crate::value::Value;
 
 /// A state slot of a component instance (`useState`, or an island prop).
@@ -23,6 +26,18 @@ pub struct Template {
     pub bindings: Vec<Binding>,
     /// Initial slot values (`useState(initial)`); the length is the slot count.
     pub slots: Vec<Value>,
+    /// Lists and other structural blocks.
+    pub blocks: Vec<Block>,
+}
+
+/// A structural block: children whose number and order are data.
+#[derive(Clone, Debug)]
+pub enum Block {
+    /// A keyed list (`items.map(i => <Row key={i.id} … />)`): the children of
+    /// node `parent` are one `item` instance per list entry, whose slots are
+    /// the entry's fields. The list owns `parent`'s children (no static
+    /// siblings), and `item` has a single root.
+    For { parent: NodeIx, item: Arc<Compiled> },
 }
 
 /// One host element of a template.

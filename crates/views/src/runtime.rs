@@ -5,14 +5,15 @@
 //! slot, and [`Runtime::flush`] re-evaluates each marked binding once and
 //! emits a command only when its value differs from the last one sent. So a
 //! burst of writes costs one evaluation per affected hole, and a write that
-//! ends where it started emits nothing.
+//! ends where it started emits nothing. Keyed lists are in [`crate::list`].
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::command::{Command, NodeId};
 use crate::eval::eval;
-use crate::ir::{JsRef, SlotId, Target, Template};
+use crate::ir::{Block, JsRef, SlotId, Target, Template};
+use crate::list::ListState;
 use crate::value::Value;
 
 /// A template prepared for mounting: validated, with its slot → binding
@@ -28,9 +29,11 @@ pub struct Compiled {
 
 impl Compiled {
     /// Prepare `template`. Panics on IR the compiler should never emit (a
-    /// parent after its child, a binding or read out of range).
+    /// parent after its child, a binding or read out of range, a list that
+    /// shares its parent with static children or has a multi-root item).
     pub fn new(template: Template) -> Arc<Self> {
-        for (i, n) in template.nodes.iter().enumerate() {
+        let nodes = &template.nodes;
+        for (i, n) in nodes.iter().enumerate() {
             if let Some(p) = n.parent {
                 assert!(usize::from(p) < i, "node {i}: parent {p} must come first");
             }
@@ -40,10 +43,7 @@ impl Compiled {
             let node = match binding.target {
                 Target::Text(n) | Target::Prop(n, _) | Target::Style(n, _) => n,
             };
-            assert!(
-                usize::from(node) < template.nodes.len(),
-                "binding {b}: node {node}"
-            );
+            assert!(usize::from(node) < nodes.len(), "binding {b}: node {node}");
             for slot in binding.expr.reads() {
                 let deps = slot_deps.get_mut(usize::from(slot)).unwrap_or_else(|| {
                     panic!("binding {b} reads slot {slot}, which is not declared")
@@ -51,8 +51,24 @@ impl Compiled {
                 deps.push(b as u16);
             }
         }
-        let handler_props = template
-            .nodes
+        for Block::For { parent, item } in &template.blocks {
+            assert!(usize::from(*parent) < nodes.len(), "list parent {parent}");
+            assert!(
+                !nodes.iter().any(|n| n.parent == Some(*parent)),
+                "list parent {parent} has static children"
+            );
+            let roots = item
+                .template
+                .nodes
+                .iter()
+                .filter(|n| n.parent.is_none())
+                .count();
+            assert!(
+                roots == 1 && item.template.nodes[0].parent.is_none(),
+                "list item needs one root, node 0"
+            );
+        }
+        let handler_props = nodes
             .iter()
             .map(|n| n.handlers.iter().map(|(ev, _)| handler_prop(ev)).collect())
             .collect();
@@ -80,28 +96,32 @@ fn handler_prop(event: &str) -> String {
 /// A mounted component instance.
 pub type InstanceId = usize;
 
-struct Instance {
-    compiled: Arc<Compiled>,
-    parent: NodeId,
+pub(crate) struct Instance {
+    pub(crate) compiled: Arc<Compiled>,
+    pub(crate) parent: NodeId,
     /// Bridge id of each template node.
-    ids: Vec<NodeId>,
+    pub(crate) ids: Vec<NodeId>,
     slots: Vec<Value>,
     /// The value each binding last sent.
     sent: Vec<Value>,
     /// Bindings marked by a write since the last flush (and their flags).
     dirty: Vec<u16>,
     is_dirty: Vec<bool>,
+    /// One per `Block::For`, in template order.
+    pub(crate) lists: Vec<ListState>,
 }
+
+/// A node's handlers: its instance, and `(event, js)` pairs (one or two).
+type NodeHandlers = (InstanceId, Vec<(&'static str, JsRef)>);
 
 /// The runtime for one island tree.
 pub struct Runtime {
     next_id: NodeId,
-    instances: Vec<Option<Instance>>,
+    pub(crate) instances: Vec<Option<Instance>>,
     /// Instances with marked bindings, in first-write order.
     dirty: Vec<InstanceId>,
-    /// Per node, its handlers (`(event, js)`; a node has one or two).
-    handlers: HashMap<NodeId, Vec<(&'static str, JsRef)>>,
-    out: Vec<Command>,
+    handlers: HashMap<NodeId, NodeHandlers>,
+    pub(crate) out: Vec<Command>,
 }
 
 /// Where Rust-allocated ids start by default: the top half of the id space,
@@ -129,15 +149,33 @@ impl Runtime {
     /// Mount an instance of `compiled` under the bridge node `parent`. Its
     /// creates and appends are queued for the next [`flush`](Self::flush).
     pub fn mount(&mut self, compiled: &Arc<Compiled>, parent: NodeId) -> InstanceId {
+        let instance = self.mount_detached(compiled, parent, compiled.template.slots.clone());
+        let inst = self.instances[instance].as_ref().expect("just mounted");
+        for (ix, node) in inst.compiled.template.nodes.iter().enumerate() {
+            if node.parent.is_none() {
+                self.out.push(Command::Append {
+                    parent,
+                    child: inst.ids[ix],
+                });
+            }
+        }
+        instance
+    }
+
+    /// Create an instance's nodes (and their internal appends) without
+    /// placing its roots; the caller positions them.
+    pub(crate) fn mount_detached(
+        &mut self,
+        compiled: &Arc<Compiled>,
+        parent: NodeId,
+        slots: Vec<Value>,
+    ) -> InstanceId {
+        let instance = self.instances.len();
         let t = &compiled.template;
-        let ids: Vec<NodeId> = (0..t.nodes.len())
-            .map(|_| {
-                let id = self.next_id;
-                self.next_id += 1;
-                id
-            })
+        let ids: Vec<NodeId> = (0..t.nodes.len() as NodeId)
+            .map(|i| self.next_id + i)
             .collect();
-        let slots = t.slots.clone();
+        self.next_id += t.nodes.len() as NodeId;
         let sent: Vec<Value> = t.bindings.iter().map(|b| eval(&b.expr, &slots)).collect();
 
         // Creates carry the statics plus every binding's first value.
@@ -168,7 +206,8 @@ impl Runtime {
                 }
             }
             if !node.handlers.is_empty() {
-                self.handlers.insert(ids[ix], node.handlers.clone());
+                self.handlers
+                    .insert(ids[ix], (instance, node.handlers.clone()));
             }
             self.out.push(Command::Create {
                 id: ids[ix],
@@ -178,25 +217,22 @@ impl Runtime {
                 text,
             });
         }
-        // Children in template order, then the roots under the mount parent.
         for (ix, node) in t.nodes.iter().enumerate() {
-            let parent_id = node.parent.map_or(parent, |p| ids[usize::from(p)]);
-            if node.parent.is_some() {
+            if let Some(p) = node.parent {
                 self.out.push(Command::Append {
-                    parent: parent_id,
-                    child: ids[ix],
-                });
-            }
-        }
-        for (ix, node) in t.nodes.iter().enumerate() {
-            if node.parent.is_none() {
-                self.out.push(Command::Append {
-                    parent,
+                    parent: ids[usize::from(p)],
                     child: ids[ix],
                 });
             }
         }
 
+        let lists = t
+            .blocks
+            .iter()
+            .map(|Block::For { parent, item }| {
+                ListState::new(ids[usize::from(*parent)], Arc::clone(item))
+            })
+            .collect();
         let n_bindings = t.bindings.len();
         self.instances.push(Some(Instance {
             compiled: Arc::clone(compiled),
@@ -206,8 +242,9 @@ impl Runtime {
             sent,
             dirty: Vec::new(),
             is_dirty: vec![false; n_bindings],
+            lists,
         }));
-        self.instances.len() - 1
+        instance
     }
 
     /// Write a state slot (a JS handler's `setX(value)`). Marks the bindings
@@ -244,7 +281,8 @@ impl Runtime {
     }
 
     /// Re-evaluate every marked binding and return the commands queued since
-    /// the last flush (mounts, unmounts and changed values), in order.
+    /// the last flush (mounts, list changes, unmounts and changed values), in
+    /// order.
     pub fn flush(&mut self) -> Vec<Command> {
         for instance in std::mem::take(&mut self.dirty) {
             let Some(Some(inst)) = self.instances.get_mut(instance) else {
@@ -284,9 +322,9 @@ impl Runtime {
     }
 
     /// Remove an instance: its roots leave the mount parent (Bevy despawns the
-    /// subtree), its handlers are forgotten.
+    /// subtree, list items included), its handlers are forgotten.
     pub fn unmount(&mut self, instance: InstanceId) {
-        let Some(inst) = self.instances.get_mut(instance).and_then(Option::take) else {
+        let Some(Some(inst)) = self.instances.get(instance) else {
             return;
         };
         for (ix, node) in inst.compiled.template.nodes.iter().enumerate() {
@@ -297,25 +335,44 @@ impl Runtime {
                 });
             }
         }
+        self.forget(instance);
+    }
+
+    /// Drop an instance and everything mounted inside it, emitting nothing
+    /// (its nodes die with whatever removal the caller sent).
+    pub(crate) fn forget(&mut self, instance: InstanceId) {
+        let Some(inst) = self.instances.get_mut(instance).and_then(Option::take) else {
+            return;
+        };
         for id in &inst.ids {
             self.handlers.remove(id);
         }
         self.dirty.retain(|&i| i != instance);
+        for list in inst.lists {
+            for item in list.items.into_values() {
+                self.forget(item);
+            }
+        }
     }
 
-    /// The JS function to run for `event` on bridge node `node` (how a UI
-    /// event from Bevy finds its compiled handler).
-    pub fn handler(&self, node: NodeId, event: &str) -> Option<JsRef> {
-        self.handlers
-            .get(&node)?
+    /// The JS function to run for `event` on bridge node `node`, and the
+    /// instance it belongs to (so a row's handler can read its row).
+    pub fn handler(&self, node: NodeId, event: &str) -> Option<(JsRef, InstanceId)> {
+        let (instance, handlers) = self.handlers.get(&node)?;
+        handlers
             .iter()
             .find(|(ev, _)| *ev == event)
-            .map(|(_, js)| *js)
+            .map(|(_, js)| (*js, *instance))
     }
 
     /// The bridge id of template node `ix` in `instance`.
     pub fn node_id(&self, instance: InstanceId, ix: usize) -> Option<NodeId> {
         self.instances.get(instance)?.as_ref()?.ids.get(ix).copied()
+    }
+
+    /// How many instances are alive (list items included).
+    pub fn live_instances(&self) -> usize {
+        self.instances.iter().filter(|i| i.is_some()).count()
     }
 }
 

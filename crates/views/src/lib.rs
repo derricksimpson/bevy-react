@@ -13,10 +13,14 @@
 pub mod command;
 pub mod eval;
 pub mod ir;
+pub mod keyed;
+pub mod list;
 pub mod runtime;
 pub mod value;
 
 pub use command::{Command, NodeId};
-pub use ir::{Binding, Expr, JsRef, SlotId, TNode, Target, Template, e};
+pub use ir::{Binding, Block, Expr, JsRef, SlotId, TNode, Target, Template, e};
+pub use keyed::Key;
+pub use list::{ListError, ListItem};
 pub use runtime::{Compiled, InstanceId, Runtime};
 pub use value::Value;

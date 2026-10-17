@@ -1,7 +1,7 @@
 //! What the runtime emits: one [`Command`] per wire op it would send.
 //!
 //! Each variant maps one-to-one onto `bevy_react_core::protocol::Op`
-//! (`Create`, `Append`, `Remove`, `UpdateText`; `SetProp`/`SetStyle` are one
+//! (`Create`, `Append`, `Insert`, `Remove`, `UpdateText`; `SetProp`/`SetStyle` are one
 //! field of an `Op::Update` delta), so a later adapter can feed the existing
 //! `apply_js_ops` path unchanged.
 
@@ -26,6 +26,12 @@ pub enum Command {
     Append {
         parent: NodeId,
         child: NodeId,
+    },
+    /// Place `child` (new, or already a child: a move) before `before`.
+    Insert {
+        parent: NodeId,
+        child: NodeId,
+        before: NodeId,
     },
     Remove {
         parent: NodeId,

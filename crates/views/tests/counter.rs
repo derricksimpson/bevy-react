@@ -54,6 +54,7 @@ fn counter() -> Arc<Compiled> {
             },
         ],
         slots: vec![Value::Num(0.0)],
+        ..Default::default()
     })
 }
 
@@ -187,7 +188,7 @@ fn ui_events_find_their_js_handler() {
     let c = rt.mount(&counter(), ROOT);
     rt.flush();
     let button = rt.node_id(c, BUTTON).unwrap();
-    assert_eq!(rt.handler(button, "click"), Some(INC));
+    assert_eq!(rt.handler(button, "click"), Some((INC, c)));
     assert_eq!(rt.handler(button, "pointerDown"), None);
     assert_eq!(rt.handler(rt.node_id(c, LABEL).unwrap(), "click"), None);
 
@@ -242,5 +243,6 @@ fn a_binding_reading_an_undeclared_slot_is_rejected() {
             expr: e::slot(3),
         }],
         slots: vec![],
+        ..Default::default()
     });
 }
