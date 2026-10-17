@@ -9,7 +9,9 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
+use crate::batch::{Clock, instant_clock};
 use crate::command::{Command, NodeId};
 use crate::eval::eval;
 use crate::ir::{Block, JsRef, SlotId, Target, Template};
@@ -122,6 +124,12 @@ pub struct Runtime {
     dirty: Vec<InstanceId>,
     handlers: HashMap<NodeId, NodeHandlers>,
     pub(crate) out: Vec<Command>,
+    /// Lists with a staged `set_list`, applied at the next flush.
+    pub(crate) staged: Vec<(InstanceId, usize)>,
+    /// The flush window and its clock (see [`crate::batch`]).
+    pub(crate) window: Duration,
+    pub(crate) clock: Clock,
+    pub(crate) pending_since: Option<Duration>,
 }
 
 /// Where Rust-allocated ids start by default: the top half of the id space,
@@ -143,6 +151,10 @@ impl Runtime {
             dirty: Vec::new(),
             handlers: HashMap::new(),
             out: Vec::new(),
+            staged: Vec::new(),
+            window: Duration::ZERO,
+            clock: instant_clock(),
+            pending_since: None,
         }
     }
 
@@ -159,6 +171,7 @@ impl Runtime {
                 });
             }
         }
+        self.note_pending();
         instance
     }
 
@@ -260,15 +273,17 @@ impl Runtime {
             return;
         }
         *cur = value;
-        if inst.dirty.is_empty() {
-            self.dirty.push(instance);
-        }
+        let first = inst.dirty.is_empty();
         for &b in &inst.compiled.slot_deps[usize::from(slot)] {
             if !inst.is_dirty[usize::from(b)] {
                 inst.is_dirty[usize::from(b)] = true;
                 inst.dirty.push(b);
             }
         }
+        if first && !inst.dirty.is_empty() {
+            self.dirty.push(instance);
+        }
+        self.note_pending();
     }
 
     /// Read a slot (what a JS handler sees as the current state).
@@ -284,6 +299,9 @@ impl Runtime {
     /// the last flush (mounts, list changes, unmounts and changed values), in
     /// order.
     pub fn flush(&mut self) -> Vec<Command> {
+        // Staged lists first: their field changes mark bindings the loop
+        // below then evaluates.
+        self.apply_staged();
         for instance in std::mem::take(&mut self.dirty) {
             let Some(Some(inst)) = self.instances.get_mut(instance) else {
                 continue;
@@ -318,6 +336,7 @@ impl Runtime {
                 self.out.push(cmd);
             }
         }
+        self.pending_since = None;
         std::mem::take(&mut self.out)
     }
 
@@ -336,6 +355,7 @@ impl Runtime {
             }
         }
         self.forget(instance);
+        self.note_pending();
     }
 
     /// Drop an instance and everything mounted inside it, emitting nothing

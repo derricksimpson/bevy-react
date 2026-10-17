@@ -46,6 +46,14 @@ struct Data {
 }
 
 impl Data {
+    fn fields(&self) -> Vec<Value> {
+        vec![
+            Value::Num(self.id as f64),
+            Value::str(&self.label),
+            Value::str(self.bg),
+        ]
+    }
+
     fn item(&self) -> ListItem {
         ListItem::new(
             self.id,
@@ -209,6 +217,94 @@ fn main() {
         println!(
             "{:<24} {:>9.3} {:>9.3} {:>9.3} {:>9.3} {:>9}",
             name, total, med[0], med[1], med[2], cmd_counts[s]
+        );
+    }
+
+    burst();
+}
+
+/// Ten one-row edits to a 10k-row list, as a burst of handler calls inside one
+/// window: flushed after every edit, staged and flushed once, or sent as
+/// per-record deltas and flushed once.
+fn burst() {
+    const EDITS: usize = 10;
+    const ROUNDS: usize = 9;
+    let mut next_id = 0i64;
+    let base = build(10_000, &mut next_id);
+    let mount = |base: &[Data]| {
+        let mut rt = Runtime::with_id_base(1);
+        let table = rt.mount(
+            &Compiled::new(Template {
+                nodes: vec![TNode::new("node", None)],
+                blocks: vec![Block::For {
+                    parent: 0,
+                    item: row(),
+                }],
+                ..Default::default()
+            }),
+            0,
+        );
+        rt.set_list(table, 0, base.iter().map(Data::item).collect())
+            .unwrap();
+        rt.flush();
+        (rt, table)
+    };
+    // The list after each edit (cumulative), built outside the timed region.
+    let versions: Vec<Vec<Data>> = {
+        let mut rows = base.clone();
+        (0..EDITS)
+            .map(|k| {
+                rows[k * 100].label.push_str(" !!!");
+                rows.clone()
+            })
+            .collect()
+    };
+    type Variant = (&'static str, fn(&mut Runtime, usize, &[Vec<Data>]) -> usize);
+    let variants: [Variant; 3] = [
+        ("flush after every edit", |rt, table, versions| {
+            let mut n = 0;
+            for (k, rows) in versions.iter().enumerate() {
+                rt.set_list(table, 0, items(rows, |i| i == k * 100))
+                    .unwrap();
+                n += rt.flush().len();
+            }
+            n
+        }),
+        ("set_list x10, one flush", |rt, table, versions| {
+            for (k, rows) in versions.iter().enumerate() {
+                rt.set_list(table, 0, items(rows, |i| i == k * 100))
+                    .unwrap();
+            }
+            rt.flush().len()
+        }),
+        ("update_item x10, one flush", |rt, table, versions| {
+            for (k, rows) in versions.iter().enumerate() {
+                let r = &rows[k * 100];
+                rt.update_item(table, 0, &r.id.into(), r.fields()).unwrap();
+            }
+            rt.flush().len()
+        }),
+    ];
+    println!("\nburst: {EDITS} one-row edits to a 10k list");
+    println!("{:<28} {:>9} {:>9}", "variant", "total ms", "commands");
+    for (name, run) in variants {
+        let mut samples = Vec::new();
+        let mut cmds = 0;
+        for round in 0..ROUNDS {
+            let (mut rt, table) = mount(&base);
+            let t0 = Instant::now();
+            cmds = run(&mut rt, table, &versions);
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            if round > 0 {
+                samples.push(ms);
+            }
+        }
+        samples.sort_by(f64::total_cmp);
+        println!(
+            "{:<28} {:>9.3} {:>9}",
+            name,
+            samples[samples.len() / 2],
+            cmds
         );
     }
 }
