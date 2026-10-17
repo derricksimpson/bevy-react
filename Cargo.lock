@@ -1584,6 +1584,11 @@ dependencies = [
 [[package]]
 name = "bevy_react_views"
 version = "0.8.1"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "serde_json",
+]
 
 [[package]]
 name = "bevy_reflect"
