@@ -353,6 +353,42 @@ pub enum Expr {
     Gt(Box<Expr>, Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
+    /// Any other binary operator.
+    Bin(BinOp, Box<Expr>, Box<Expr>),
+    /// A unary function.
+    Un(UnOp, Box<Expr>),
+    /// `n.toFixed(digits)`.
+    Fixed(Box<Expr>, u8),
+}
+
+/// The binary operators beyond `+`, `*`, `===` and `>`; JS semantics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinOp {
+    Sub,
+    Div,
+    Rem,
+    Ne,
+    Lt,
+    Le,
+    Ge,
+    /// `a && b`: `a` if falsy, else `b`.
+    And,
+    /// `a || b`: `a` if truthy, else `b`.
+    Or,
+    /// `Math.min` (NaN if either is).
+    Min,
+    Max,
+}
+
+/// The unary operators; JS semantics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnOp {
+    Neg,
+    Abs,
+    Floor,
+    Ceil,
+    /// `Math.round`: halves go toward +Infinity.
+    Round,
 }
 
 impl Expr {
@@ -373,8 +409,12 @@ impl Expr {
             }
             Expr::Concat(parts) => parts.iter().for_each(|p| p.collect_reads(out)),
             Expr::Cond(a, b, c) => [a, b, c].iter().for_each(|e| e.collect_reads(out)),
-            Expr::Not(a) => a.collect_reads(out),
-            Expr::Eq(a, b) | Expr::Gt(a, b) | Expr::Add(a, b) | Expr::Mul(a, b) => {
+            Expr::Not(a) | Expr::Un(_, a) | Expr::Fixed(a, _) => a.collect_reads(out),
+            Expr::Eq(a, b)
+            | Expr::Gt(a, b)
+            | Expr::Add(a, b)
+            | Expr::Mul(a, b)
+            | Expr::Bin(_, a, b) => {
                 a.collect_reads(out);
                 b.collect_reads(out);
             }
@@ -384,7 +424,7 @@ impl Expr {
 
 /// Short constructors, so hand-written IR (tests, the spike) stays readable.
 pub mod e {
-    use super::{Expr, SlotId};
+    use super::{BinOp, Expr, SlotId, UnOp};
     use crate::value::Value;
 
     pub fn lit(v: impl Into<Value>) -> Expr {
@@ -413,5 +453,67 @@ pub mod e {
     }
     pub fn mul(a: Expr, b: Expr) -> Expr {
         Expr::Mul(Box::new(a), Box::new(b))
+    }
+    fn bin(op: BinOp, a: Expr, b: Expr) -> Expr {
+        Expr::Bin(op, Box::new(a), Box::new(b))
+    }
+    fn un(op: UnOp, a: Expr) -> Expr {
+        Expr::Un(op, Box::new(a))
+    }
+    pub fn sub(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Sub, a, b)
+    }
+    pub fn div(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Div, a, b)
+    }
+    pub fn rem(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Rem, a, b)
+    }
+    pub fn ne(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Ne, a, b)
+    }
+    pub fn lt(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Lt, a, b)
+    }
+    pub fn le(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Le, a, b)
+    }
+    pub fn ge(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Ge, a, b)
+    }
+    pub fn and(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::And, a, b)
+    }
+    pub fn or(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Or, a, b)
+    }
+    pub fn min(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Min, a, b)
+    }
+    pub fn max(a: Expr, b: Expr) -> Expr {
+        bin(BinOp::Max, a, b)
+    }
+    /// `Math.min(Math.max(v, lo), hi)`.
+    pub fn clamp(v: Expr, lo: Expr, hi: Expr) -> Expr {
+        min(max(v, lo), hi)
+    }
+    pub fn neg(a: Expr) -> Expr {
+        un(UnOp::Neg, a)
+    }
+    pub fn abs(a: Expr) -> Expr {
+        un(UnOp::Abs, a)
+    }
+    pub fn floor(a: Expr) -> Expr {
+        un(UnOp::Floor, a)
+    }
+    pub fn ceil(a: Expr) -> Expr {
+        un(UnOp::Ceil, a)
+    }
+    pub fn round(a: Expr) -> Expr {
+        un(UnOp::Round, a)
+    }
+    /// `a.toFixed(digits)`.
+    pub fn fixed(a: Expr, digits: u8) -> Expr {
+        Expr::Fixed(Box::new(a), digits)
     }
 }

@@ -32,8 +32,8 @@ pub use compiled::Compiled;
 pub use dispatch::Dispatch;
 pub use effects::{EffectCall, EffectKind};
 pub use ir::{
-    Action, Binding, Block, ChildBlock, Effect, Expr, Handler, JsRef, Selector, SlotId, TNode,
-    Target, Template, Window, e,
+    Action, BinOp, Binding, Block, ChildBlock, Effect, Expr, Handler, JsRef, Selector, SlotId,
+    TNode, Target, Template, UnOp, Window, e,
 };
 pub use keyed::Key;
 pub use list::{ListError, ListItem, visible_range};
