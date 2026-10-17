@@ -15,7 +15,11 @@ pub struct Compiled {
     /// `selector_index[slot]` = the `(block, selector)` pairs selecting on `slot`.
     pub(crate) selector_index: Vec<Vec<(usize, usize)>>,
     /// Per node, the handler props as they cross the wire (`"onClick"`).
-    pub(crate) handler_props: Vec<Vec<String>>,
+    pub(crate) handler_props: Vec<Vec<&'static str>>,
+    /// Per node, the bindings that write it.
+    pub(crate) node_bindings: Vec<Vec<u16>>,
+    /// Does any node carry a handler?
+    pub(crate) has_handlers: bool,
 }
 
 impl Compiled {
@@ -145,13 +149,27 @@ impl Compiled {
         }
         let handler_props = nodes
             .iter()
-            .map(|n| n.handlers.iter().map(|(ev, _)| handler_prop(ev)).collect())
+            .map(|n| {
+                n.handlers
+                    .iter()
+                    // Leaked once per template: bounded by the templates.
+                    .map(|(ev, _)| &*Box::leak(handler_prop(ev).into_boxed_str()))
+                    .collect()
+            })
             .collect();
+        let mut node_bindings = vec![Vec::new(); nodes.len()];
+        for (b, binding) in template.bindings.iter().enumerate() {
+            let (Target::Text(n) | Target::Prop(n, _) | Target::Style(n, _)) = binding.target;
+            node_bindings[usize::from(n)].push(b as u16);
+        }
+        let has_handlers = nodes.iter().any(|n| !n.handlers.is_empty());
         Arc::new(Compiled {
             template,
             slot_deps,
             selector_index,
             handler_props,
+            node_bindings,
+            has_handlers,
         })
     }
 

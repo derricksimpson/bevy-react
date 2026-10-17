@@ -11,6 +11,7 @@
 //! by exact command streams in tests.
 
 pub mod batch;
+mod bits;
 mod child;
 pub mod command;
 mod compiled;

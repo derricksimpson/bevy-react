@@ -18,7 +18,7 @@ pub enum Command {
         id: NodeId,
         kind: &'static str,
         /// Wire props; a handler crosses as `onClick: true`.
-        props: Vec<(String, Value)>,
+        props: Vec<(&'static str, Value)>,
         style: Vec<(&'static str, Value)>,
         /// Inline text (`Op::Create`'s `text`).
         text: Option<Arc<str>>,

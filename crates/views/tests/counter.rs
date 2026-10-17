@@ -94,7 +94,7 @@ fn mount_emits_the_tree_once() {
             Command::Create {
                 id: 102,
                 kind: "button",
-                props: vec![("onClick".to_owned(), Value::Bool(true))],
+                props: vec![("onClick", Value::Bool(true))],
                 style: vec![("backgroundColor", Value::str("blue"))],
                 text: None,
             },

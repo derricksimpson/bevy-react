@@ -19,8 +19,8 @@ impl Runtime {
             .when
             .as_ref()
             .is_none_or(|w| eval(w, &inst.slots).truthy());
-        let parent = inst.ids[usize::from(block.parent)];
-        let before = block.before.map(|b| inst.ids[usize::from(b)]);
+        let parent = inst.node(usize::from(block.parent));
+        let before = block.before.map(|b| inst.node(usize::from(b)));
         let have = inst.children[c];
         let props: Vec<(u16, Value)> = if want {
             block
@@ -38,7 +38,7 @@ impl Runtime {
                     slots[usize::from(slot)] = v;
                 }
                 let child = self.mount_detached(&block.component, parent, slots);
-                let root = self.instances[child].as_ref().expect("just mounted").ids[0];
+                let root = self.instances[child].as_ref().expect("just mounted").id0;
                 self.out.push(match before {
                     Some(before) => Command::Insert {
                         parent,
@@ -56,7 +56,7 @@ impl Runtime {
                     .children[c] = Some(child);
             }
             (false, Some(child)) => {
-                let root = self.instances[child].as_ref().expect("live child").ids[0];
+                let root = self.instances[child].as_ref().expect("live child").id0;
                 self.out.push(Command::Remove {
                     parent,
                     child: root,

@@ -350,7 +350,7 @@ impl Runtime {
 
     /// The bridge id of an item's root (node 0, checked by `Compiled::new`).
     fn root(&self, item: InstanceId) -> NodeId {
-        self.instances[item].as_ref().expect("live item").ids[0]
+        self.instances[item].as_ref().expect("live item").id0
     }
 
     /// The instance of list entry `key` (to read or write its fields).
