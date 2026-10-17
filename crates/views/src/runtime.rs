@@ -14,6 +14,7 @@ use crate::batch::{Clock, instant_clock};
 use crate::bits::Bits;
 use crate::command::{Command, NodeId};
 use crate::compiled::Compiled;
+use crate::effects::EffectCall;
 use crate::eval::eval;
 use crate::ir::{Block, Handler, JsRef, SlotId, Target};
 use crate::list::ListState;
@@ -40,6 +41,10 @@ pub(crate) struct Instance {
     pub(crate) lists: Vec<ListState>,
     /// One per `ChildBlock`: its mounted instance, if any.
     pub(crate) children: Vec<Option<InstanceId>>,
+    /// One per effect: the dependency values at its last run.
+    pub(crate) effect_deps: Vec<Vec<Value>>,
+    /// One per effect: has it been queued to run (so it needs a cleanup)?
+    pub(crate) effect_ran: Vec<bool>,
 }
 
 impl Instance {
@@ -63,6 +68,8 @@ pub struct Runtime {
     ranges: Vec<(NodeId, InstanceId)>,
     dead_ranges: usize,
     pub(crate) out: Vec<Command>,
+    /// Effect calls for the host, in order (see [`crate::effects`]).
+    pub(crate) effects: Vec<EffectCall>,
     /// Lists with a staged `set_list`, applied at the next flush.
     pub(crate) staged: Vec<(InstanceId, usize)>,
     /// The flush window and its clock (see [`crate::batch`]).
@@ -91,6 +98,7 @@ impl Runtime {
             ranges: Vec::new(),
             dead_ranges: 0,
             out: Vec::new(),
+            effects: Vec::new(),
             staged: Vec::new(),
             window: Duration::ZERO,
             clock: instant_clock(),
@@ -201,10 +209,14 @@ impl Runtime {
             is_dirty: Bits::default(),
             lists,
             children: vec![None; n_children],
+            effect_deps: Vec::new(),
+            effect_ran: vec![false; t.effects.len()],
         }));
         for c in 0..n_children {
             self.sync_child(instance, c);
         }
+        // Children's effects are queued above, so they run before ours.
+        self.start_effects(instance);
         instance
     }
 
@@ -262,12 +274,18 @@ impl Runtime {
                     continue;
                 };
                 let n_bindings = inst.compiled.template.bindings.len();
+                let n_effect_base = n_bindings + inst.compiled.template.children.len();
                 let mut marked = std::mem::take(&mut inst.dirty);
                 // Template order, not write order: a deterministic stream.
                 marked.sort_unstable();
                 let mut blocks = Vec::new();
+                let mut fx = Vec::new();
                 for b in marked {
                     inst.is_dirty.clear(usize::from(b));
+                    if usize::from(b) >= n_effect_base {
+                        fx.push(usize::from(b) - n_effect_base);
+                        continue;
+                    }
                     if usize::from(b) >= n_bindings {
                         blocks.push(usize::from(b) - n_bindings);
                         continue;
@@ -298,6 +316,9 @@ impl Runtime {
                 }
                 for c in blocks {
                     self.sync_child(instance, c);
+                }
+                for e in fx {
+                    self.effect_deps_changed(instance, e);
                 }
             }
         }
@@ -333,6 +354,7 @@ impl Runtime {
             self.dead_ranges += 1;
             self.compact_ranges();
         }
+        self.cleanup_effects(instance, &inst);
         for list in inst.lists {
             for item in list.items.into_values() {
                 self.forget(item);

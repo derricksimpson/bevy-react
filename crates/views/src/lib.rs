@@ -16,6 +16,7 @@ mod child;
 pub mod command;
 mod compiled;
 mod dispatch;
+mod effects;
 pub mod eval;
 pub mod ir;
 pub mod keyed;
@@ -29,9 +30,10 @@ pub use batch::Clock;
 pub use command::{Command, NodeId};
 pub use compiled::Compiled;
 pub use dispatch::Dispatch;
+pub use effects::{EffectCall, EffectKind};
 pub use ir::{
-    Action, Binding, Block, ChildBlock, Expr, Handler, JsRef, Selector, SlotId, TNode, Target,
-    Template, Window, e,
+    Action, Binding, Block, ChildBlock, Effect, Expr, Handler, JsRef, Selector, SlotId, TNode,
+    Target, Template, Window, e,
 };
 pub use keyed::Key;
 pub use list::{ListError, ListItem, visible_range};

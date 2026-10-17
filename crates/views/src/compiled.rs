@@ -186,6 +186,24 @@ impl Compiled {
                     .push((n_bindings + c) as u16);
             }
         }
+        // Effects depend on slots through ids after the child blocks'.
+        let effect_base = n_bindings + template.children.len();
+        for (i, fx) in template.effects.iter().enumerate() {
+            let id = (effect_base + i) as u16;
+            match &fx.deps {
+                Some(deps) => {
+                    for slot in deps {
+                        slot_deps
+                            .get_mut(usize::from(*slot))
+                            .unwrap_or_else(|| {
+                                panic!("effect {i} depends on slot {slot}, which is not declared")
+                            })
+                            .push(id);
+                    }
+                }
+                None => slot_deps.iter_mut().for_each(|d| d.push(id)),
+            }
+        }
         let handler_props = nodes
             .iter()
             .map(|n| {

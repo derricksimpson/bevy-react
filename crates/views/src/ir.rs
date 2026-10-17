@@ -30,6 +30,51 @@ pub struct Template {
     pub blocks: Vec<Block>,
     /// Conditional and nested components.
     pub children: Vec<ChildBlock>,
+    /// `useEffect`s.
+    pub effects: Vec<Effect>,
+}
+
+/// A `useEffect`: JS the host runs after the component mounts and after any
+/// of its dependencies changed (compared by value at flush time, so a slot
+/// written and restored inside one flush runs nothing). Calls come out of
+/// `Runtime::take_effects` in React's order: children before parents on
+/// mount, cleanup before the next run, and a cleanup at unmount.
+#[derive(Clone, Debug)]
+pub struct Effect {
+    /// The slots whose change re-runs it; `None` = any slot of the component
+    /// (an effect with no dependency array); empty = on mount only.
+    pub deps: Option<Vec<SlotId>>,
+    /// The JS function the host runs.
+    pub run: JsRef,
+    /// Does a run return a cleanup the host must call before the next run
+    /// and at unmount?
+    pub cleanup: bool,
+}
+
+impl Effect {
+    /// Runs on mount and whenever one of `deps` changes.
+    pub fn on(deps: &[SlotId], run: JsRef) -> Self {
+        Effect {
+            deps: Some(deps.to_vec()),
+            run,
+            cleanup: false,
+        }
+    }
+
+    /// Runs after any change of the component's state.
+    pub fn always(run: JsRef) -> Self {
+        Effect {
+            deps: None,
+            run,
+            cleanup: false,
+        }
+    }
+
+    /// The host holds a cleanup for each run.
+    pub fn with_cleanup(mut self) -> Self {
+        self.cleanup = true;
+        self
+    }
 }
 
 /// A nested component, optionally conditional (`{open && <Detail name={n} />}`).
