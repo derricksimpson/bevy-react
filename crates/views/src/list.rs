@@ -11,9 +11,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::command::{Command, NodeId};
+use crate::compiled::Compiled;
 use crate::ir::Selector;
 use crate::keyed::{self, Key, Step};
-use crate::runtime::{Compiled, InstanceId, Runtime};
+use crate::runtime::{InstanceId, Runtime};
 use crate::select;
 use crate::value::Value;
 

@@ -13,126 +13,11 @@ use std::time::Duration;
 
 use crate::batch::{Clock, instant_clock};
 use crate::command::{Command, NodeId};
+use crate::compiled::Compiled;
 use crate::eval::eval;
-use crate::ir::{Block, JsRef, SlotId, Target, Template};
+use crate::ir::{Block, JsRef, SlotId, Target};
 use crate::list::ListState;
 use crate::value::Value;
-
-/// A template prepared for mounting: validated, with its slot → binding
-/// index precomputed (the compiler knows every read statically).
-#[derive(Debug)]
-pub struct Compiled {
-    template: Template,
-    /// `slot_deps[slot]` = the bindings that read `slot`.
-    slot_deps: Vec<Vec<u16>>,
-    /// `selector_index[slot]` = the `(block, selector)` pairs selecting on `slot`.
-    pub(crate) selector_index: Vec<Vec<(usize, usize)>>,
-    /// Per node, the handler props as they cross the wire (`"onClick"`).
-    handler_props: Vec<Vec<String>>,
-}
-
-impl Compiled {
-    /// Prepare `template`. Panics on IR the compiler should never emit (a
-    /// parent after its child, a binding or read out of range, a list that
-    /// shares its parent with static children or has a multi-root item).
-    pub fn new(template: Template) -> Arc<Self> {
-        let nodes = &template.nodes;
-        for (i, n) in nodes.iter().enumerate() {
-            if let Some(p) = n.parent {
-                assert!(usize::from(p) < i, "node {i}: parent {p} must come first");
-            }
-        }
-        let mut slot_deps = vec![Vec::new(); template.slots.len()];
-        for (b, binding) in template.bindings.iter().enumerate() {
-            let node = match binding.target {
-                Target::Text(n) | Target::Prop(n, _) | Target::Style(n, _) => n,
-            };
-            assert!(usize::from(node) < nodes.len(), "binding {b}: node {node}");
-            for slot in binding.expr.reads() {
-                let deps = slot_deps.get_mut(usize::from(slot)).unwrap_or_else(|| {
-                    panic!("binding {b} reads slot {slot}, which is not declared")
-                });
-                deps.push(b as u16);
-            }
-        }
-        let mut selector_index = vec![Vec::new(); template.slots.len()];
-        for (
-            block,
-            Block::For {
-                parent,
-                item,
-                selectors,
-            },
-        ) in template.blocks.iter().enumerate()
-        {
-            assert!(usize::from(*parent) < nodes.len(), "list parent {parent}");
-            let item_slots = item.template.slots.len();
-            assert!(
-                item_slots >= selectors.len(),
-                "list item has fewer slots than selectors"
-            );
-            let data = item_slots - selectors.len();
-            for (i, sel) in selectors.iter().enumerate() {
-                assert!(
-                    usize::from(sel.field) < data,
-                    "selector field {} is not a data slot",
-                    sel.field
-                );
-                assert_eq!(
-                    usize::from(sel.flag),
-                    data + i,
-                    "selector {i}: flag slots are the item's last slots, in order"
-                );
-                selector_index
-                    .get_mut(usize::from(sel.from))
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "selector reads parent slot {}, which is not declared",
-                            sel.from
-                        )
-                    })
-                    .push((block, i));
-            }
-            assert!(
-                !nodes.iter().any(|n| n.parent == Some(*parent)),
-                "list parent {parent} has static children"
-            );
-            let roots = item
-                .template
-                .nodes
-                .iter()
-                .filter(|n| n.parent.is_none())
-                .count();
-            assert!(
-                roots == 1 && item.template.nodes[0].parent.is_none(),
-                "list item needs one root, node 0"
-            );
-        }
-        let handler_props = nodes
-            .iter()
-            .map(|n| n.handlers.iter().map(|(ev, _)| handler_prop(ev)).collect())
-            .collect();
-        Arc::new(Compiled {
-            template,
-            slot_deps,
-            selector_index,
-            handler_props,
-        })
-    }
-
-    pub fn template(&self) -> &Template {
-        &self.template
-    }
-}
-
-/// `"click"` → `"onClick"`.
-fn handler_prop(event: &str) -> String {
-    let mut chars = event.chars();
-    match chars.next() {
-        Some(first) => format!("on{}{}", first.to_uppercase(), chars.as_str()),
-        None => "on".to_owned(),
-    }
-}
 
 /// A mounted component instance.
 pub type InstanceId = usize;
@@ -142,7 +27,7 @@ pub(crate) struct Instance {
     pub(crate) parent: NodeId,
     /// Bridge id of each template node.
     pub(crate) ids: Vec<NodeId>,
-    slots: Vec<Value>,
+    pub(crate) slots: Vec<Value>,
     /// The value each binding last sent.
     sent: Vec<Value>,
     /// Bindings marked by a write since the last flush (and their flags).
@@ -150,6 +35,8 @@ pub(crate) struct Instance {
     is_dirty: Vec<bool>,
     /// One per `Block::For`, in template order.
     pub(crate) lists: Vec<ListState>,
+    /// One per `ChildBlock`: its mounted instance, if any.
+    pub(crate) children: Vec<Option<InstanceId>>,
 }
 
 /// A node's handlers: its instance, and `(event, js)` pairs (one or two).
@@ -295,7 +182,8 @@ impl Runtime {
                 },
             )
             .collect();
-        let n_bindings = t.bindings.len();
+        let n_dirty = t.bindings.len() + t.children.len();
+        let n_children = t.children.len();
         self.instances.push(Some(Instance {
             compiled: Arc::clone(compiled),
             parent,
@@ -303,9 +191,13 @@ impl Runtime {
             slots,
             sent,
             dirty: Vec::new(),
-            is_dirty: vec![false; n_bindings],
+            is_dirty: vec![false; n_dirty],
             lists,
+            children: vec![None; n_children],
         }));
+        for c in 0..n_children {
+            self.sync_child(instance, c);
+        }
         instance
     }
 
@@ -356,38 +248,51 @@ impl Runtime {
         // Staged lists first: their field changes mark bindings the loop
         // below then evaluates.
         self.apply_staged();
-        for instance in std::mem::take(&mut self.dirty) {
-            let Some(Some(inst)) = self.instances.get_mut(instance) else {
-                continue;
-            };
-            let mut marked = std::mem::take(&mut inst.dirty);
-            // Template order, not write order: a deterministic stream.
-            marked.sort_unstable();
-            for b in marked {
-                inst.is_dirty[usize::from(b)] = false;
-                let binding = &inst.compiled.template.bindings[usize::from(b)];
-                let v = eval(&binding.expr, &inst.slots);
-                if v == inst.sent[usize::from(b)] {
-                    continue; // changed and changed back, or an equal result
-                }
-                let cmd = match binding.target {
-                    Target::Text(n) => Command::UpdateText {
-                        id: inst.ids[usize::from(n)],
-                        text: Arc::from(v.to_string()),
-                    },
-                    Target::Prop(n, key) => Command::SetProp {
-                        id: inst.ids[usize::from(n)],
-                        key,
-                        value: v.clone(),
-                    },
-                    Target::Style(n, key) => Command::SetStyle {
-                        id: inst.ids[usize::from(n)],
-                        key,
-                        value: v.clone(),
-                    },
+        // Mounting a child or pushing a prop marks more bindings: go round
+        // until nothing is left (parents only ever mark their children).
+        while !self.dirty.is_empty() {
+            for instance in std::mem::take(&mut self.dirty) {
+                let Some(Some(inst)) = self.instances.get_mut(instance) else {
+                    continue;
                 };
-                inst.sent[usize::from(b)] = v;
-                self.out.push(cmd);
+                let n_bindings = inst.compiled.template.bindings.len();
+                let mut marked = std::mem::take(&mut inst.dirty);
+                // Template order, not write order: a deterministic stream.
+                marked.sort_unstable();
+                let mut blocks = Vec::new();
+                for b in marked {
+                    inst.is_dirty[usize::from(b)] = false;
+                    if usize::from(b) >= n_bindings {
+                        blocks.push(usize::from(b) - n_bindings);
+                        continue;
+                    }
+                    let binding = &inst.compiled.template.bindings[usize::from(b)];
+                    let v = eval(&binding.expr, &inst.slots);
+                    if v == inst.sent[usize::from(b)] {
+                        continue; // changed and changed back, or an equal result
+                    }
+                    let cmd = match binding.target {
+                        Target::Text(n) => Command::UpdateText {
+                            id: inst.ids[usize::from(n)],
+                            text: Arc::from(v.to_string()),
+                        },
+                        Target::Prop(n, key) => Command::SetProp {
+                            id: inst.ids[usize::from(n)],
+                            key,
+                            value: v.clone(),
+                        },
+                        Target::Style(n, key) => Command::SetStyle {
+                            id: inst.ids[usize::from(n)],
+                            key,
+                            value: v.clone(),
+                        },
+                    };
+                    inst.sent[usize::from(b)] = v;
+                    self.out.push(cmd);
+                }
+                for c in blocks {
+                    self.sync_child(instance, c);
+                }
             }
         }
         self.pending_since = None;
@@ -426,6 +331,9 @@ impl Runtime {
             for item in list.items.into_values() {
                 self.forget(item);
             }
+        }
+        for child in inst.children.into_iter().flatten() {
+            self.forget(child);
         }
     }
 

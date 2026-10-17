@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use crate::runtime::Compiled;
+use crate::compiled::Compiled;
 use crate::value::Value;
 
 /// A state slot of a component instance (`useState`, or an island prop).
@@ -26,8 +26,59 @@ pub struct Template {
     pub bindings: Vec<Binding>,
     /// Initial slot values (`useState(initial)`); the length is the slot count.
     pub slots: Vec<Value>,
-    /// Lists and other structural blocks.
+    /// Keyed lists.
     pub blocks: Vec<Block>,
+    /// Conditional and nested components.
+    pub children: Vec<ChildBlock>,
+}
+
+/// A nested component, optionally conditional (`{open && <Detail name={n} />}`).
+///
+/// While `when` holds (always, if absent) one instance of `component` is a
+/// child of node `parent`, placed before the static sibling `before` (or last).
+/// Its slots are its own state, except the ones `props` bind to expressions
+/// over this component's slots: those follow their expression whenever the
+/// slots it reads change. The instance keeps its state while mounted, and a
+/// condition that goes false and true again mounts a fresh one. `component`
+/// has a single root, node 0, and `parent` is not a list's parent.
+#[derive(Clone, Debug)]
+pub struct ChildBlock {
+    pub parent: NodeIx,
+    pub before: Option<NodeIx>,
+    pub when: Option<Expr>,
+    pub component: Arc<Compiled>,
+    /// `(child slot, expression over this component's slots)`.
+    pub props: Vec<(SlotId, Expr)>,
+}
+
+impl ChildBlock {
+    pub fn new(parent: NodeIx, component: Arc<Compiled>) -> Self {
+        ChildBlock {
+            parent,
+            before: None,
+            when: None,
+            component,
+            props: Vec::new(),
+        }
+    }
+
+    /// Place the child before the static sibling `node`.
+    pub fn before(mut self, node: NodeIx) -> Self {
+        self.before = Some(node);
+        self
+    }
+
+    /// Mount the child only while `cond` is truthy.
+    pub fn when(mut self, cond: Expr) -> Self {
+        self.when = Some(cond);
+        self
+    }
+
+    /// Bind child slot `slot` to `expr`.
+    pub fn prop(mut self, slot: SlotId, expr: Expr) -> Self {
+        self.props.push((slot, expr));
+        self
+    }
 }
 
 /// A structural block: children whose number and order are data.

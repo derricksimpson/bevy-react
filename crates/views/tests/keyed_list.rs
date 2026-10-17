@@ -11,6 +11,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+mod common;
+use common::Tree;
+
 use bevy_react_views::{
     Binding, Block, Command, Compiled, Key, ListError, ListItem, NodeId, Runtime, TNode, Target,
     Template, Value, e,
@@ -48,82 +51,6 @@ fn item(id: i64) -> ListItem {
         id,
         vec![Value::Num(id as f64), Value::str(&format!("row{id}"))],
     )
-}
-
-/// A model of the bridge's hierarchy: what `apply_js_ops` would build.
-#[derive(Default)]
-struct Tree {
-    children: HashMap<NodeId, Vec<NodeId>>,
-    text: HashMap<NodeId, String>,
-    alive: HashMap<NodeId, &'static str>,
-}
-
-impl Tree {
-    fn apply(&mut self, cmds: &[Command]) {
-        for c in cmds {
-            match c {
-                Command::Create { id, kind, text, .. } => {
-                    assert!(self.alive.insert(*id, kind).is_none(), "{id} created twice");
-                    if let Some(t) = text {
-                        self.text.insert(*id, t.to_string());
-                    }
-                }
-                Command::Append { parent, child } => {
-                    self.detach(*child);
-                    self.children.entry(*parent).or_default().push(*child);
-                }
-                Command::Insert {
-                    parent,
-                    child,
-                    before,
-                } => {
-                    self.detach(*child);
-                    let kids = self.children.entry(*parent).or_default();
-                    let at = kids
-                        .iter()
-                        .position(|k| k == before)
-                        .expect("anchor is a child");
-                    kids.insert(at, *child);
-                }
-                Command::Remove { parent, child } => {
-                    let kids = self.children.get_mut(parent).expect("parent has children");
-                    kids.retain(|k| k != child);
-                    self.despawn(*child);
-                }
-                Command::UpdateText { id, text } => {
-                    assert!(self.alive.contains_key(id), "text of a dead node {id}");
-                    self.text.insert(*id, text.to_string());
-                }
-                Command::SetProp { .. } | Command::SetStyle { .. } => {}
-            }
-        }
-    }
-
-    fn detach(&mut self, child: NodeId) {
-        for kids in self.children.values_mut() {
-            kids.retain(|k| *k != child);
-        }
-    }
-
-    fn despawn(&mut self, id: NodeId) {
-        self.alive.remove(&id);
-        self.text.remove(&id);
-        for k in self.children.remove(&id).unwrap_or_default() {
-            self.despawn(k);
-        }
-    }
-
-    /// The labels of the table's rows, in order.
-    fn rows(&self, table: NodeId) -> Vec<String> {
-        self.children
-            .get(&table)
-            .map(|rows| {
-                rows.iter()
-                    .map(|r| self.text[&self.children[r][0]].clone())
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
 }
 
 fn labels(ids: &[i64]) -> Vec<String> {

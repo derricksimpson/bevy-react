@@ -250,3 +250,53 @@ component runs in Rust" is visible.
 - **Expectation**: on V8 the throughput gain is bounded by Bevy's own layout
   and render cost (Evidence). The case rests on latency, engine independence
   and per-frame UI, so phase 0 matters.
+
+## Spike log (`crates/views`, `bevy_react_views`)
+
+Built so far, no Bevy dependency yet; 63 tests, `cargo run --release -p
+bevy_react_views --example bench` for the numbers. Runtime work only: building
+the list, `set_list`/`update_item`, `flush`. It excludes the JS side (building
+the list, the identity diff, the boundary) and Bevy's apply and layout, so it
+is **not** comparable to the React table in Evidence beyond the shape.
+
+| Piece          | What it does                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IR + evaluator | templates, bindings as pure expressions over slots, JS primitive semantics                                                                           |
+| Runtime        | mount, slot writes mark bindings, flush re-evaluates each once and emits a command only when the value changed                                       |
+| Keyed lists    | `Block::For`; LIS diff, so a swap of 2 of 1,000 rows is 2 moves (React's `lastPlacedIndex` rule moves 997); 500 random-edit rounds pin minimal moves |
+| Batching       | writes mark work; `poll()` flushes after a window anchored to the first write; staged lists coalesce into one diff; injectable clock                 |
+| Delta path     | `update_item` changes one record in place, folds into a staged list; unchanged key order skips hashing and positioning                               |
+| Selectors      | `selected === row.id` as a flag slot; a selection change flips only the old and the new row                                                          |
+| Child blocks   | conditional/nested components with props bound to parent expressions; placement before a static sibling; nested; badge inside a list row             |
+
+Measured (release, median; run-to-run spread about 30%):
+
+| Step                          | Runtime (ms)     | Commands | Note                                                        |
+| ----------------------------- | ---------------- | -------- | ----------------------------------------------------------- |
+| create 1k / 10k rows          | 0.9 / 14-18      | 4k / 40k | React on V8: 7.1 / 263 (JS only)                            |
+| text every 2nd of 1k / 10k    | 0.25 / 4         | 500 / 5k | React: 1.4 / 18.5                                           |
+| swap 2 of 1k                  | 0.15             | 2        | React: 2.6                                                  |
+| text 1 of 10k, via `set_list` | 0.56             | 1        | was 3-4 ms before the unchanged-order fast path             |
+| 10 one-row edits of 10k       | 2.0 / 1.6 / 0.35 | 10       | flush each / `set_list` x10 + one flush / `update_item` x10 |
+| select / move selection (10k) | 0.001-0.005      | 1-2      |                                                             |
+| clear 10k                     | 6-7              | 10k      | slower than React (5.8): per-row teardown allocates         |
+
+Findings:
+
+- **A window does little for full-list sets.** 10 `set_list` calls in one
+  window cost 1.6 ms against 2.0 ms flushing each: each call still builds and
+  compares the whole list. The win is the **delta API** (`update_item`, 0.35
+  ms): cost follows the number of changed records, not the list length. So the
+  JS side should send records that changed in place as deltas and use a full
+  list only for structural change. The window still pays for writes that hit
+  the same slot or the same list.
+- **Teardown and mass create are allocation-bound** (about 0.7 us per row to
+  free, 1.3 us to create): each instance owns six small vectors. A slab per
+  list, or one allocation per row, is the next performance step.
+- **The Rust side has no `Send`/Bevy plumbing yet**: commands are plain data
+  mirroring the wire ops, to be converted to `protocol::Op`.
+
+Next candidates: convert commands to real ops and drive the headless Bevy
+harness; the JS side (handlers writing slots, the identity diff); the
+allocation work above; an `else`/`switch` block; text-run (`textSpan`)
+children; then a TSX compiler front-end over this IR.
