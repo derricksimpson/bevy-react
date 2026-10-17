@@ -46,12 +46,12 @@ impl OpAdapter {
                 self.kinds.insert(*id, kind);
                 let mut json: Map<String, Json> = props
                     .iter()
-                    .map(|(k, v)| ((*k).to_owned(), json(v)))
+                    .map(|(k, v)| ((*k).to_owned(), to_json(v)))
                     .collect();
                 if !style.is_empty() {
                     let style: Map<String, Json> = style
                         .iter()
-                        .map(|(k, v)| ((*k).to_owned(), json(v)))
+                        .map(|(k, v)| ((*k).to_owned(), to_json(v)))
                         .collect();
                     json.insert("style".into(), Json::Object(style));
                 }
@@ -81,11 +81,11 @@ impl OpAdapter {
             },
             Command::SetProp { id, key, value } => self.update(
                 *id,
-                [((*key).to_owned(), json(value))].into_iter().collect(),
+                [((*key).to_owned(), to_json(value))].into_iter().collect(),
             ),
             Command::SetStyle { id, key, value } => {
                 let style: Map<String, Json> =
-                    [((*key).to_owned(), json(value))].into_iter().collect();
+                    [((*key).to_owned(), to_json(value))].into_iter().collect();
                 self.update(
                     *id,
                     [("style".to_owned(), Json::Object(style))]
@@ -115,18 +115,18 @@ impl OpAdapter {
 /// A binding value as the wire carries it: integral numbers as integers
 /// (lengths and counts), other numbers as floats, `NaN`/`Infinity` as `null`
 /// (what `JSON.stringify` does).
-fn json(v: &Value) -> Json {
+fn to_json(v: &Value) -> Json {
     match v {
         Value::Null => Json::Null,
         Value::Bool(b) => Json::Bool(*b),
         Value::Num(n) if n.fract() == 0.0 && n.abs() < 9.0e15 => Json::from(*n as i64),
         Value::Num(n) => serde_json::Number::from_f64(*n).map_or(Json::Null, Json::Number),
         Value::Str(s) => Json::String(s.to_string()),
-        Value::List(items) => Json::Array(items.iter().map(json).collect()),
+        Value::List(items) => Json::Array(items.iter().map(to_json).collect()),
         Value::Map(entries) => Json::Object(
             entries
                 .iter()
-                .map(|(k, v)| (k.to_string(), json(v)))
+                .map(|(k, v)| (k.to_string(), to_json(v)))
                 .collect(),
         ),
     }

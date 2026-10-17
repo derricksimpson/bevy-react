@@ -253,7 +253,7 @@ component runs in Rust" is visible.
 
 ## Spike log (`crates/views`, `bevy_react_views`)
 
-See `crates/views/README.md` for the map. 119 tests; `cargo run --release -p
+See `crates/views/README.md` for the map. 119 tests (+4 end to end with `--features bevy`); `cargo run --release -p
 bevy_react_views --example bench` for the numbers. The numbers time the
 runtime only: building the list, `set_list`/`update_item`, `flush`. They
 exclude the JS side (building the list, the identity diff, the boundary) and
@@ -312,6 +312,24 @@ Findings:
   reasoning, fixed with slot reuse behind generation-tagged ids; a stale id
   names nothing.
 - **Structured values were a blocker** (a transform, a shadow list): added.
+
+**End to end (first real number).** Commands go through the adapter into the
+core's real `apply_js_ops` (the headless op app: apply only, no layout or
+render). A 10k-row table, one run (`cargo test -p bevy_react_views --features
+bevy --test bevy_e2e -- --ignored --nocapture`):
+
+| 10k-row table      | runtime | adapter (via JSON) | Bevy `apply_js_ops` | commands | entities |
+| ------------------ | ------- | ------------------ | ------------------- | -------- | -------- |
+| all rows           | 12.6 ms | 12.1 ms            | **122 ms**          | 40,002   | 20,001   |
+| windowed (30 rows) | 1.1 ms  | 0.2 ms             | **1.2 ms**          | 127      | 63       |
+
+This settles the phase 0 question: the runtime is not where the time goes.
+Bevy's own apply is about 5x the runtime's cost for the same table (and layout
+and render come on top), so the lever is **how many entities exist**, which is
+what windowing changes by 160x here. A faster reconciler alone would move the
+total by less than a tenth. The adapter's cost (JSON, decoded against the
+element) is as large as the runtime's own: pre-decoding a template's static
+props once is the next saving on the Rust side.
 
 Not done: animation bindings (`{ animated }` values need a shared-value id
 allocated per instance), the JS side, the TSX compiler front-end, pre-decoding

@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn swap_far_apart_is_two_moves() {
         let d = diff(&keys(&[0, 1, 2, 3, 4, 5]), &keys(&[0, 4, 2, 3, 1, 5]));
-        assert_eq!(d.removed, vec![]);
+        assert_eq!(d.removed, Vec::<usize>::new());
         assert_eq!(
             d.steps,
             vec![

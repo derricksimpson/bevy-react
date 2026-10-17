@@ -26,17 +26,18 @@ when a value actually changed.
 | Handlers       | `dispatch.rs`               | Rust-run click actions (`setX(expr)`, on the owner too), or JS                       |
 | Effects        | `effects.rs`                | `useEffect` calls for the host, in React's order                                     |
 | Batching       | `batch.rs`                  | a flush window anchored to the first write                                           |
-| Bevy adapter   | `bevy.rs` (feature `bevy`)  | commands to `bevy_react_core::protocol::Op`                                          |
+| Bevy adapter   | `bevy.rs` (feature `bevy`)  | commands to `bevy_react_core::protocol::Op`; verified against real entities          |
 
 ## Running it
 
 ```sh
 cargo test -p bevy_react_views                    # unit + integration tests, seconds
 cargo run --release -p bevy_react_views --example bench    # stress-table timings
-cargo test -p bevy_react_views --features bevy    # end to end through the core's op app (builds Bevy)
+cargo test -p bevy_react_views --features bevy --test bevy_e2e    # end to end through the core's op app (builds Bevy)
 ```
 
-The benchmark times the runtime only (building the list, `set_list` /
+The `bevy` feature links Bevy and V8 into every test binary it builds (hundreds
+of MB each), so run just `--test bevy_e2e` with it. The benchmark times the runtime only (building the list, `set_list` /
 `update_item`, `flush`): not the JS side, not Bevy's apply and layout.
 
 ## What is missing

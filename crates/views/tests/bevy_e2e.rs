@@ -300,3 +300,40 @@ fn a_panel_mounts_and_unmounts_real_entities() {
     assert_eq!(react_nodes(&mut app), 3);
     let _ = Key::Int(0);
 }
+
+/// Timing, not a correctness test: `cargo test -p bevy_react_views --features
+/// bevy --test bevy_e2e -- --ignored --nocapture`. The harness runs only
+/// `apply_js_ops` (no layout or render), so this is the apply leg alone.
+#[test]
+#[ignore = "timing"]
+fn apply_cost_of_a_10k_table_with_and_without_a_window() {
+    use std::time::Instant;
+    for windowed in [false, true] {
+        let (mut app, tx) = op_app();
+        let mut adapter = OpAdapter::default();
+        let mut rt = Runtime::with_id_base(1);
+        let t = rt.mount(&table(windowed), 0);
+        rt.set_list(t, 0, (0..10_000).map(item).collect()).unwrap();
+        if windowed {
+            rt.set_window(t, 0, 0, 30).unwrap();
+        }
+        let t0 = Instant::now();
+        let cmds = rt.flush();
+        let t1 = Instant::now();
+        let ops = adapter.convert(&cmds);
+        let t2 = Instant::now();
+        tx.send(ops).unwrap();
+        app.update();
+        let t3 = Instant::now();
+        let ms = |a: Instant, b: Instant| (b - a).as_secs_f64() * 1000.0;
+        println!(
+            "{:<10} runtime {:>7.2} ms | adapter {:>7.2} ms | apply_js_ops {:>7.2} ms | {} commands, {} entities",
+            if windowed { "windowed" } else { "all rows" },
+            ms(t0, t1),
+            ms(t1, t2),
+            ms(t2, t3),
+            cmds.len(),
+            react_nodes(&mut app),
+        );
+    }
+}
