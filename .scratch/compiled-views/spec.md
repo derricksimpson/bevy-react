@@ -331,6 +331,22 @@ total by less than a tenth. The adapter's cost (JSON, decoded against the
 element) is as large as the runtime's own: pre-decoding a template's static
 props once is the next saving on the Rust side.
 
+**Where Bevy's apply goes** (callgrind on the same 10k-row create, core at
+`opt-level=3`, no debug assertions). The build profile did not matter: apply
+was 117 ms optimized against 122 ms at the dev profile, so Bevy's apply is
+about **10x** the runtime's 12 ms, not 5x. Of the 404 M instructions in
+`App::update`, **217 M (54%) are `EntityCommands::add_related`**: every
+`Op::Append` calls `commands.entity(p).add_child(c)` (`reconcile/apply.rs`,
+the first-time attach) on an entity that was already spawned with its full set
+of UI components, and inserting `ChildOf` moves the whole row to a new
+archetype table (`Tables::move_row`, `Column::initialize_from_unchecked`,
+13% of all instructions in `memcpy`). About 10,000 instructions per attach.
+That cost is paid by every path that mounts many nodes at once, React's
+included. Candidate fix, in the core: put `ChildOf(parent)` in the spawn
+bundle (reserve the entities for a batch's creates first, so a parent that is
+created after its children is still nameable), so no attach moves a row. Not
+done; it changes the core's apply path and needs its own test pass.
+
 Not done: animation bindings (`{ animated }` values need a shared-value id
 allocated per instance), the JS side, the TSX compiler front-end, pre-decoding
 a template's static props once for the adapter (commands still copy them per
