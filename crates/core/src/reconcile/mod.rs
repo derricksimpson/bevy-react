@@ -21,6 +21,7 @@ mod hover;
 mod interaction;
 pub(crate) mod picking;
 mod pointer;
+mod spawn_plan;
 pub(crate) mod stamps;
 mod stats;
 pub(crate) mod text_cascade;
@@ -28,6 +29,8 @@ mod update;
 
 #[cfg(test)]
 pub(crate) mod clip_pick_tests;
+#[cfg(test)]
+mod spawn_plan_tests;
 #[cfg(test)]
 mod svg_tests;
 #[cfg(any(test, feature = "test_util"))]

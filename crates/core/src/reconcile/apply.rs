@@ -85,7 +85,8 @@ pub fn apply_js_ops(
     // mass reorders are O(ops) + one O(children) rebuild, not quadratic; a parent
     // that only received a few fresh mid-list inserts gets one positional
     // `insert_children` per insert instead. First-time attaches still queue an
-    // O(1) `add_child` per op (a same-batch ancestor removal must reach the child
+    // O(1) `add_child` per op unless the spawn plan already spawned the child
+    // under its parent (a same-batch ancestor removal must reach the child
     // recursively), and removals don't dirty their parent at all: despawn's
     // relationship cleanup drops the child from `Children` preserving the order
     // of the rest.
@@ -111,6 +112,9 @@ pub fn apply_js_ops(
             });
         }
     }
+
+    // Fresh nodes that can be spawned already parented (see `spawn_plan`).
+    let mut plan = super::spawn_plan::SpawnPlan::build(&ops, &bridge);
 
     for op in ops {
         match op {
@@ -178,6 +182,7 @@ pub fn apply_js_ops(
                     &assets,
                     &fonts,
                     &mut images,
+                    &mut plan,
                     id,
                     kind,
                     props,
@@ -185,26 +190,42 @@ pub fn apply_js_ops(
                 );
             }
             Op::CreateText { id, text } => {
-                let entity = commands
-                    .spawn((
+                let reserved = plan.take_reserved(id);
+                let parent = plan.parent_entity(&mut commands, &bridge, id);
+                let entity = crate::element::spawn_in(
+                    &mut commands,
+                    reserved,
+                    parent,
+                    (
                         Text::new(text),
                         TextColor(Color::WHITE),
                         ReactNode(id),
                         crate::ext::ElementFlags::NODE,
-                    ))
-                    .id();
+                    ),
+                );
+                if parent.is_some() {
+                    plan.mark_attached(id);
+                }
                 bridge.nodes.insert(id, entity);
             }
             Op::CreateTextSpan { id, text } => {
                 // A bare-string run inside a `<text>`. Style is inherited from its
                 // parent on append (see below); until then it keeps span defaults.
-                let entity = commands
-                    .spawn((
+                let reserved = plan.take_reserved(id);
+                let parent = plan.parent_entity(&mut commands, &bridge, id);
+                let entity = crate::element::spawn_in(
+                    &mut commands,
+                    reserved,
+                    parent,
+                    (
                         TextSpan(text),
                         ReactNode(id),
                         crate::ext::ElementFlags::NODE_LESS,
-                    ))
-                    .id();
+                    ),
+                );
+                if parent.is_some() {
+                    plan.mark_attached(id);
+                }
                 bridge.nodes.insert(id, entity);
                 bridge.spans.insert(id, SpanKind::RawInherited);
             }
@@ -246,7 +267,10 @@ pub fn apply_js_ops(
                         // shadow tail (so no rebuild is needed), and a cross-parent
                         // `add_child` also detaches from the old ECS parent via the
                         // relationship hooks.
-                        commands.entity(p).add_child(c);
+                        // A node the plan spawned under `p` is attached already.
+                        if !plan.is_attached(child) {
+                            commands.entity(p).add_child(c);
+                        }
                     }
                     inherit_text_style(&mut commands, &mut bridge, &fonts, parent, child, c);
                 }

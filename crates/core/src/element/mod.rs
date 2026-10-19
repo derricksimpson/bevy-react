@@ -35,6 +35,7 @@ use std::sync::Arc;
 
 pub(crate) use attribute::is_attr;
 pub use attribute::{AnyAttribute, AttrBinding, Attribute, animatable_binding};
+pub(crate) use decl::spawn_in;
 pub use decl::{Common, Element, SpawnCtx, SpawnFn};
 pub use event::{AnyElementEvent, ElementEvent, ElementEvents, EventSubscriptions, handler_prop};
 pub use registry::ElementInfo;

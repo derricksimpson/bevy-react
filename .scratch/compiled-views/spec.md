@@ -344,8 +344,25 @@ archetype table (`Tables::move_row`, `Column::initialize_from_unchecked`,
 That cost is paid by every path that mounts many nodes at once, React's
 included. Candidate fix, in the core: put `ChildOf(parent)` in the spawn
 bundle (reserve the entities for a batch's creates first, so a parent that is
-created after its children is still nameable), so no attach moves a row. Not
-done; it changes the core's apply path and needs its own test pass.
+created after its children is still nameable), so no attach moves a row.
+
+**Done: spawn-time parenting** (`crates/core/src/reconcile/spawn_plan.rs`, 10
+tests in `spawn_plan_tests.rs`, the rules in CLAUDE.md). A pre-pass over the
+batch plans only the parents it can prove pure (appends of fresh nodes, once
+each, in creation order), reserves the entity of a parent created after its
+children, and spawns the children with `ChildOf` in the bundle; the `Append`
+arm keeps its bookkeeping and skips the attach. Result on the same 10k-row
+create, instructions (callgrind, whole test): **683 M -> 587 M (-14%)**; the
+plan's own pre-pass costs 3 M with dense tables over the batch's id range
+(a first version with hash maps cost 47 M and ate half the saving). Wall
+clock for `apply_js_ops` is noisy (90-115 ms either way on this machine);
+the median moved from about 102 ms to about 96 ms. The expectation above
+(54% of the apply) was too high: the archetype moves were removed, but the
+remaining cost is the spawn commands themselves (large bundles copied into
+the command queue, then into the table; `memcpy` is still 10% of all
+instructions), which only a direct-world apply path or fewer components per
+node would cut. Windowing remains the lever that matters (160x fewer
+entities). Full core suite (896) and the feature crates pass.
 
 Not done: animation bindings (`{ animated }` values need a shared-value id
 allocated per instance), the JS side, the TSX compiler front-end, pre-decoding

@@ -36,6 +36,7 @@ pub(super) fn apply_create(
     assets: &AssetServer,
     fonts: &Fonts,
     images: &mut Assets<Image>,
+    plan: &mut super::spawn_plan::SpawnPlan,
     id: NodeId,
     kind: String,
     mut props: Box<Props>,
@@ -55,6 +56,14 @@ pub(super) fn apply_create(
     // The retained style carries the element's defaults (see
     // `ElementInfo::fill_default_style`).
     info.fill_default_style(&mut props.style);
+    // Born attached when the batch's plan allows it; a detached element is
+    // never parented by the op path.
+    let reserved = plan.take_reserved(id);
+    let parent = if flags.detached {
+        None
+    } else {
+        plan.parent_entity(commands, bridge, id)
+    };
     // The spawn sees the act-now props too (an input's `value` seeds it).
     let entity = {
         let mut ctx = SpawnCtx {
@@ -68,12 +77,17 @@ pub(super) fn apply_create(
             style: &props.style,
             text: text.as_deref(),
             flags,
+            parent,
+            reserved,
         };
         match info.decl.spawn {
             Some(spawn) => spawn(&mut ctx),
             None => ctx.spawn(()),
         }
     };
+    if parent.is_some() {
+        plan.mark_attached(id);
+    }
     // The act-now props act once, here, and are never retained.
     let events = props.split_events();
     let style = &props.style;

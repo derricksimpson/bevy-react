@@ -4,6 +4,7 @@
 use bevy::asset::{AssetServer, Assets, Handle};
 use bevy::ecs::bundle::Bundle;
 use bevy::ecs::entity::Entity;
+use bevy::ecs::hierarchy::ChildOf;
 use bevy::ecs::system::Commands;
 use bevy::image::Image;
 
@@ -152,6 +153,11 @@ pub struct SpawnCtx<'a, 'w, 's> {
     pub text: Option<&'a str>,
     /// The element's flags.
     pub flags: ElementFlags,
+    /// The parent to spawn under when the batch lets the node be born
+    /// attached (see `reconcile::spawn_plan`); `spawn` adds the `ChildOf`.
+    pub(crate) parent: Option<Entity>,
+    /// An entity reserved for this node by a child that spawned first.
+    pub(crate) reserved: Option<Entity>,
 }
 
 impl SpawnCtx<'_, '_, '_> {
@@ -159,15 +165,14 @@ impl SpawnCtx<'_, '_, '_> {
     pub fn spawn(&mut self, extra: impl Bundle) -> Entity {
         let base = (crate::bridge::ReactNode(self.id), self.flags);
         if self.flags.node_less {
-            self.commands.spawn((base, extra)).id()
+            spawn_in(self.commands, self.reserved, self.parent, (base, extra))
         } else {
-            self.commands
-                .spawn((
-                    base,
-                    crate::ui_map::fresh_style_bundle(self.style, self.flags),
-                    extra,
-                ))
-                .id()
+            let styled = (
+                base,
+                crate::ui_map::fresh_style_bundle(self.style, self.flags),
+                extra,
+            );
+            spawn_in(self.commands, self.reserved, self.parent, styled)
         }
     }
 
@@ -181,5 +186,27 @@ impl SpawnCtx<'_, '_, '_> {
     /// height, letter spacing) — a text element's born-with components.
     pub fn text_style(&self) -> ResolvedTextStyle {
         crate::ui_map::resolved_text_style(self.style.as_ref(), self.fonts, false)
+    }
+}
+
+/// Spawn `bundle` (into the `reserved` entity if one was set aside), under
+/// `parent` when given.
+pub(crate) fn spawn_in(
+    commands: &mut Commands,
+    reserved: Option<Entity>,
+    parent: Option<Entity>,
+    bundle: impl Bundle,
+) -> Entity {
+    match (reserved, parent) {
+        (Some(e), Some(p)) => {
+            commands.entity(e).insert((bundle, ChildOf(p)));
+            e
+        }
+        (Some(e), None) => {
+            commands.entity(e).insert(bundle);
+            e
+        }
+        (None, Some(p)) => commands.spawn((bundle, ChildOf(p))).id(),
+        (None, None) => commands.spawn(bundle).id(),
     }
 }
